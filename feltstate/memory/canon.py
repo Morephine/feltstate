@@ -274,6 +274,8 @@ class Canon:
             "when": entry.get("when", "") or "",
             "where": entry.get("where", "") or "",
             "ts": entry.get("ts", ""),
+            "valid_at": entry.get("valid_at") or entry.get("ts", ""),  # M3
+            "invalid_at": entry.get("invalid_at"),  # M3: None while still believed
             "intensity": round(current, 3),
             "base_intensity": round(float(entry.get("intensity", self.cfg.default_intensity)), 3),
             "confidence": round(float(entry.get("confidence", 0.9)), 3),
@@ -314,8 +316,9 @@ class Canon:
         """
         if default_intensity is None:
             default_intensity = self.cfg.default_intensity
+        ts = _now_iso()
         entry = {
-            "ts": _now_iso(),
+            "ts": ts,
             "who": {"actor": actor},
             "what": {"action": action or "", "object": obj},
             "why": why or "",
@@ -324,6 +327,7 @@ class Canon:
             "intensity": float(intensity if intensity is not None else default_intensity),
             "confidence": float(confidence),
             "recalls": 0,
+            "valid_at": ts,  # M3 (bi-temporal): when this belief became true
         }
         if emotion is not None:
             prof, w = blend(
@@ -510,6 +514,7 @@ class Canon:
         old = entries[idx]
         old_id = _entry_id(old)
 
+        now_iso = _now_iso()
         new_entry = dict(old)
         for k in (
             "_reinforce_count",
@@ -518,13 +523,17 @@ class Canon:
             "_superseded_at",
             "_retracted",
             "_retracted_at",
+            "invalid_at",
         ):
             new_entry.pop(k, None)
-        new_entry["ts"] = _now_iso()
+        new_entry["ts"] = now_iso
+        new_entry["valid_at"] = now_iso  # M3: the corrected belief becomes true now
         new_entry["supersedes"] = old_id
-        new_entry.setdefault("what", {})
-        if not isinstance(new_entry["what"], dict):
-            new_entry["what"] = {"object": new_entry["what"]}
+        # Deep-copy the nested 5W1H: a shallow dict(old) shares the inner ``what``
+        # dict, so without this, correcting the new entry would also rewrite the
+        # old (superseded) one — which history() would then show wrong.
+        w = old.get("what")
+        new_entry["what"] = dict(w) if isinstance(w, dict) else {"object": w}
         new_entry["what"]["object"] = object
         if action is not None:
             new_entry["what"]["action"] = action
@@ -541,7 +550,8 @@ class Canon:
 
         new_id = _entry_id(new_entry)
         old["_superseded_by"] = new_id
-        old["_superseded_at"] = _now_iso()
+        old["_superseded_at"] = now_iso
+        old["invalid_at"] = now_iso  # M3: the old belief stopped being true now
         entries.append(new_entry)
         _rewrite_jsonl(self.path, entries)
         return self._render(new_entry, datetime.now(timezone.utc))
@@ -557,10 +567,65 @@ class Canon:
         if idx < 0:
             return {}
         e = entries[idx]
+        now_iso = _now_iso()
         e["_retracted"] = True
-        e["_retracted_at"] = _now_iso()
+        e["_retracted_at"] = now_iso
+        e["invalid_at"] = now_iso  # M3: this belief stopped being true now
         _rewrite_jsonl(self.path, entries)
         return self._render(e, datetime.now(timezone.utc))
+
+    def history(self, id_or_keyword: str) -> list[dict]:
+        """The full timeline of a belief — every version ever held, including the
+        superseded and retracted ones (M3, bi-temporal).
+
+        Where :meth:`view` and :meth:`search` show only what is *currently* held,
+        this is the audit trail: each matching record rendered with its
+        ``valid_at`` / ``invalid_at`` window and a ``status`` of ``"active"`` /
+        ``"superseded"`` / ``"retracted"``, oldest first. This is what lets the
+        agent answer "what did I *used to* think?" — a belief that changed is kept,
+        not erased.
+        """
+        target = str(id_or_keyword).lower()
+        now = datetime.now(timezone.utc)
+        out = []
+        for e in _load_jsonl(self.path):
+            if _entry_id(e) == target or target in _entry_text(e):
+                r = self._render(e, now)
+                if e.get("_retracted"):
+                    r["status"] = "retracted"
+                elif e.get("_superseded_by"):
+                    r["status"] = "superseded"
+                else:
+                    r["status"] = "active"
+                out.append(r)
+        out.sort(key=lambda r: r.get("valid_at") or r.get("ts") or "")
+        return out
+
+    def as_of(self, keyword: str, when: str) -> list[dict]:
+        """What was believed true at a past time ``when`` (an ISO timestamp) — M3.
+
+        Returns the facts matching ``keyword`` whose validity window contained
+        ``when`` — i.e. ``valid_at <= when`` and not yet invalidated by then —
+        each rendered. This answers "last month, what did you think my job was?":
+        the belief that was active *then*, even if it has since been corrected.
+        Bi-temporal, on a flat file, no graph.
+        """
+        target = str(keyword).lower()
+        w = _parse_ts(when)
+        now = datetime.now(timezone.utc)
+        out = []
+        for e in _load_jsonl(self.path):
+            if target not in _entry_text(e):
+                continue
+            va = _parse_ts(e.get("valid_at") or e.get("ts", ""))
+            iv = _parse_ts(e["invalid_at"]) if e.get("invalid_at") else None
+            if va is None or (w is not None and va > w):
+                continue  # not yet true at `when`
+            if iv is not None and w is not None and iv <= w:
+                continue  # already invalidated by `when`
+            out.append(self._render(e, now))
+        out.sort(key=lambda r: r.get("valid_at") or r.get("ts") or "")
+        return out
 
     # ------------------------------------------------------------------ #
     # Public API — read                                                  #

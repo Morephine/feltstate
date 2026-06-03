@@ -162,3 +162,43 @@ def test_recall_object_type_filter(tmp_path):
     c.add("user", "电影", action="看")
     objs = [x["object"] for x in c.recall("", object_type="吃")]
     assert "苹果" in objs and "电影" not in objs
+
+
+# --- M3: bi-temporal (a belief that changed is kept, not erased) ---------- #
+def test_correct_records_a_validity_window(tmp_path):
+    c = Canon(tmp_path / "canon.jsonl")
+    c.add("user", "在 A 公司上班", action="工作")
+    c.correct("工作", object="在 B 公司上班", action="工作")
+    hist = {h["object"]: h for h in c.history("上班")}
+    assert hist["在 A 公司上班"]["status"] == "superseded"
+    assert hist["在 B 公司上班"]["status"] == "active"
+    assert hist["在 A 公司上班"]["invalid_at"] is not None  # the old belief has an end
+    assert hist["在 B 公司上班"]["invalid_at"] is None  # the current one is still open
+
+
+def test_as_of_returns_the_belief_held_then(tmp_path):
+    import json
+
+    p = tmp_path / "canon.jsonl"
+    rows = [  # one belief, two versions: A valid Jan–Mar, then B from Mar on
+        {
+            "ts": "2026-01-01T00:00:00+00:00",
+            "who": {"actor": "u"},
+            "what": {"action": "工作", "object": "A 公司"},
+            "valid_at": "2026-01-01T00:00:00+00:00",
+            "invalid_at": "2026-03-01T00:00:00+00:00",
+            "_superseded_by": "xx",
+            "intensity": 0.5,
+        },
+        {
+            "ts": "2026-03-01T00:00:00+00:00",
+            "who": {"actor": "u"},
+            "what": {"action": "工作", "object": "B 公司"},
+            "valid_at": "2026-03-01T00:00:00+00:00",
+            "intensity": 0.5,
+        },
+    ]
+    p.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows), encoding="utf-8")
+    c = Canon(p)
+    assert [x["object"] for x in c.as_of("公司", "2026-02-01T00:00:00+00:00")] == ["A 公司"]
+    assert [x["object"] for x in c.as_of("公司", "2026-04-01T00:00:00+00:00")] == ["B 公司"]

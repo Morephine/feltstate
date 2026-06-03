@@ -26,6 +26,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   prefilter → pluggable scorer) with an optional **mood-congruent** re-rank, so a
   low mood surfaces low memories. It returns a list for the agent to use; it never
   injects anything on its own.
+- **Bi-temporal history** (`Canon.history` / `Canon.as_of`): a fact carries a
+  `valid_at`, and supersede / retract stamp an `invalid_at`, so a belief that
+  changed is kept as a timeline rather than erased. `history(keyword)` returns
+  every version with its validity window and `active` / `superseded` / `retracted`
+  status; `as_of(keyword, when)` returns what was believed true at a past time
+  ("last month, what did you think my job was?"). Flat-file, no graph, no infra.
 - **Dreams** (`feltstate.dream` + `Engine.dream`): off-the-per-turn-path,
   zero-LLM recombination of the agent's own charged material into a short,
   illogical dream that leaves a faint, *untraceable* mood residue — a feeling
