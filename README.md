@@ -118,8 +118,8 @@ library never writes "be sad now" into the prompt — it only ever supplies stat
 | `feltstate/state.py` | The schemas: `AffectState`, `AffectDelta`, `Mood`, `Traits`, `Relationship`, `PressureState`. Plain dataclasses, JSON round-trip. |
 | `feltstate/config.py` | Every tunable in one place (EWMA rates, decay, pressure thresholds, label maps) + `PersonaDials`. |
 | `feltstate/sources/` | `AffectSource` interface + `KeywordSource` (rules, zero-dep) + `LLMSource` (any OpenAI-compatible endpoint). The pluggable "how does it feel?" seam. |
-| `feltstate/affect/` | The dynamics: `pressure` (multi-bar release), `traits` (asymmetric adaptation), `imprint` (permanent marks). |
-| `feltstate/memory/` | `Canon` — a decaying 5W1H fact store (intensity fades, repetition reinforces, recall slows decay). |
+| `feltstate/affect/` | The dynamics: `pressure` (multi-bar release), `traits` (asymmetric adaptation), `imprint` (permanent marks), `relationship` (the bond evolving), `tide` (mood's rise & fall), `smooth` (label hysteresis). |
+| `feltstate/memory/` | `Canon` — a decaying 5W1H fact store (intensity fades, repetition reinforces, recall slows decay); `extract` — optional second-model fact extraction into it. |
 | `feltstate/timeawareness/` | Fuzzy "how long since we last talked" + precise "now". |
 | `feltstate/render/` | `render_felt_block` (state → first-person block) + `build_injection` (cache-safe). |
 | `feltstate/engine.py` | `Engine` — the façade that ties it together: `tick()`, `render()`, `inject()`. |

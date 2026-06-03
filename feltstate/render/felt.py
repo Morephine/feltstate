@@ -190,8 +190,18 @@ def _relationship_line(rel: Relationship) -> str:
     return line
 
 
+# Tide stage -> a short phrase for the mood's direction, shown on the mood line.
+_TIDE_PHRASES = {
+    "rising": "lifting",
+    "peak": "riding high",
+    "falling": "sinking",
+    "valley": "at a low",
+}
+
+
 def _mood_line(mood: Mood) -> str:
-    """e.g. ``curious, content | calm, mild energy`` — labels, then felt tone."""
+    """e.g. ``curious, content | calm, mild energy · lifting`` — labels, felt tone,
+    an optional tide (rising/falling direction) and an optional mixed-feeling clause."""
     labels = [str(s).strip() for s in (mood.labels or []) if s and str(s).strip()]
     if not labels:
         labels = ["neutral"]
@@ -199,7 +209,24 @@ def _mood_line(mood: Mood) -> str:
 
     val = _band(mood.valence, _VALENCE, _VALENCE_DEFAULT)
     aro = _band(mood.arousal, _AROUSAL, _AROUSAL_DEFAULT)
-    return f"{label_part} | {val}, {aro}"
+    line = f"{label_part} | {val}, {aro}"
+
+    # Tide — the rising/falling shape, only when the mood is clearly moving.
+    tide = mood.tide
+    if isinstance(tide, dict):
+        phrase = _TIDE_PHRASES.get(str(tide.get("stage", "")))
+        if phrase:
+            line += f" · {phrase}"
+
+    # Mixed feeling — a second, opposing note under the primary one.
+    mb = mood.mixed_blend
+    if isinstance(mb, dict):
+        prim = str(mb.get("primary", "") or "").strip()
+        sec = str(mb.get("secondary", "") or "").strip()
+        if prim and sec and prim != sec:
+            line += f" ({prim} tinged with {sec})"
+
+    return line
 
 
 def _pressure_line(pressure: PressureState) -> str:

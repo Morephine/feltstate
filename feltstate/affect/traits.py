@@ -207,4 +207,5 @@ def update_mood(mood: Mood, delta: AffectDelta, traits: Traits, cfg: MoodConfig)
         arousal=felt_a,
         labels=list(delta.labels),
         aftertaste=new_aftertaste,
+        mixed_blend=delta.mixed_blend,
     )

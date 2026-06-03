@@ -137,6 +137,31 @@ def _trait_or_rel(name: str, traits: Traits, relationship: Relationship) -> floa
 # --------------------------------------------------------------------------- #
 # Phase 1 — accumulation                                                      #
 # --------------------------------------------------------------------------- #
+def _anticipation_progress(ant: dict, ts: str) -> float:
+    """How far a scheduled anticipation has come, in ``[0, 1]``.
+
+    If ``ant`` carries an ``event_ts`` (when the looked-forward-to thing happens)
+    and a ``since_ts`` (when it was first registered), this ramps linearly from
+    registration toward the event — excitement building as it nears. With no
+    schedule it returns ``1.0``: a flat, always-on anticipation floor.
+    """
+    event = ant.get("event_ts")
+    if not event:
+        return 1.0
+    try:
+        ev = _parse(str(event))
+        now = _parse(ts)
+        since = ant.get("since_ts")
+        start = _parse(str(since)) if since else now
+        total = (ev - start).total_seconds()
+        if total <= 0:
+            return 1.0
+        elapsed = (now - start).total_seconds()
+        return max(0.0, min(1.0, elapsed / total))
+    except (ValueError, TypeError):
+        return 1.0
+
+
 def _accumulate(
     pressure: PressureState,
     *,
@@ -144,6 +169,7 @@ def _accumulate(
     traits: Traits,
     relationship: Relationship,
     cfg: PressureConfig,
+    ts: str,
 ) -> None:
     """Add this turn's inflow into the bars (mutating ``pressure.bars``).
 
@@ -194,14 +220,17 @@ def _accumulate(
     elif v > 0.2:
         inflow["joy"] += v * 0.02
 
-    # An anticipated good thing keeps a little joy in the tank proportional to
-    # how much it is looked forward to (weight x positive valence). Optional.
+    # An anticipated good thing keeps a little joy in the tank, proportional to how
+    # much it is looked forward to (weight x positive valence). If the anticipation
+    # carries a schedule (``event_ts`` + ``since_ts``), the floor ramps from
+    # registration up toward the event — excitement building as it nears. Optional.
     ant = delta.anticipation
     if isinstance(ant, dict):
         a_v = float(ant.get("valence", 0.0))
         a_w = float(ant.get("weight", 0.0))
         if a_v > 0 and a_w > 0:
-            inflow["joy"] = max(inflow["joy"], 0.5 * a_v * a_w * cfg.idle_decay / 0.018)
+            progress = _anticipation_progress(ant, ts)
+            inflow["joy"] = max(inflow["joy"], 0.5 * a_v * a_w * progress * cfg.idle_decay / 0.018)
 
     # --- (3) milestone shocks ---
     for m in delta.milestones or []:
@@ -551,6 +580,7 @@ def step(
             traits=traits,
             relationship=relationship,
             cfg=cfg,
+            ts=ts,
         )
 
     # (2) decay + trait floor, every tick.

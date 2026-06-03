@@ -50,3 +50,27 @@ else:
         "decay_imprints",
         "check_echo",
     ]
+
+# --- tide (rising/falling shape of mood) ---
+try:
+    from .tide import compute_tide
+except Exception:  # pragma: no cover - module may not be present yet
+    pass
+else:
+    __all__ += ["compute_tide"]
+
+# --- relationship dynamics ---
+try:
+    from .relationship import update_relationship
+except Exception:  # pragma: no cover - module may not be present yet
+    pass
+else:
+    __all__ += ["update_relationship"]
+
+# --- label hysteresis (anti-flicker) ---
+try:
+    from .smooth import smooth_labels
+except Exception:  # pragma: no cover - module may not be present yet
+    pass
+else:
+    __all__ += ["smooth_labels"]

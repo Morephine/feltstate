@@ -59,6 +59,12 @@ class MoodConfig:
     # pulled toward a dim resting valence even when cheered.
     trait_gravity: float = 0.30
     aftertaste_weight: float = 0.5  # how much of last turn's flavour carries forward
+    # Tide — the rising/falling shape of mood, read from recent valence history.
+    tide_window: int = 5  # how many recent readings define the trajectory
+    tide_delta: float = 0.06  # min valence change to count as rising/falling (else steady)
+    # Label hysteresis: a new top label must persist this many ticks before it
+    # replaces the shown one (anti-flicker; keeps the rendered block cache-stable).
+    label_smooth_ticks: int = 2
 
 
 # --------------------------------------------------------------------------- #
@@ -277,6 +283,30 @@ LABEL_TO_TRAITS = {
 }
 
 
+# --------------------------------------------------------------------------- #
+# Relationship — how the bond with the user drifts over time                  #
+# --------------------------------------------------------------------------- #
+@dataclass(frozen=True)
+class RelationshipConfig:
+    """Rates at which the relationship dimensions move. All small on purpose: a
+    bond is built (and frayed) slowly, over many turns, not in one exchange."""
+
+    closeness_up: float = 0.004  # a warm turn nudges closeness up
+    closeness_down: float = 0.003  # a cold turn nudges it down
+    trust_up: float = 0.002  # warmth slowly earns trust
+    safety_up: float = 0.003  # warmth slowly builds felt safety
+    safety_down: float = 0.005  # friction erodes it a bit faster
+    tension_decay: float = 0.01  # unresolved tension eases on its own per tick
+    repair_per_event: float = 0.10  # repair only accumulates — it is trust capital
+    # Milestone-driven shifts, scaled by the event's severity.
+    trust_per_care: float = 0.03
+    trust_per_betrayal: float = 0.08  # subtracted from trust
+    closeness_per_warmth: float = 0.04
+    tension_per_conflict: float = 0.15
+    clamp_lo: float = 0.05
+    clamp_hi: float = 0.95
+
+
 @dataclass(frozen=True)
 class Config:
     """Bundle of every sub-config. Pass a customised one to the engine, or use
@@ -287,6 +317,7 @@ class Config:
     pressure: PressureConfig = field(default_factory=PressureConfig)
     memory: MemoryConfig = field(default_factory=MemoryConfig)
     time: TimeConfig = field(default_factory=TimeConfig)
+    relationship: RelationshipConfig = field(default_factory=RelationshipConfig)
 
 
 DEFAULT_CONFIG = Config()

@@ -43,9 +43,12 @@ from pathlib import Path
 from .affect import (
     apply_trait_shift,
     check_echo,
+    compute_tide,
     decay_imprints,
     ingest_milestones,
+    smooth_labels,
     update_mood,
+    update_relationship,
     update_traits,
 )
 from .affect import (
@@ -130,6 +133,11 @@ class Engine:
         # Load engine bookkeeping (best-effort; never fatal).
         self._last_user_ts: str | None = None
         self.imprints: list[Imprint] = []
+        # Label-hysteresis bookkeeping (see affect.smooth): the labels currently
+        # shown, plus a candidate top label and how long it has been trying to win.
+        self._labels_committed: list[str] = []
+        self._label_candidate: str | None = None
+        self._label_streak: int = 0
         self._load_meta()
 
     # ------------------------------------------------------------------ #
@@ -174,6 +182,16 @@ class Engine:
         # (2) Integrate into slow traits, then the trait-pulled fast mood.
         traits = update_traits(self.state.traits, delta, self.config.traits)
         mood = update_mood(self.state.mood, delta, traits, self.config.mood)
+        # Top-label hysteresis so a noisy source can't flip the shown label every
+        # turn (keeps the rendered block cache-stable).
+        mood.labels, self._label_candidate, self._label_streak = smooth_labels(
+            mood.labels,
+            self._labels_committed,
+            self._label_candidate,
+            self._label_streak,
+            self.config.mood.label_smooth_ticks,
+        )
+        self._labels_committed = list(mood.labels)
 
         # (3) Optional permanent imprints. Deep appraised events (the warmth /
         #     trauma families) leave a lasting mark; their one-time trait shift is
@@ -181,12 +199,14 @@ class Engine:
         #     temperament this turn. Done on the imprint-adjusted `traits`.
         traits = self._apply_imprints(delta, traits, messages, ts)
 
-        # (4) One full pressure-cooker tick (mutates and returns the same object).
+        # (4) Evolve the bond with the user from this turn (its tension/safety
+        #     feed the pressure tick), then run one full pressure-cooker tick.
+        relationship = update_relationship(self.state.relationship, delta, self.config.relationship)
         pressure = pressure_step(
             self.state.pressure,
             delta=delta,
             traits=traits,
-            relationship=self.state.relationship,
+            relationship=relationship,
             dials=self.dials,
             cfg=self.config.pressure,
             ts=ts,
@@ -195,6 +215,7 @@ class Engine:
         # Commit the integrated layers back onto the state.
         self.state.traits = traits
         self.state.mood = mood
+        self.state.relationship = relationship
         self.state.pressure = pressure
 
         # (5) Rolling history of readings + bookkeeping, then persist.
@@ -207,6 +228,8 @@ class Engine:
             }
         )
         self.state.history = self.state.history[-50:]
+        # Read the mood's rising/falling tide from the (now-updated) history.
+        self.state.mood.tide = compute_tide(self.state.history, self.config.mood)
         self.state.last_tick_ts = ts
 
         # A turn that actually carried a user message re-anchors the time sense:
@@ -332,6 +355,9 @@ class Engine:
         self.imprints = [
             Imprint.from_dict(d) for d in (data.get("imprints") or []) if isinstance(d, dict)
         ]
+        self._labels_committed = list(data.get("labels_committed") or [])
+        self._label_candidate = data.get("label_candidate") or None
+        self._label_streak = int(data.get("label_streak") or 0)
 
     def _save_meta(self) -> None:
         """Atomically write the engine sidecar beside the state file."""
@@ -340,6 +366,9 @@ class Engine:
         payload = {
             "last_user_ts": self._last_user_ts,
             "imprints": [imp.to_dict() for imp in self.imprints],
+            "labels_committed": list(self._labels_committed),
+            "label_candidate": self._label_candidate,
+            "label_streak": int(self._label_streak),
         }
         p = self._meta_path
         p.parent.mkdir(parents=True, exist_ok=True)

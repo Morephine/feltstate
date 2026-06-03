@@ -6,6 +6,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Fact extraction** (`memory.extract`): an optional second-model pass that
+  proposes 5W1H facts for a `Canon` — model-agnostic, grey-zone by default, so
+  the agent confirms what it keeps.
+- **The relationship now evolves** (`affect.relationship`): closeness, trust and
+  safety drift with the conversation; tension rises on friction and eases over
+  time; repair banks trust capital that never decays.
+- **Mood tide** (`affect.tide`): the rising/falling shape of mood, rendered as
+  "lifting" / "sinking" / "riding high" / "at a low".
+- **Mixed feelings are rendered** ("relieved tinged with sad").
+- **Scheduled anticipation**: the joy floor can ramp toward a dated event
+  (dopamine pre-payment) instead of staying flat.
+- **Top-label hysteresis** (`affect.smooth`): a noisy source no longer flickers
+  the rendered block from turn to turn.
+
 ## [0.1.0] - initial
 
 First public release: a clean, dependency-free reference implementation of a

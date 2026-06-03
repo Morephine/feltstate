@@ -168,6 +168,12 @@ class Mood:
     labels: list[str] = field(default_factory=list)
     # {"valence","arousal","weight"} — last turn's lingering flavour, or None
     aftertaste: dict | None = None
+    # {"primary","secondary","primary_score","secondary_score"} — a mixed feeling
+    # carried from the reading (e.g. "relief tinged with sadness"), or None
+    mixed_blend: dict | None = None
+    # {"stage","intensity"} — where the mood sits in its rising/falling tide
+    # (computed from recent valence trajectory), or None when flat/calm
+    tide: dict | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -175,6 +181,8 @@ class Mood:
             "arousal": round(self.arousal, 4),
             "labels": list(self.labels),
             "aftertaste": self.aftertaste,
+            "mixed_blend": self.mixed_blend,
+            "tide": self.tide,
         }
 
     @classmethod
@@ -185,6 +193,8 @@ class Mood:
             arousal=float(d.get("arousal", 0.4)),
             labels=list(d.get("labels") or []),
             aftertaste=d.get("aftertaste"),
+            mixed_blend=d.get("mixed_blend"),
+            tide=d.get("tide"),
         )
 
 
