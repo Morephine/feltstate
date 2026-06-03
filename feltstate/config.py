@@ -323,6 +323,29 @@ class DreamConfig:
     residue_scale: float = 0.25  # shrink the blended affect to a faint nudge
 
 
+# --------------------------------------------------------------------------- #
+# Sleep pressure — when to dream (homeostatic, not clock-driven)              #
+# --------------------------------------------------------------------------- #
+@dataclass(frozen=True)
+class TirednessConfig:
+    """Tunables for the single sleep-pressure accumulator (:mod:`feltstate.sleep`).
+
+    Defaults aim for roughly one dream per day under ordinary activity, with a
+    hard floor that prevents more than a couple regardless of how hard the agent
+    lived. Tune ``rise_k`` for cadence, ``refractory_hours`` for the hard cap."""
+
+    rise_k: float = (
+        0.125  # level gained per hour per unit arousal (~16h at arousal .5 -> threshold)
+    )
+    threshold: float = 1.0  # a dream becomes possible at/above this level
+    refractory_hours: float = 10.0  # hard minimum between dreams — caps frequency whatever the rate
+    idle_gate_minutes: float = 30.0  # must be alone at least this long to drift off
+    self_accel_alpha: float = (
+        0.0  # >0: tiredness compounds (the tireder, the faster); off by default
+    )
+    level_cap: float = 3.0  # never accrue unboundedly across a long idle
+
+
 @dataclass(frozen=True)
 class Config:
     """Bundle of every sub-config. Pass a customised one to the engine, or use
@@ -335,6 +358,7 @@ class Config:
     time: TimeConfig = field(default_factory=TimeConfig)
     relationship: RelationshipConfig = field(default_factory=RelationshipConfig)
     dream: DreamConfig = field(default_factory=DreamConfig)
+    tiredness: TirednessConfig = field(default_factory=TirednessConfig)
 
 
 DEFAULT_CONFIG = Config()

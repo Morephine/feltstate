@@ -85,6 +85,11 @@ class Phrasebook:
     they must read as continuing from the previous image without re-naming it
     (e.g. "which became", not "{previous} became"). ``open`` starts the dream and
     ``dissolve`` ends it (dreams don't conclude, they slip away).
+
+    ``joiner`` separates the stitched parts and ``glue`` sits between a connective
+    and the fragment it introduces — both default to English word-spacing. For a
+    space-less script (Chinese, Japanese) set ``glue=""`` and ``joiner`` to your
+    own punctuation.
     """
 
     open: tuple[str, ...]
@@ -94,6 +99,7 @@ class Phrasebook:
     dissolve: tuple[str, ...]
     joiner: str = ", "
     terminator: str = "."
+    glue: str = " "  # between a connective and its fragment ("" for CJK scripts)
 
 
 DEFAULT_PHRASEBOOK = Phrasebook(
@@ -132,7 +138,7 @@ def stitch(fragments: list[Fragment], phrasebook: Phrasebook, rng: random.Random
     """
     if not fragments:
         return ""
-    parts = [rng.choice(phrasebook.open) + " " + fragments[0].text]
+    parts = [rng.choice(phrasebook.open) + phrasebook.glue + fragments[0].text]
     last = ""
     for frag in fragments[1:]:
         r = rng.random()
@@ -144,7 +150,7 @@ def stitch(fragments: list[Fragment], phrasebook: Phrasebook, rng: random.Random
         while bridge == last and tries < 5:
             bridge = rng.choice(pool)
             tries += 1
-        parts.append(bridge + " " + frag.text)
+        parts.append(bridge + phrasebook.glue + frag.text)
         last = bridge
     parts.append(rng.choice(phrasebook.dissolve))
     body = phrasebook.joiner.join(parts)
@@ -234,6 +240,18 @@ def dream(
 # --------------------------------------------------------------------------- #
 # Best-effort fragment gathering from an AffectState                          #
 # --------------------------------------------------------------------------- #
+# Pressure releases -> a short felt image + the affect of that climax. Generic
+# English; supply richer Fragments via ``extra`` for another locale or voice.
+_RELEASE_FRAGMENT = {
+    "burst_joy": ("a flare of joy", 0.7, 0.7),
+    "tears": ("a wave of tears", -0.6, 0.6),
+    "anger": ("a flash of anger", -0.5, 0.75),
+    "anxious": ("a clench of dread", -0.5, 0.7),
+    "withdraw": ("the urge to pull away", -0.4, 0.35),
+    "collapse": ("everything crowding in at once", -0.4, 0.8),
+}
+
+
 def gather_fragments(
     state: AffectState,
     *,
@@ -241,14 +259,25 @@ def gather_fragments(
     history_window: int = 30,
     peak_valence: float = 0.25,
     max_history: int = 6,
+    include_releases: bool = True,
+    max_releases: int = 4,
 ) -> list[Fragment]:
     """A best-effort dream-material set drawn from ``state`` plus any ``extra``.
 
-    Pulls emotional *peaks* from the rolling history (turns whose valence ran
-    past ``peak_valence``), using each turn's top label as the image text. This
-    is intentionally thin — labels make abstract dreams. For vivid dreams, pass
-    rich :class:`Fragment` objects via ``extra`` (real desires and remembered
-    scenes from your own store, each tagged with the affect it was felt at).
+    Three layers, all tagged with the affect they were felt at:
+
+    * ``extra`` — rich :class:`Fragment` objects from the caller's own store (real
+      desires, remembered scenes, an inner monologue). The best material; supply
+      it when you can.
+    * **history peaks** — turns whose valence ran past ``peak_valence``, labelled
+      by their top emotion word. Thin (labels make abstract dreams) but free.
+    * **pressure releases** — the agent's recent emotional *climaxes* (a good cry,
+      a flare of joy), pulled from the pressure cooker as raw spikes. Distinct
+      from the reflective history peaks: a release is something it *felt break*.
+
+    Recency weights each fragment, so older material fades to a faint tail rather
+    than vanishing — which is what lets an old, charged image recur in a later
+    dream. Intentionally best-effort: the vivid stuff is ``extra``.
     """
     frags: list[Fragment] = list(extra or [])
 
@@ -271,4 +300,20 @@ def gather_fragments(
     # Keep the strongest peaks.
     peaks.sort(key=lambda f: abs(f.valence) * f.weight, reverse=True)
     frags.extend(peaks[:max_history])
+
+    # Pressure releases — raw emotional climaxes, charged dream material.
+    if include_releases:
+        releases = list(getattr(state.pressure, "history", None) or [])[-max_releases:]
+        rn = len(releases)
+        for i, ev in enumerate(releases):
+            if not isinstance(ev, dict):
+                continue
+            rtype = str(ev.get("release_type") or "").replace("_suppress", "")
+            spec = _RELEASE_FRAGMENT.get(rtype)
+            if not spec:
+                continue
+            text, rv, ra = spec
+            recency = (i + 1) / max(1, rn)
+            frags.append(Fragment(text=text, valence=rv, arousal=ra, weight=recency))
+
     return frags

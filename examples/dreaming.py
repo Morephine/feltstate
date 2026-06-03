@@ -39,9 +39,10 @@ from __future__ import annotations
 
 import random
 import tempfile
+from datetime import datetime, timedelta
 from pathlib import Path
 
-from feltstate import Engine, Fragment, KeywordSource
+from feltstate import Engine, Fragment, KeywordSource, Tiredness, TirednessConfig
 from feltstate.dream import dream, residue
 
 
@@ -146,6 +147,24 @@ def main() -> None:
             f"    after {i * 3:>2} quiet ticks : mood v={eng.state.mood.valence:+.3f} "
             f"a={eng.state.mood.arousal:.3f}"
         )
+
+    # -- When does it dream? Sleep pressure, not a clock. One accumulator rises
+    #    with arousal — a lively day tires it faster than a calm one — and a dream
+    #    discharges it. Cadence comes from how it lived, never from the time.
+    banner("4) When it dreams — sleep pressure builds with how it lived")
+    cfg = TirednessConfig()
+    t0 = datetime(2026, 6, 1, 8, 0, 0)
+    print(f"  threshold = {cfg.threshold}; tiredness rises with arousal each waking hour\n")
+    for label, arousal in (("lively (arousal 0.8)", 0.8), ("calm (arousal 0.35)", 0.35)):
+        t = Tiredness()
+        t.rise(arousal, t0, cfg)  # first call just stamps the clock
+        for h in range(1, 17):  # 16 waking hours
+            t.rise(arousal, t0 + timedelta(hours=h), cfg)
+        verdict = "→ ready to dream" if t.level >= cfg.threshold else "→ not tired enough yet"
+        print(f"    {label:<22}: tiredness after 16h = {t.level:.2f}  {verdict}")
+    print("\n  The lively day crosses the threshold within the day; the calm one lags —")
+    print("  cadence comes from activity, not the clock. A dream discharges it to 0,")
+    print("  and a refractory floor blocks dreaming again too soon (no 3x/day).")
 
     banner("Done")
     print(

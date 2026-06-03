@@ -238,6 +238,20 @@ Two notes worth stating:
 This runs *off* the per-turn path: you dream on a sleep cycle — between sessions,
 or after a long idle — not every message.
 
+**When does it dream? Not on a clock.** A single *sleep-pressure* accumulator
+rises with arousal — an intense stretch tires the agent faster than a calm one —
+and a dream discharges it to zero. That is the homeostatic half of the
+two-process model of sleep (Process S): pressure builds the longer and harder you
+are awake, and sleep clears it. A dream fires when three things hold at once —
+tired *enough*, left *alone* a while, and past a hard *refractory* interval since
+the last one — so the cadence emerges from how the agent actually lived that day
+(roughly once a day under ordinary activity), capped against dreaming too often
+no matter how fast pressure climbs. The same quiet moment where it is *not* yet
+tired enough is, in a fuller system, exactly where it would reflect or introspect
+instead: the one tiredness value is what arbitrates between staying up and
+drifting off. As ever, this only decides *when*; the agent still does the dreaming
+— a reading, not a command.
+
 ---
 
 ## 6. Cache-safe by construction

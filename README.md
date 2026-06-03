@@ -110,10 +110,12 @@ python examples/quickstart.py     # pure stdlib, no install needed
 The reply model reads the felt block and **decides for itself** how to act. The
 library never writes "be sad now" into the prompt — it only ever supplies state.
 
-*Off* this per-turn path, `Engine.dream()` can run on a sleep cycle (between
-sessions, or after a long idle): it recombines the agent's own charged material
-into a short, illogical dream that leaves a faint, **untraceable** mood the agent
-wakes with and can't trace back. See §5 of [PHILOSOPHY.md](PHILOSOPHY.md).
+*Off* this per-turn path, the agent **dreams**: `Engine.maybe_dream()` fires only
+when a single sleep-pressure accumulator (driven by arousal, not the clock) says
+it's tired enough — then recombines the agent's own charged material into a short,
+illogical dream that leaves a faint, **untraceable** mood it wakes with and can't
+trace back, which decays over the next hours like any feeling. See §5 of
+[PHILOSOPHY.md](PHILOSOPHY.md).
 
 ---
 
@@ -127,9 +129,10 @@ wakes with and can't trace back. See §5 of [PHILOSOPHY.md](PHILOSOPHY.md).
 | `feltstate/affect/` | The dynamics: `pressure` (multi-bar release), `traits` (asymmetric adaptation), `imprint` (permanent marks), `relationship` (the bond evolving), `tide` (mood's rise & fall), `smooth` (label hysteresis). |
 | `feltstate/memory/` | `Canon` — a decaying 5W1H fact store (intensity fades, repetition reinforces, recall slows decay); `extract` — optional second-model fact extraction into it. |
 | `feltstate/dream.py` | Off-path, zero-LLM: recombines the agent's charged material (`Fragment`s) into an *illogical* dream that leaves a faint, **untraceable** mood residue. Swap the `Phrasebook` for another language. |
+| `feltstate/sleep.py` | The single sleep-pressure accumulator (`Tiredness`) that decides *when* to dream: rises with arousal, gated by threshold + idle + a hard refractory floor, discharged by a dream. Homeostatic, not clock-driven. |
 | `feltstate/timeawareness/` | Fuzzy "how long since we last talked" + precise "now". |
 | `feltstate/render/` | `render_felt_block` (state → first-person block) + `build_injection` (cache-safe). |
-| `feltstate/engine.py` | `Engine` — the façade that ties it together: `tick()`, `render()`, `inject()`, `dream()`. |
+| `feltstate/engine.py` | `Engine` — the façade that ties it together: `tick()`, `render()`, `inject()`, `dream()`, `maybe_dream()`. |
 
 ---
 

@@ -58,11 +58,15 @@ from .affect.imprint import Imprint
 from .config import DEFAULT_CONFIG, Config, PersonaDials
 from .memory.canon import Canon
 from .render import build_injection, render_felt_block
+from .sleep import Tiredness
 from .sources.base import AffectSource, latest_user_text
 from .state import AffectState
 from .timeawareness import now_phrase, time_since_phrase
 
 __all__ = ["Engine"]
+
+# A dream is forgotten once its mood-nudge has decayed this close to baseline.
+_DREAM_FORGET_EPS = 0.04
 
 
 class Engine:
@@ -139,6 +143,7 @@ class Engine:
         self._label_candidate: str | None = None
         self._label_streak: int = 0
         self._last_dream: str = ""  # most recent dream's text, for possible recall
+        self.tiredness: Tiredness = Tiredness()  # sleep-pressure accumulator (when to dream)
         self._load_meta()
 
     # ------------------------------------------------------------------ #
@@ -239,6 +244,13 @@ class Engine:
         # growing while the conversation is quiet.
         if latest_user_text(messages).strip():
             self._last_user_ts = ts
+
+        # (6) Sleep pressure: accrue tiredness for this tick's activity (it drives
+        #     *when* the agent next dreams), and forget the last dream once its
+        #     residue has decayed back to baseline (text lifespan = mood lifespan).
+        self.tiredness.rise(self.state.mood.arousal, now, self.config.tiredness)
+        if self._last_dream and self._dream_residue_spent():
+            self._last_dream = ""
 
         self.save()
         return self.state
@@ -371,6 +383,45 @@ class Engine:
         self.save()
         return d
 
+    def maybe_dream(
+        self,
+        *,
+        idle_minutes: float,
+        now: datetime | None = None,
+        fragments: list | None = None,
+        phrasebook=None,
+        rng=None,
+    ):
+        """Dream *iff* sleep pressure says it is time — otherwise return ``None``.
+
+        This is the *when*; :meth:`dream` is the *how*. It brings the tiredness
+        accumulator up to ``now`` (catching up any idle time since its last
+        update), and if it is :meth:`~feltstate.sleep.Tiredness.ready` — tired
+        enough, alone at least ``idle_gate_minutes``, and past the refractory floor
+        since the last dream — runs one dream, discharges the pressure to zero, and
+        returns the :class:`~feltstate.dream.Dream`. Otherwise it persists the
+        risen pressure and returns ``None``, changing nothing else.
+
+        Call it on a sleep-cycle check (a periodic idle tick), not every turn. When
+        the agent is *not yet* tired enough, it simply isn't ready to sleep — in a
+        fuller system that idle moment is where introspection would run instead.
+        """
+        now = now or datetime.now()
+        self.tiredness.rise(self.state.mood.arousal, now, self.config.tiredness)
+        if not self.tiredness.ready(now, idle_minutes, self.config.tiredness):
+            self.save()  # persist the risen pressure even when we don't dream
+            return None
+        d = self.dream(fragments=fragments, phrasebook=phrasebook, rng=rng)
+        self.tiredness.discharge(now)
+        self.save()
+        return d
+
+    def _dream_residue_spent(self) -> bool:
+        """True once a dream's faint mood-nudge has decayed back to baseline — at
+        which point the dream is forgotten (its stored text is dropped)."""
+        m = self.state.mood
+        return abs(m.valence) < _DREAM_FORGET_EPS and abs(m.arousal - 0.4) < _DREAM_FORGET_EPS
+
     # ------------------------------------------------------------------ #
     # Persistence                                                        #
     # ------------------------------------------------------------------ #
@@ -397,6 +448,7 @@ class Engine:
         self._label_candidate = data.get("label_candidate") or None
         self._label_streak = int(data.get("label_streak") or 0)
         self._last_dream = str(data.get("last_dream", "") or "")
+        self.tiredness = Tiredness.from_dict(data.get("tiredness"))
 
     def _save_meta(self) -> None:
         """Atomically write the engine sidecar beside the state file."""
@@ -409,6 +461,7 @@ class Engine:
             "label_candidate": self._label_candidate,
             "label_streak": int(self._label_streak),
             "last_dream": self._last_dream,
+            "tiredness": self.tiredness.to_dict(),
         }
         p = self._meta_path
         p.parent.mkdir(parents=True, exist_ok=True)

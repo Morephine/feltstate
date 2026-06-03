@@ -15,6 +15,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   raises arousal; the residue decays through the normal dynamics. Supply rich
   `Fragment`s (or a swapped-in `Phrasebook` for another language); the default
   phrasebook is English.
+- **Sleep pressure** (`feltstate.sleep` + `Engine.maybe_dream`): a single
+  `Tiredness` accumulator that decides *when* to dream — rises with arousal (an
+  intense stretch tires faster than a calm one), gated by a threshold, a 30-min
+  idle, and a hard refractory floor, and discharged to zero by a dream. Cadence
+  (≈ once a day) emerges from activity, not the clock. A dream's text is also
+  dropped once its mood-nudge has decayed, so its lifespan tracks the feeling's.
 - **Fact extraction** (`memory.extract`): an optional second-model pass that
   proposes 5W1H facts for a `Canon` — model-agnostic, grey-zone by default, so
   the agent confirms what it keeps.
