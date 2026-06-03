@@ -29,6 +29,7 @@ quiet: keep ticking with empty deltas and traits and mood both ease home.
 Every constant comes from :class:`~feltstate.config.TraitConfig` /
 :class:`~feltstate.config.MoodConfig`; nothing is hard-coded or character-specific.
 """
+
 from __future__ import annotations
 
 from ..config import LABEL_TO_TRAITS, MoodConfig, TraitConfig
@@ -131,15 +132,10 @@ def _trait_resting_point(traits: Traits) -> tuple[float, float, float]:
     optimism = traits.optimism
     anxiety = traits.anxiety
 
-    resting_v = (
-        -max(0.0, depression - 0.5) * 0.40
-        + max(0.0, optimism - 0.5) * 0.30
-    )
+    resting_v = -max(0.0, depression - 0.5) * 0.40 + max(0.0, optimism - 0.5) * 0.30
     resting_a = 0.5 + max(0.0, anxiety - 0.5) * 0.20
 
-    deviation = max(
-        abs(depression - 0.5), abs(optimism - 0.5), abs(anxiety - 0.5)
-    )
+    deviation = max(abs(depression - 0.5), abs(optimism - 0.5), abs(anxiety - 0.5))
     # Dead-zone of 0.05, then ramp; capped so gravity can soften but never pin.
     strength = min(0.20, max(0.0, deviation - 0.05) * 0.6)
     return resting_v, resting_a, strength

@@ -34,30 +34,30 @@ Quickstart::
     prompt = eng.inject("what should we build next?")  # felt block + user words
     # ... send `prompt` as the user turn; persona/rules stay static up top ...
 """
+
 from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
-
-from .config import Config, DEFAULT_CONFIG, PersonaDials
-from .state import AffectState
-from .sources.base import AffectSource, latest_user_text
-from .memory.canon import Canon
 
 from .affect import (
     apply_trait_shift,
     check_echo,
     decay_imprints,
     ingest_milestones,
-    step as pressure_step,
     update_mood,
     update_traits,
 )
+from .affect import (
+    step as pressure_step,
+)
 from .affect.imprint import Imprint
-from .timeawareness import now_phrase, time_since_phrase
+from .config import DEFAULT_CONFIG, Config, PersonaDials
+from .memory.canon import Canon
 from .render import build_injection, render_felt_block
-
+from .sources.base import AffectSource, latest_user_text
+from .state import AffectState
+from .timeawareness import now_phrase, time_since_phrase
 
 __all__ = ["Engine"]
 
@@ -105,14 +105,16 @@ class Engine:
         state_path: str | Path = "state.json",
         config: Config = DEFAULT_CONFIG,
         persona: str = "",
-        dials: PersonaDials = None,
+        dials: PersonaDials | None = None,
         canon: Canon | None = None,
+        max_imprints: int = 128,
     ) -> None:
         self.source = source
         self.config = config
         self.persona = persona or ""
         self.dials = dials if dials is not None else PersonaDials()
         self.canon = canon
+        self.max_imprints = int(max_imprints)
 
         self.state_path = Path(state_path)
         # Sidecar for engine bookkeeping the AffectState schema does not carry:
@@ -126,7 +128,7 @@ class Engine:
         self.state: AffectState = AffectState.load(self.state_path)
 
         # Load engine bookkeeping (best-effort; never fatal).
-        self._last_user_ts: Optional[str] = None
+        self._last_user_ts: str | None = None
         self.imprints: list[Imprint] = []
         self._load_meta()
 
@@ -196,12 +198,14 @@ class Engine:
         self.state.pressure = pressure
 
         # (5) Rolling history of readings + bookkeeping, then persist.
-        self.state.history.append({
-            "ts": ts,
-            "valence": round(float(delta.valence), 4),
-            "arousal": round(float(delta.arousal), 4),
-            "labels": list(delta.labels or []),
-        })
+        self.state.history.append(
+            {
+                "ts": ts,
+                "valence": round(float(delta.valence), 4),
+                "arousal": round(float(delta.arousal), 4),
+                "labels": list(delta.labels or []),
+            }
+        )
         self.state.history = self.state.history[-50:]
         self.state.last_tick_ts = ts
 
@@ -247,6 +251,13 @@ class Engine:
                 traits = apply_trait_shift(traits, imp)
                 self.imprints.append(imp)
                 known_ids.add(imp.id)
+
+        # Bound the imprint list defensively: a source that reports the same deep
+        # event every turn must not grow memory without limit. When over the cap,
+        # keep the most vivid marks (current intensity, then original depth).
+        if len(self.imprints) > self.max_imprints:
+            self.imprints.sort(key=lambda i: (i.intensity, i.severity), reverse=True)
+            del self.imprints[self.max_imprints :]
 
         return traits
 

@@ -29,15 +29,15 @@ Two design rules from :mod:`feltstate.sources.base` shape this implementation:
    common cues to a plausible standing reaction and let the slow layers
    (traits, mood, relationship in :mod:`feltstate.affect`) integrate it.
 """
+
 from __future__ import annotations
 
 import re
-from typing import Sequence
+from collections.abc import Sequence
 
 from ..config import DEFAULT_LABELS
 from ..state import AffectDelta, AffectState
 from .base import AffectSource, latest_user_text
-
 
 # --------------------------------------------------------------------------- #
 # Cue table                                                                   #
@@ -56,127 +56,469 @@ from .base import AffectSource, latest_user_text
 # intentionally small and general; extend it freely for your domain.
 _CUES: tuple[dict, ...] = (
     # --- positive: gratitude / warmth ------------------------------------ #
-    {"label": "grateful", "valence": 0.75, "arousal": 0.45, "weight": 1.0,
-     "phrases": ("thank you", "thanks", "thank u", "thx", "ty",
-                 "appreciate", "grateful", "means a lot")},
-    {"label": "tender", "valence": 0.70, "arousal": 0.40, "weight": 1.0,
-     "phrases": ("love you", "love u", "i love", "adore you", "you mean",
-                 "care about you", "you're the best", "youre the best")},
-    {"label": "proud", "valence": 0.80, "arousal": 0.55, "weight": 0.9,
-     "phrases": ("proud of you", "so proud", "well done", "good job",
-                 "nice work", "great work", "impressive")},
-    {"label": "content", "valence": 0.55, "arousal": 0.30, "weight": 0.7,
-     "phrases": ("happy", "glad", "pleased", "wonderful", "lovely",
-                 "feels good", "feel good", "nice")},
-    {"label": "joyful", "valence": 0.85, "arousal": 0.75, "weight": 1.0,
-     "phrases": ("yay", "woohoo", "hooray", "amazing", "awesome",
-                 "fantastic", "so happy", "delighted", "thrilled")},
-    {"label": "excited", "valence": 0.75, "arousal": 0.85, "weight": 0.95,
-     "phrases": ("excited", "can't wait", "cant wait", "so pumped",
-                 "let's go", "lets go", "stoked")},
-    {"label": "amused", "valence": 0.65, "arousal": 0.55, "weight": 0.7,
-     "phrases": ("lol", "lmao", "haha", "hehe", "rofl", "funny", "so funny")},
-    {"label": "relieved", "valence": 0.55, "arousal": 0.35, "weight": 0.8,
-     "phrases": ("finally", "phew", "what a relief", "relieved",
-                 "thank god", "at last")},
-    {"label": "hopeful", "valence": 0.50, "arousal": 0.45, "weight": 0.7,
-     "phrases": ("hopeful", "looking forward", "fingers crossed",
-                 "i hope", "hope so", "optimistic")},
-    {"label": "calm", "valence": 0.30, "arousal": 0.20, "weight": 0.6,
-     "phrases": ("calm", "peaceful", "at ease", "relaxed", "no worries",
-                 "it's fine", "its fine", "all good")},
-
+    {
+        "label": "grateful",
+        "valence": 0.75,
+        "arousal": 0.45,
+        "weight": 1.0,
+        "phrases": (
+            "thank you",
+            "thanks",
+            "thank u",
+            "thx",
+            "ty",
+            "appreciate",
+            "grateful",
+            "means a lot",
+        ),
+    },
+    {
+        "label": "tender",
+        "valence": 0.70,
+        "arousal": 0.40,
+        "weight": 1.0,
+        "phrases": (
+            "love you",
+            "love u",
+            "i love",
+            "adore you",
+            "you mean",
+            "care about you",
+            "you're the best",
+            "youre the best",
+        ),
+    },
+    {
+        "label": "proud",
+        "valence": 0.80,
+        "arousal": 0.55,
+        "weight": 0.9,
+        "phrases": (
+            "proud of you",
+            "so proud",
+            "well done",
+            "good job",
+            "nice work",
+            "great work",
+            "impressive",
+        ),
+    },
+    {
+        "label": "content",
+        "valence": 0.55,
+        "arousal": 0.30,
+        "weight": 0.7,
+        "phrases": (
+            "happy",
+            "glad",
+            "pleased",
+            "wonderful",
+            "lovely",
+            "feels good",
+            "feel good",
+            "nice",
+        ),
+    },
+    {
+        "label": "joyful",
+        "valence": 0.85,
+        "arousal": 0.75,
+        "weight": 1.0,
+        "phrases": (
+            "yay",
+            "woohoo",
+            "hooray",
+            "amazing",
+            "awesome",
+            "fantastic",
+            "so happy",
+            "delighted",
+            "thrilled",
+        ),
+    },
+    {
+        "label": "excited",
+        "valence": 0.75,
+        "arousal": 0.85,
+        "weight": 0.95,
+        "phrases": (
+            "excited",
+            "can't wait",
+            "cant wait",
+            "so pumped",
+            "let's go",
+            "lets go",
+            "stoked",
+        ),
+    },
+    {
+        "label": "amused",
+        "valence": 0.65,
+        "arousal": 0.55,
+        "weight": 0.7,
+        "phrases": ("lol", "lmao", "haha", "hehe", "rofl", "funny", "so funny"),
+    },
+    {
+        "label": "relieved",
+        "valence": 0.55,
+        "arousal": 0.35,
+        "weight": 0.8,
+        "phrases": ("finally", "phew", "what a relief", "relieved", "thank god", "at last"),
+    },
+    {
+        "label": "hopeful",
+        "valence": 0.50,
+        "arousal": 0.45,
+        "weight": 0.7,
+        "phrases": (
+            "hopeful",
+            "looking forward",
+            "fingers crossed",
+            "i hope",
+            "hope so",
+            "optimistic",
+        ),
+    },
+    {
+        "label": "calm",
+        "valence": 0.30,
+        "arousal": 0.20,
+        "weight": 0.6,
+        "phrases": (
+            "calm",
+            "peaceful",
+            "at ease",
+            "relaxed",
+            "no worries",
+            "it's fine",
+            "its fine",
+            "all good",
+        ),
+    },
     # --- curiosity / engagement ------------------------------------------ #
-    {"label": "curious", "valence": 0.35, "arousal": 0.55, "weight": 0.7,
-     "phrases": ("curious", "i wonder", "interesting", "intrigued",
-                 "tell me more", "how does", "what if", "fascinating")},
-    {"label": "focused", "valence": 0.15, "arousal": 0.55, "weight": 0.5,
-     "phrases": ("let's work", "lets work", "let's get to work",
-                 "focus", "let's start", "lets start", "let's build",
-                 "lets build")},
-
+    {
+        "label": "curious",
+        "valence": 0.35,
+        "arousal": 0.55,
+        "weight": 0.7,
+        "phrases": (
+            "curious",
+            "i wonder",
+            "interesting",
+            "intrigued",
+            "tell me more",
+            "how does",
+            "what if",
+            "fascinating",
+        ),
+    },
+    {
+        "label": "focused",
+        "valence": 0.15,
+        "arousal": 0.55,
+        "weight": 0.5,
+        "phrases": (
+            "let's work",
+            "lets work",
+            "let's get to work",
+            "focus",
+            "let's start",
+            "lets start",
+            "let's build",
+            "lets build",
+        ),
+    },
     # --- negative: sadness / low energy ---------------------------------- #
-    {"label": "sad", "valence": -0.70, "arousal": 0.35, "weight": 1.0,
-     "phrases": ("sad", "unhappy", "crying", "i cried", "heartbroken",
-                 "depressed", "miserable", "hurts", "this hurts",
-                 "feel down", "feeling down", "down")},
-    {"label": "lonely", "valence": -0.65, "arousal": 0.30, "weight": 0.95,
-     "phrases": ("lonely", "alone", "no one", "nobody", "isolated",
-                 "miss you", "i miss")},
-    {"label": "tired", "valence": -0.35, "arousal": 0.15, "weight": 0.85,
-     "phrases": ("tired", "exhausted", "so tired", "worn out", "burnt out",
-                 "burned out", "sleepy", "drained", "no energy", "fed up")},
-    {"label": "numb", "valence": -0.45, "arousal": 0.15, "weight": 0.7,
-     "phrases": ("numb", "empty", "nothing matters", "don't care anymore",
-                 "dont care anymore", "feel nothing")},
-    {"label": "disappointed", "valence": -0.55, "arousal": 0.35, "weight": 0.9,
-     "phrases": ("disappointed", "let down", "let me down", "bummed",
-                 "such a shame", "what a shame", "too bad")},
-    {"label": "wistful", "valence": -0.15, "arousal": 0.30, "weight": 0.7,
-     "phrases": ("i miss", "miss the old", "wish things", "used to be",
-                 "back then", "nostalgic", "bittersweet")},
-
+    {
+        "label": "sad",
+        "valence": -0.70,
+        "arousal": 0.35,
+        "weight": 1.0,
+        "phrases": (
+            "sad",
+            "unhappy",
+            "crying",
+            "i cried",
+            "heartbroken",
+            "depressed",
+            "miserable",
+            "hurts",
+            "this hurts",
+            "feel down",
+            "feeling down",
+            "down",
+        ),
+    },
+    {
+        "label": "lonely",
+        "valence": -0.65,
+        "arousal": 0.30,
+        "weight": 0.95,
+        "phrases": ("lonely", "alone", "no one", "nobody", "isolated", "miss you", "i miss"),
+    },
+    {
+        "label": "tired",
+        "valence": -0.35,
+        "arousal": 0.15,
+        "weight": 0.85,
+        "phrases": (
+            "tired",
+            "exhausted",
+            "so tired",
+            "worn out",
+            "burnt out",
+            "burned out",
+            "sleepy",
+            "drained",
+            "no energy",
+            "fed up",
+        ),
+    },
+    {
+        "label": "numb",
+        "valence": -0.45,
+        "arousal": 0.15,
+        "weight": 0.7,
+        "phrases": (
+            "numb",
+            "empty",
+            "nothing matters",
+            "don't care anymore",
+            "dont care anymore",
+            "feel nothing",
+        ),
+    },
+    {
+        "label": "disappointed",
+        "valence": -0.55,
+        "arousal": 0.35,
+        "weight": 0.9,
+        "phrases": (
+            "disappointed",
+            "let down",
+            "let me down",
+            "bummed",
+            "such a shame",
+            "what a shame",
+            "too bad",
+        ),
+    },
+    {
+        "label": "wistful",
+        "valence": -0.15,
+        "arousal": 0.30,
+        "weight": 0.7,
+        "phrases": (
+            "i miss",
+            "miss the old",
+            "wish things",
+            "used to be",
+            "back then",
+            "nostalgic",
+            "bittersweet",
+        ),
+    },
     # --- negative: anxiety ----------------------------------------------- #
-    {"label": "anxious", "valence": -0.55, "arousal": 0.75, "weight": 1.0,
-     "phrases": ("anxious", "anxiety", "panic", "panicking", "freaking out",
-                 "freaked out", "on edge", "dread")},
-    {"label": "worried", "valence": -0.45, "arousal": 0.60, "weight": 0.9,
-     "phrases": ("worried", "worry", "concerned", "nervous", "uneasy",
-                 "what if it goes wrong")},
-    {"label": "scared", "valence": -0.60, "arousal": 0.80, "weight": 1.0,
-     "phrases": ("scared", "afraid", "terrified", "frightened", "fear")},
-    {"label": "tense", "valence": -0.40, "arousal": 0.65, "weight": 0.8,
-     "phrases": ("tense", "stressed", "stress", "so much pressure",
-                 "under pressure", "overwhelmed")},
-    {"label": "restless", "valence": -0.20, "arousal": 0.70, "weight": 0.6,
-     "phrases": ("restless", "can't sit still", "cant sit still",
-                 "jittery", "antsy")},
-
+    {
+        "label": "anxious",
+        "valence": -0.55,
+        "arousal": 0.75,
+        "weight": 1.0,
+        "phrases": (
+            "anxious",
+            "anxiety",
+            "panic",
+            "panicking",
+            "freaking out",
+            "freaked out",
+            "on edge",
+            "dread",
+        ),
+    },
+    {
+        "label": "worried",
+        "valence": -0.45,
+        "arousal": 0.60,
+        "weight": 0.9,
+        "phrases": ("worried", "worry", "concerned", "nervous", "uneasy", "what if it goes wrong"),
+    },
+    {
+        "label": "scared",
+        "valence": -0.60,
+        "arousal": 0.80,
+        "weight": 1.0,
+        "phrases": ("scared", "afraid", "terrified", "frightened", "fear"),
+    },
+    {
+        "label": "tense",
+        "valence": -0.40,
+        "arousal": 0.65,
+        "weight": 0.8,
+        "phrases": (
+            "tense",
+            "stressed",
+            "stress",
+            "so much pressure",
+            "under pressure",
+            "overwhelmed",
+        ),
+    },
+    {
+        "label": "restless",
+        "valence": -0.20,
+        "arousal": 0.70,
+        "weight": 0.6,
+        "phrases": ("restless", "can't sit still", "cant sit still", "jittery", "antsy"),
+    },
     # --- negative: anger / frustration ----------------------------------- #
-    {"label": "frustrated", "valence": -0.55, "arousal": 0.70, "weight": 1.0,
-     "phrases": ("ugh", "frustrated", "frustrating", "this is broken",
-                 "broken", "doesn't work", "doesnt work", "not working",
-                 "bug", "buggy", "crashed", "crash", "stuck", "argh", "grr")},
-    {"label": "irritated", "valence": -0.45, "arousal": 0.60, "weight": 0.8,
-     "phrases": ("irritated", "annoyed", "annoying", "bothered",
-                 "fed up with", "sick of")},
-    {"label": "angry", "valence": -0.75, "arousal": 0.85, "weight": 1.0,
-     "phrases": ("angry", "furious", "i hate", "hate this", "pissed",
-                 "pissed off", "mad", "outraged", "rage")},
-    {"label": "indignant", "valence": -0.55, "arousal": 0.70, "weight": 0.8,
-     "phrases": ("not fair", "unfair", "how dare", "ridiculous",
-                 "unacceptable", "outrageous")},
-
+    {
+        "label": "frustrated",
+        "valence": -0.55,
+        "arousal": 0.70,
+        "weight": 1.0,
+        "phrases": (
+            "ugh",
+            "frustrated",
+            "frustrating",
+            "this is broken",
+            "broken",
+            "doesn't work",
+            "doesnt work",
+            "not working",
+            "bug",
+            "buggy",
+            "crashed",
+            "crash",
+            "stuck",
+            "argh",
+            "grr",
+        ),
+    },
+    {
+        "label": "irritated",
+        "valence": -0.45,
+        "arousal": 0.60,
+        "weight": 0.8,
+        "phrases": ("irritated", "annoyed", "annoying", "bothered", "fed up with", "sick of"),
+    },
+    {
+        "label": "angry",
+        "valence": -0.75,
+        "arousal": 0.85,
+        "weight": 1.0,
+        "phrases": (
+            "angry",
+            "furious",
+            "i hate",
+            "hate this",
+            "pissed",
+            "pissed off",
+            "mad",
+            "outraged",
+            "rage",
+        ),
+    },
+    {
+        "label": "indignant",
+        "valence": -0.55,
+        "arousal": 0.70,
+        "weight": 0.8,
+        "phrases": ("not fair", "unfair", "how dare", "ridiculous", "unacceptable", "outrageous"),
+    },
     # --- mixed / social-cognitive ---------------------------------------- #
     # An apology is the canonical *mixed* cue: a little sting, a little
     # reassurance. We tag it sad-leaning but near-neutral and let mixed_blend
     # carry the ambivalence (see _build_delta).
-    {"label": "wistful", "valence": -0.10, "arousal": 0.40, "weight": 0.85,
-     "phrases": ("sorry", "i'm sorry", "im sorry", "my apologies",
-                 "apologize", "apologise", "forgive me", "my bad")},
-    {"label": "embarrassed", "valence": -0.35, "arousal": 0.55, "weight": 0.7,
-     "phrases": ("embarrassed", "embarrassing", "so awkward", "ashamed",
-                 "cringe", "mortified")},
-    {"label": "surprised", "valence": 0.10, "arousal": 0.75, "weight": 0.7,
-     "phrases": ("wow", "whoa", "what?!", "no way", "really?!",
-                 "surprised", "didn't expect", "didnt expect", "unexpected")},
-    {"label": "confused", "valence": -0.15, "arousal": 0.50, "weight": 0.6,
-     "phrases": ("confused", "don't understand", "dont understand",
-                 "doesn't make sense", "doesnt make sense", "lost", "huh")},
+    {
+        "label": "wistful",
+        "valence": -0.10,
+        "arousal": 0.40,
+        "weight": 0.85,
+        "phrases": (
+            "sorry",
+            "i'm sorry",
+            "im sorry",
+            "my apologies",
+            "apologize",
+            "apologise",
+            "forgive me",
+            "my bad",
+        ),
+    },
+    {
+        "label": "embarrassed",
+        "valence": -0.35,
+        "arousal": 0.55,
+        "weight": 0.7,
+        "phrases": ("embarrassed", "embarrassing", "so awkward", "ashamed", "cringe", "mortified"),
+    },
+    {
+        "label": "surprised",
+        "valence": 0.10,
+        "arousal": 0.75,
+        "weight": 0.7,
+        "phrases": (
+            "wow",
+            "whoa",
+            "what?!",
+            "no way",
+            "really?!",
+            "surprised",
+            "didn't expect",
+            "didnt expect",
+            "unexpected",
+        ),
+    },
+    {
+        "label": "confused",
+        "valence": -0.15,
+        "arousal": 0.50,
+        "weight": 0.6,
+        "phrases": (
+            "confused",
+            "don't understand",
+            "dont understand",
+            "doesn't make sense",
+            "doesnt make sense",
+            "lost",
+            "huh",
+        ),
+    },
 )
 
 # Phrases an apology fires on — used to flag the mixed-feeling blend.
 _APOLOGY_PHRASES = frozenset(
-    p for c in _CUES if c["label"] == "wistful" for p in c["phrases"]
+    p
+    for c in _CUES
+    if c["label"] == "wistful"
+    for p in c["phrases"]
     if "sorry" in p or "apolog" in p or p in ("forgive me", "my bad")
 )
 
 # A single intensifier nudges arousal and confidence up a touch; a single
 # negator/softener nudges them down. Cheap heuristics, not parsing.
-_INTENSIFIERS = ("so ", "really ", "very ", "extremely ", "absolutely ",
-                 "!!", "!!!", "super ", "incredibly ")
-_SOFTENERS = ("a bit", "a little", "kind of", "kinda", "sort of", "slightly",
-              "maybe", "i guess", "i think")
+_INTENSIFIERS = (
+    "so ",
+    "really ",
+    "very ",
+    "extremely ",
+    "absolutely ",
+    "!!",
+    "!!!",
+    "super ",
+    "incredibly ",
+)
+_SOFTENERS = (
+    "a bit",
+    "a little",
+    "kind of",
+    "kinda",
+    "sort of",
+    "slightly",
+    "maybe",
+    "i guess",
+    "i think",
+)
 
 
 def _compile(phrases: Sequence[str]) -> re.Pattern:
@@ -247,7 +589,9 @@ class KeywordSource(AffectSource):
         text = latest_user_text(messages)
         if not text.strip():
             return AffectDelta(
-                valence=0.0, arousal=0.4, labels=[],
+                valence=0.0,
+                arousal=0.4,
+                labels=[],
                 confidence=self.neutral_confidence,
             )
 
@@ -255,7 +599,9 @@ class KeywordSource(AffectSource):
         hits = self._scan(lowered)
         if not hits:
             return AffectDelta(
-                valence=0.0, arousal=0.4, labels=["neutral"],
+                valence=0.0,
+                arousal=0.4,
+                labels=["neutral"],
                 confidence=self.neutral_confidence,
             )
 
@@ -324,8 +670,7 @@ class KeywordSource(AffectSource):
         confidence = base + 0.04 * min(boost, 3) - 0.05 * min(damp, 3)
 
         # Sign disagreement among the top cues => ambivalence => less certain.
-        signs = {1 if h["valence"] > 0.05 else -1 if h["valence"] < -0.05 else 0
-                 for h in hits}
+        signs = {1 if h["valence"] > 0.05 else -1 if h["valence"] < -0.05 else 0 for h in hits}
         mixed = len({s for s in signs if s != 0}) > 1
         apology = any(p in lowered for p in _APOLOGY_PHRASES)
         if mixed:
@@ -339,12 +684,12 @@ class KeywordSource(AffectSource):
             # Prefer an opposite-sign runner-up as the secondary; for a lone
             # apology, pair its wistful sting with a reassuring counter-note.
             secondary = next(
-                (h for h in hits[1:]
-                 if (h["valence"] > 0) != (primary["valence"] > 0)),
+                (h for h in hits[1:] if (h["valence"] > 0) != (primary["valence"] > 0)),
                 None,
             )
             sec_label = (
-                secondary["label"] if secondary is not None
+                secondary["label"]
+                if secondary is not None
                 else ("relieved" if apology and primary["valence"] <= 0 else None)
             )
             if sec_label is not None and sec_label in _VALID_LABELS:

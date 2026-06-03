@@ -45,13 +45,13 @@ Storage is line-delimited JSON (one record per line). Given a base ``path`` of
 All writes are atomic (write-temp-then-replace), so a crash mid-write cannot
 corrupt the store.
 """
+
 from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 from ..config import MemoryConfig
 
@@ -66,7 +66,7 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).astimezone().isoformat()
 
 
-def _parse_ts(ts_iso: str) -> Optional[datetime]:
+def _parse_ts(ts_iso: str) -> datetime | None:
     """Parse an ISO timestamp to an aware ``datetime``; ``None`` if unparseable."""
     try:
         ts = datetime.fromisoformat(str(ts_iso).replace("Z", "+00:00"))
@@ -145,8 +145,8 @@ class Canon:
         constant. Defaults to library defaults.
     """
 
-    def __init__(self, path: str | Path, cfg: MemoryConfig = MemoryConfig()):
-        self.cfg = cfg
+    def __init__(self, path: str | Path, cfg: MemoryConfig | None = None):
+        self.cfg = cfg if cfg is not None else MemoryConfig()
         self.path = Path(path)
         stem = self.path.stem  # "canon" from "canon.jsonl"
         suffix = self.path.suffix or ".jsonl"
@@ -173,10 +173,7 @@ class Canon:
         recalls = int(entry.get("recalls", 0))
         recall_boost = min(cfg.recall_boost_cap, recalls * cfg.recall_boost_each)
         current = (
-            base
-            - age_days * cfg.decay_per_day
-            + reinforce * cfg.reinforce_boost
-            + recall_boost
+            base - age_days * cfg.decay_per_day + reinforce * cfg.reinforce_boost + recall_boost
         )
         return max(0.0, current)
 
@@ -215,7 +212,8 @@ class Canon:
             "intensity": round(current, 3),
             "base_intensity": round(float(entry.get("intensity", self.cfg.default_intensity)), 3),
             "confidence": round(float(entry.get("confidence", 0.9)), 3),
-            "permanent": float(entry.get("intensity", self.cfg.default_intensity)) >= self.cfg.permanent_above,
+            "permanent": float(entry.get("intensity", self.cfg.default_intensity))
+            >= self.cfg.permanent_above,
             "tier": self._tier(current),
             "reinforced": int(entry.get("_reinforce_count", 0)),
             "recalls": int(entry.get("recalls", 0)),
@@ -235,9 +233,9 @@ class Canon:
         why: str = "",
         when: str = "",
         where: str = "",
-        intensity: Optional[float] = None,
+        intensity: float | None = None,
         confidence: float = 0.9,
-        default_intensity: Optional[float] = None,
+        default_intensity: float | None = None,
     ) -> dict:
         """Assemble a fresh 5W1H record from keyword fields."""
         if default_intensity is None:
@@ -302,7 +300,7 @@ class Canon:
         action: str = "",
         why: str = "",
         when: str = "",
-        intensity: Optional[float] = None,
+        intensity: float | None = None,
         confidence: float = 0.9,
     ) -> dict:
         """Record a confirmed fact, or reinforce it if it already exists.
@@ -312,8 +310,13 @@ class Canon:
         stored (or reinforced) entry as a rendered view dict.
         """
         entry = self._build_entry(
-            actor, object, action=action, why=why, when=when,
-            intensity=intensity, confidence=confidence,
+            actor,
+            object,
+            action=action,
+            why=why,
+            when=when,
+            intensity=intensity,
+            confidence=confidence,
             default_intensity=self.cfg.default_intensity,
         )
         return self._write_or_reinforce(self.path, entry)
@@ -326,7 +329,7 @@ class Canon:
         action: str = "",
         why: str = "",
         when: str = "",
-        intensity: Optional[float] = None,
+        intensity: float | None = None,
         confidence: float = 0.9,
     ) -> dict:
         """Record a *grey-zone* fact — something not yet decided or only half-believed.
@@ -336,8 +339,13 @@ class Canon:
         fact. Promote one later with :meth:`confirm`. Returns the rendered entry.
         """
         entry = self._build_entry(
-            actor, object, action=action, why=why, when=when,
-            intensity=intensity, confidence=confidence,
+            actor,
+            object,
+            action=action,
+            why=why,
+            when=when,
+            intensity=intensity,
+            confidence=confidence,
             default_intensity=self.cfg.pending_intensity,
         )
         return self._write_or_reinforce(self.pending_path, entry)
@@ -374,12 +382,12 @@ class Canon:
         id_or_keyword: str,
         *,
         object: str,
-        action: Optional[str] = None,
-        why: Optional[str] = None,
-        when: Optional[str] = None,
-        where: Optional[str] = None,
-        intensity: Optional[float] = None,
-        confidence: Optional[float] = None,
+        action: str | None = None,
+        why: str | None = None,
+        when: str | None = None,
+        where: str | None = None,
+        intensity: float | None = None,
+        confidence: float | None = None,
     ) -> dict:
         """Supersede an existing fact with a corrected version (the old one is kept).
 
@@ -395,8 +403,14 @@ class Canon:
         old_id = _entry_id(old)
 
         new_entry = dict(old)
-        for k in ("_reinforce_count", "_last_reinforced", "_superseded_by",
-                  "_superseded_at", "_retracted", "_retracted_at"):
+        for k in (
+            "_reinforce_count",
+            "_last_reinforced",
+            "_superseded_by",
+            "_superseded_at",
+            "_retracted",
+            "_retracted_at",
+        ):
             new_entry.pop(k, None)
         new_entry["ts"] = _now_iso()
         new_entry["supersedes"] = old_id
@@ -443,7 +457,7 @@ class Canon:
     # ------------------------------------------------------------------ #
     # Public API — read                                                  #
     # ------------------------------------------------------------------ #
-    def search(self, keyword: str, *, actor: Optional[str] = None) -> list[dict]:
+    def search(self, keyword: str, *, actor: str | None = None) -> list[dict]:
         """Find visible/archived facts matching ``keyword`` (optionally by actor).
 
         A hit increments each matched fact's ``recalls`` and persists it: a fact
@@ -468,7 +482,11 @@ class Canon:
                     return False
             return True
 
-        hits = [e for e in confirmed if matches(e) and self._tier(self._current_intensity(e, now)) != "forgotten"]
+        hits = [
+            e
+            for e in confirmed
+            if matches(e) and self._tier(self._current_intensity(e, now)) != "forgotten"
+        ]
 
         # Recall feedback: bump recalls on confirmed hits and persist.
         if hits:

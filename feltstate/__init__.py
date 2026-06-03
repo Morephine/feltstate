@@ -23,23 +23,24 @@ Quickstart::
     eng.tick([{"role": "user", "content": "I finally shipped it!! thank you"}])
     print(eng.render())   # -> a first-person felt block to prepend to the agent's context
 """
-from .state import (
-    AffectState,
-    AffectDelta,
-    Mood,
-    Traits,
-    Relationship,
-    PressureState,
-    PressureBars,
-)
-from .config import Config, DEFAULT_CONFIG, PersonaDials
+
+from .config import DEFAULT_CONFIG, Config, PersonaDials
+from .engine import Engine
+from .memory.canon import Canon
+from .render import build_injection, render_felt_block
 from .sources.base import AffectSource
 from .sources.keyword import KeywordSource
 from .sources.llm import LLMSource
-from .memory.canon import Canon
+from .state import (
+    AffectDelta,
+    AffectState,
+    Mood,
+    PressureBars,
+    PressureState,
+    Relationship,
+    Traits,
+)
 from .timeawareness import time_since_phrase
-from .render import render_felt_block, build_injection
-from .engine import Engine
 
 __version__ = "0.1.0"
 

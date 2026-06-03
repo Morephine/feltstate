@@ -7,12 +7,12 @@ times faster once the signal stops. Good moods fade; bad moods linger. These
 tests pin that asymmetry and the "decays back to neutral when idle" property the
 whole system depends on.
 """
+
 from __future__ import annotations
 
-from feltstate import AffectDelta, Traits, DEFAULT_CONFIG
-from feltstate.affect import update_traits, update_mood
+from feltstate import DEFAULT_CONFIG, AffectDelta, Traits
+from feltstate.affect import update_mood, update_traits
 from feltstate.state import Mood
-
 
 CFG = DEFAULT_CONFIG.traits
 MCFG = DEFAULT_CONFIG.mood
@@ -54,8 +54,8 @@ def test_optimism_relaxes_to_baseline_faster_than_depression():
     optimism has fallen back toward 0.5 markedly more than depression has."""
     # Ramp both up to a comparable elevated level with their own signals.
     t = Traits()
-    t = _feed(t, ["joyful"], n=15)   # optimism up
-    t = _feed(t, ["sad"], n=15)      # depression up
+    t = _feed(t, ["joyful"], n=15)  # optimism up
+    t = _feed(t, ["sad"], n=15)  # depression up
     opt_peak = t.optimism
     dep_peak = t.depression
     assert opt_peak > 0.55 and dep_peak > 0.55
@@ -128,8 +128,8 @@ def test_update_mood_trait_gravity_dims_a_depressed_temperament():
 
     even = Mood()
     depressed = Mood()
-    even_traits = Traits()                       # neutral
-    dep_traits = Traits(depression=0.9)          # strongly low
+    even_traits = Traits()  # neutral
+    dep_traits = Traits(depression=0.9)  # strongly low
 
     for _ in range(20):
         even = update_mood(even, reading, even_traits, MCFG)

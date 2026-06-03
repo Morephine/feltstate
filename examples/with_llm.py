@@ -45,6 +45,7 @@ each with its own prompt — even if they hit the same underlying model:
 The engine does all the integration (smoothing, trait/mood decay, the pressure
 cooker) between those two calls; the judge stays stateless.
 """
+
 from __future__ import annotations
 
 import json
@@ -53,7 +54,6 @@ import urllib.error
 import urllib.request
 
 from feltstate import Engine, LLMSource, PersonaDials
-
 
 # --------------------------------------------------------------------------- #
 # Configuration (env-driven; sensible local-first defaults).                  #
@@ -114,7 +114,7 @@ def build_reply_messages(injected_user_turn: str) -> list[dict]:
     """
     system_prompt = PERSONA + "\n\n" + REPLY_RULES
     return [
-        {"role": "system", "content": system_prompt},   # static -> cached
+        {"role": "system", "content": system_prompt},  # static -> cached
         {"role": "user", "content": injected_user_turn},  # dynamic tail
     ]
 
@@ -130,7 +130,7 @@ def call_reply_model(messages: list[dict]) -> str:
     body = {
         "model": MODEL,
         "messages": messages,
-        "temperature": 0.7,            # the reply is creative, unlike the judge
+        "temperature": 0.7,  # the reply is creative, unlike the judge
         "max_tokens": 300,
         # Many OpenAI-compatible servers cache the longest static prefix
         # automatically; some expose an explicit opt-in. This generic hint is
@@ -249,8 +249,8 @@ def main() -> None:
     eng = Engine(
         source=source,
         state_path=state_path,
-        persona=PERSONA,        # grounds the judge's measurement
-        dials=DIALS,            # expression style only
+        persona=PERSONA,  # grounds the judge's measurement
+        dials=DIALS,  # expression style only
     )
 
     # A tiny scripted conversation so the example is self-contained. In a real
@@ -277,7 +277,7 @@ def main() -> None:
         for ln in eng.render().splitlines():
             print("  | " + ln)
 
-        print(f'\nagent: {reply}\n')
+        print(f"\nagent: {reply}\n")
 
     print("=" * 72)
     print("Loop complete.")

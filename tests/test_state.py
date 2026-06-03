@@ -5,16 +5,17 @@ These check the one thing the dynamics layers all rely on: an
 ``save`` / ``load`` to disk without losing or mangling any field. Numbers are
 rounded on serialization (by design), so the assertions allow for that.
 """
+
 from __future__ import annotations
 
 from feltstate import (
-    AffectState,
     AffectDelta,
+    AffectState,
     Mood,
-    Traits,
-    Relationship,
-    PressureState,
     PressureBars,
+    PressureState,
+    Relationship,
+    Traits,
 )
 from feltstate.state import BAR_NAMES
 
@@ -49,7 +50,14 @@ def _rich_state() -> AffectState:
             history=[{"ts": "2020-01-01T12:00:00+00:00", "release_type": "burst_joy"}],
         ),
         last_tick_ts="2020-01-01T12:00:00+00:00",
-        history=[{"ts": "2020-01-01T12:00:00+00:00", "valence": 0.4, "arousal": 0.6, "labels": ["content"]}],
+        history=[
+            {
+                "ts": "2020-01-01T12:00:00+00:00",
+                "valence": 0.4,
+                "arousal": 0.6,
+                "labels": ["content"],
+            }
+        ],
     )
 
 
@@ -61,8 +69,12 @@ def test_affect_delta_round_trip():
         confidence=0.55,
         monologue="a quiet ache",
         anticipation={"valence": 0.4, "arousal": 0.3, "weight": 0.6},
-        mixed_blend={"primary": "sad", "secondary": "hopeful",
-                     "primary_score": 0.6, "secondary_score": 0.3},
+        mixed_blend={
+            "primary": "sad",
+            "secondary": "hopeful",
+            "primary_score": 0.6,
+            "secondary_score": 0.3,
+        },
         milestones=[{"kind": "care", "actor": "user", "severity": 0.5}],
     )
     back = AffectDelta.from_dict(d.to_dict())
@@ -148,7 +160,9 @@ def test_from_dict_tolerates_empty_and_partial_input():
 
 def test_history_is_capped_on_serialization():
     # to_dict keeps only the last 50 readings; a longer history is trimmed.
-    long_history = [{"ts": str(i), "valence": 0.0, "arousal": 0.4, "labels": []} for i in range(120)]
+    long_history = [
+        {"ts": str(i), "valence": 0.0, "arousal": 0.4, "labels": []} for i in range(120)
+    ]
     state = AffectState(history=long_history)
     assert len(state.to_dict()["history"]) == 50
     # The kept slice is the most recent tail.

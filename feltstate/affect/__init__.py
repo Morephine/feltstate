@@ -16,6 +16,7 @@ The sibling modules are imported defensively: a module that is still being
 written should not break ``import feltstate.affect`` for the others. Symbols
 become available in this namespace as soon as their module exists.
 """
+
 from __future__ import annotations
 
 from .pressure import compute_power, step

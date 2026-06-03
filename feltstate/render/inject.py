@@ -38,6 +38,7 @@ This mirrors what the production system this was distilled from does: the felt
 block is attached as a *dynamic prefix to the turn's instruction*, never folded
 into the static system prompt that the cache pins.
 """
+
 from __future__ import annotations
 
 

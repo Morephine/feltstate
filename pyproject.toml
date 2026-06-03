@@ -23,7 +23,7 @@ dependencies = []
 [project.optional-dependencies]
 # LLMSource talks to any OpenAI-compatible endpoint over stdlib urllib, so it
 # needs nothing extra either; this extra is just dev tooling.
-dev = ["pytest>=7"]
+dev = ["pytest>=7", "ruff>=0.6", "mypy>=1.8"]
 
 [project.urls]
 Homepage = "https://github.com/USER/feltstate"
@@ -34,3 +34,21 @@ packages = ["feltstate"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+# E501 (line length) is not enforced: prose in docstrings is allowed to run long,
+# and the formatter wraps code. Everything else is on.
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+files = ["feltstate"]

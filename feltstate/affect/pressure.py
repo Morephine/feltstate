@@ -51,17 +51,17 @@ The text/voice of a release (what words the character actually uses) is a
 product concern and lives nowhere in this module. Here we only move numbers and
 phases.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 from ..config import (
     BAR_TO_RELEASE,
     BAR_TO_RELEASE_SUPPRESS,
     LABEL_TO_PRESSURE,
-    PressureConfig,
     PersonaDials,
+    PressureConfig,
 )
 from ..state import (
     BAR_NAMES,
@@ -98,9 +98,7 @@ def _now_iso() -> str:
 # --------------------------------------------------------------------------- #
 # Power — Lazarus appraisal of perceived control / self-efficacy.             #
 # --------------------------------------------------------------------------- #
-def compute_power(
-    traits: Traits, relationship: Relationship, cfg: PressureConfig
-) -> float:
+def compute_power(traits: Traits, relationship: Relationship, cfg: PressureConfig) -> float:
     """Return the agent's *power* in ``[0, 1]`` — its felt control / self-efficacy.
 
     High power means it feels safe and capable enough to express what it feels
@@ -337,7 +335,7 @@ def _select_release(
     cfg: PressureConfig,
     power: float,
     ts: str,
-) -> Optional[dict]:
+) -> dict | None:
     """Decide the release if any bar is at/above the release threshold, else ``None``.
 
     Returns a decision dict carrying the primary (and, for a hybrid, secondary)
@@ -432,13 +430,15 @@ def _trigger_release(pressure: PressureState, decision: dict, cfg: PressureConfi
         _parse(decision["ends_ts"]) + timedelta(minutes=aftertaste_min)
     ).isoformat()
 
-    pressure.history.append({
-        "ts": decision["started_ts"],
-        "release_type": decision["primary_release"],
-        "secondary": decision.get("secondary_release"),
-        "is_collapse": decision.get("is_collapse", False),
-        "trigger_bars": {k: round(getattr(pressure.bars, k), 3) for k in BAR_NAMES},
-    })
+    pressure.history.append(
+        {
+            "ts": decision["started_ts"],
+            "release_type": decision["primary_release"],
+            "secondary": decision.get("secondary_release"),
+            "is_collapse": decision.get("is_collapse", False),
+            "trigger_bars": {k: round(getattr(pressure.bars, k), 3) for k in BAR_NAMES},
+        }
+    )
     pressure.history = pressure.history[-5:]
 
 

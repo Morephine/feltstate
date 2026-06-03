@@ -35,6 +35,7 @@ It also shows the two things most memory layers miss:
 The script uses a brand-new temporary state file each run, so repeated runs
 start from the same neutral baseline and stay reproducible.
 """
+
 from __future__ import annotations
 
 import tempfile
@@ -58,7 +59,7 @@ def show_numbers(state) -> None:
     move. The agent itself is handed the worded block from ``render()`` below,
     never these figures (that is the identity-merge discipline at work).
     """
-    m, t, r, p = state.mood, state.traits, state.relationship, state.pressure
+    m, t, _rel, p = state.mood, state.traits, state.relationship, state.pressure
     bars = p.bars
     print(
         "  numbers | "
@@ -70,8 +71,7 @@ def show_numbers(state) -> None:
         "          | "
         f"bars sad={bars.sadness:.2f} ang={bars.anger:.2f} "
         f"anx={bars.anxiety:.2f} bnd={bars.boundary:.2f} joy={bars.joy:.2f}  "
-        f"phase={p.phase}"
-        + (f" ({p.release_type})" if p.release_type else "")
+        f"phase={p.phase}" + (f" ({p.release_type})" if p.release_type else "")
     )
 
 
@@ -159,7 +159,7 @@ def main() -> None:
     )
 
     eng = Engine(
-        source=KeywordSource(),     # ground-truth seam: rule-based, zero deps
+        source=KeywordSource(),  # ground-truth seam: rule-based, zero deps
         state_path=str(state_path),
         persona=persona,
         dials=dials,

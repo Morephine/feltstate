@@ -34,10 +34,11 @@ Two design rules carried over from production, both about not fooling yourself:
    standing baseline. Don't paraphrase the user's content into the character's
    feeling.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Sequence
+from collections.abc import Sequence
 
 from ..state import AffectDelta, AffectState
 

@@ -2,6 +2,10 @@
 
 **Give an LLM agent a felt inner life it experiences as its own.**
 
+[![CI](https://github.com/USER/feltstate/actions/workflows/ci.yml/badge.svg)](https://github.com/USER/feltstate/actions/workflows/ci.yml)
+&nbsp;![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+&nbsp;![License: MIT](https://img.shields.io/badge/license-MIT-green)
+
 Most "AI companion" memory work gives an agent *facts* it can recall. feltstate
 gives it *feelings* it can't fake: a small, separate component measures how the
 agent feels each turn, that reading is integrated into a mood / temperament /
@@ -140,11 +144,22 @@ library never writes "be sad now" into the prompt — it only ever supplies stat
 
 ```bash
 pip install -e .          # core is pure standard library
-pip install -e ".[dev]"   # + pytest
-pytest
+pip install -e ".[dev]"   # + pytest, ruff, mypy
 ```
 
 Requires Python 3.10+.
+
+## Development
+
+```bash
+ruff check .          # lint
+ruff format .         # format
+mypy feltstate        # type check
+pytest -q             # tests
+```
+
+All four run in CI (`.github/workflows/ci.yml`) on Python 3.10–3.13. To take this
+public, see **[PUBLISHING.md](PUBLISHING.md)** — set your identity, then push.
 
 ## License
 

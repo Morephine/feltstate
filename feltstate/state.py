@@ -15,12 +15,12 @@ Design note — *ground truth, not self-report*: an :class:`AffectDelta` is
 not asked of the generating model. The model never gets to decide how it feels;
 it only gets to read the felt state back (see :mod:`feltstate.render`).
 """
+
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 
 def _clamp(x: float, lo: float, hi: float) -> float:
@@ -40,15 +40,15 @@ class AffectDelta:
     these readings over time.
     """
 
-    valence: float = 0.0          # -1 (negative) .. +1 (positive)
-    arousal: float = 0.4          # 0 (calm) .. 1 (activated)
-    labels: list[str] = field(default_factory=list)   # 0-3 discrete emotion labels
-    confidence: float = 0.7       # 0..1 — how clear the signal is
-    monologue: str = ""           # optional one-line first-person felt sentence
+    valence: float = 0.0  # -1 (negative) .. +1 (positive)
+    arousal: float = 0.4  # 0 (calm) .. 1 (activated)
+    labels: list[str] = field(default_factory=list)  # 0-3 discrete emotion labels
+    confidence: float = 0.7  # 0..1 — how clear the signal is
+    monologue: str = ""  # optional one-line first-person felt sentence
     # {"valence","arousal","weight"} — a looked-forward-to event, or None
-    anticipation: Optional[dict] = None
+    anticipation: dict | None = None
     # {"primary","secondary","primary_score","secondary_score"} — mixed feeling, or None
-    mixed_blend: Optional[dict] = None
+    mixed_blend: dict | None = None
     # discrete appraised events this turn, e.g. {"kind":"care","actor":"user","severity":0.6}
     milestones: list[dict] = field(default_factory=list)
 
@@ -65,7 +65,7 @@ class AffectDelta:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> "AffectDelta":
+    def from_dict(cls, d: dict | None) -> AffectDelta:
         d = d or {}
         return cls(
             valence=float(d.get("valence", 0.0)),
@@ -99,12 +99,17 @@ class Traits:
     curiosity: float = 0.5
 
     def to_dict(self) -> dict:
-        return {k: round(getattr(self, k), 4) for k in ("depression", "optimism", "anxiety", "curiosity")}
+        return {
+            k: round(getattr(self, k), 4)
+            for k in ("depression", "optimism", "anxiety", "curiosity")
+        }
 
     @classmethod
-    def from_dict(cls, d: dict) -> "Traits":
+    def from_dict(cls, d: dict | None) -> Traits:
         d = d or {}
-        return cls(**{k: float(d.get(k, 0.5)) for k in ("depression", "optimism", "anxiety", "curiosity")})
+        return cls(
+            **{k: float(d.get(k, 0.5)) for k in ("depression", "optimism", "anxiety", "curiosity")}
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -135,7 +140,7 @@ class Relationship:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> "Relationship":
+    def from_dict(cls, d: dict | None) -> Relationship:
         d = d or {}
         return cls(
             closeness=float(d.get("closeness", 0.5)),
@@ -162,7 +167,7 @@ class Mood:
     arousal: float = 0.4
     labels: list[str] = field(default_factory=list)
     # {"valence","arousal","weight"} — last turn's lingering flavour, or None
-    aftertaste: Optional[dict] = None
+    aftertaste: dict | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -173,7 +178,7 @@ class Mood:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> "Mood":
+    def from_dict(cls, d: dict | None) -> Mood:
         d = d or {}
         return cls(
             valence=float(d.get("valence", 0.0)),
@@ -208,7 +213,7 @@ class PressureBars:
         return {k: round(getattr(self, k), 3) for k in BAR_NAMES}
 
     @classmethod
-    def from_dict(cls, d: dict) -> "PressureBars":
+    def from_dict(cls, d: dict | None) -> PressureBars:
         d = d or {}
         return cls(**{k: float(d.get(k, 0.0)) for k in BAR_NAMES})
 
@@ -232,12 +237,14 @@ class PressureState:
 
     bars: PressureBars = field(default_factory=PressureBars)
     phase: str = "calm"  # calm | building | releasing | aftertaste
-    release_type: Optional[str] = None       # e.g. tears | anger | anxious | withdraw | burst_joy | collapse
-    release_secondary: Optional[str] = None  # for hybrid (two bars released together)
-    release_started_ts: Optional[str] = None
-    release_ends_ts: Optional[str] = None
-    aftertaste_until_ts: Optional[str] = None
-    last_tick_ts: Optional[str] = None
+    release_type: str | None = (
+        None  # e.g. tears | anger | anxious | withdraw | burst_joy | collapse
+    )
+    release_secondary: str | None = None  # for hybrid (two bars released together)
+    release_started_ts: str | None = None
+    release_ends_ts: str | None = None
+    aftertaste_until_ts: str | None = None
+    last_tick_ts: str | None = None
     history: list[dict] = field(default_factory=list)  # last 5 release events
 
     def to_dict(self) -> dict:
@@ -254,7 +261,7 @@ class PressureState:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> "PressureState":
+    def from_dict(cls, d: dict | None) -> PressureState:
         d = d or {}
         return cls(
             bars=PressureBars.from_dict(d.get("bars")),
@@ -285,7 +292,7 @@ class AffectState:
     traits: Traits = field(default_factory=Traits)
     relationship: Relationship = field(default_factory=Relationship)
     pressure: PressureState = field(default_factory=PressureState)
-    last_tick_ts: Optional[str] = None
+    last_tick_ts: str | None = None
     # rolling window of recent readings: [{"ts","valence","arousal","labels"}, ...]
     history: list[dict] = field(default_factory=list)
 
@@ -300,7 +307,7 @@ class AffectState:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> "AffectState":
+    def from_dict(cls, d: dict | None) -> AffectState:
         d = d or {}
         return cls(
             mood=Mood.from_dict(d.get("mood")),
@@ -320,7 +327,7 @@ class AffectState:
         tmp.replace(p)
 
     @classmethod
-    def load(cls, path: str | Path) -> "AffectState":
+    def load(cls, path: str | Path) -> AffectState:
         p = Path(path)
         if not p.is_file():
             return cls()

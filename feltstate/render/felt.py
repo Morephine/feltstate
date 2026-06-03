@@ -25,9 +25,10 @@ The block is intentionally character-agnostic. :class:`PersonaDials` only tilt
 the closing *tone* line (a guarded character phrases the same feeling more
 tightly than an open one); they never change which feeling is reported.
 """
+
 from __future__ import annotations
 
-from ..config import Config, DEFAULT_CONFIG, PersonaDials
+from ..config import DEFAULT_CONFIG, Config, PersonaDials
 from ..state import AffectState, Mood, PressureState, Relationship, Traits
 
 
@@ -56,45 +57,66 @@ def _band(value: float, ladder: tuple[tuple[float, str], ...], default: str) -> 
 # ``locale`` argument); the banding logic above stays the same. Keep bands wide
 # to preserve cache-stability.
 
-_CLOSENESS = ((0.85, "inseparable"), (0.70, "close"), (0.50, "warming"),
-              (0.30, "still distant"), (0.10, "far apart"))
+_CLOSENESS = (
+    (0.85, "inseparable"),
+    (0.70, "close"),
+    (0.50, "warming"),
+    (0.30, "still distant"),
+    (0.10, "far apart"),
+)
 _CLOSENESS_DEFAULT = "no closeness yet"
 
-_TRUST = ((0.85, "fully trusted"), (0.70, "trusted"), (0.50, "mostly trusting"),
-          (0.30, "half-trusting"), (0.10, "wary"))
+_TRUST = (
+    (0.85, "fully trusted"),
+    (0.70, "trusted"),
+    (0.50, "mostly trusting"),
+    (0.30, "half-trusting"),
+    (0.10, "wary"),
+)
 _TRUST_DEFAULT = "guarded"
 
-_SAFETY = ((0.85, "fully at ease"), (0.70, "safe"), (0.50, "mostly safe"),
-           (0.30, "not fully settled"), (0.10, "on guard"))
+_SAFETY = (
+    (0.85, "fully at ease"),
+    (0.70, "safe"),
+    (0.50, "mostly safe"),
+    (0.30, "not fully settled"),
+    (0.10, "on guard"),
+)
 _SAFETY_DEFAULT = "bracing"
 
 # unresolved_tension and repair_history are reported only when present, as a
 # trailing clause, so the common (calm) case renders the same short line.
-_TENSION = ((0.90, "a knot that won't loosen"), (0.70, "a heavy tension"),
-            (0.50, "a tension that hasn't cleared"), (0.30, "a little friction"),
-            (0.10, "a faint edge"))
-_REPAIR = ((0.85, "weathered many repairs together"),
-           (0.70, "come through deep repair"),
-           (0.50, "mended things more than once"),
-           (0.30, "patched things up a few times"),
-           (0.10, "mended once or twice"))
+_TENSION = (
+    (0.90, "a knot that won't loosen"),
+    (0.70, "a heavy tension"),
+    (0.50, "a tension that hasn't cleared"),
+    (0.30, "a little friction"),
+    (0.10, "a faint edge"),
+)
+_REPAIR = (
+    (0.85, "weathered many repairs together"),
+    (0.70, "come through deep repair"),
+    (0.50, "mended things more than once"),
+    (0.30, "patched things up a few times"),
+    (0.10, "mended once or twice"),
+)
 
 # Felt valence -> warmth of mood. -1..+1.
-_VALENCE = ((0.45, "bright"), (0.20, "lightly lifted"), (-0.20, "level"),
-            (-0.45, "a little low"))
+_VALENCE = ((0.45, "bright"), (0.20, "lightly lifted"), (-0.20, "level"), (-0.45, "a little low"))
 _VALENCE_DEFAULT = "heavy"
 
 # Felt arousal -> energy. 0..1.
-_AROUSAL = ((0.80, "keyed up"), (0.65, "energized"), (0.45, "mild energy"),
-            (0.30, "low energy"))
+_AROUSAL = ((0.80, "keyed up"), (0.65, "energized"), (0.45, "mild energy"), (0.30, "low energy"))
 _AROUSAL_DEFAULT = "flat, drained"
 
 # Negative pressure (max of the four heavy bars) -> how much weight is held.
-_PRESSURE_NEG = ((0.85, "pressure brimming, hard to hold"),
-                 (0.70, "pressure heavy"),
-                 (0.50, "pressure building, weighing a little"),
-                 (0.35, "a touch of pressure"),
-                 (0.20, "pressure low"))
+_PRESSURE_NEG = (
+    (0.85, "pressure brimming, hard to hold"),
+    (0.70, "pressure heavy"),
+    (0.50, "pressure building, weighing a little"),
+    (0.35, "a touch of pressure"),
+    (0.20, "pressure low"),
+)
 _PRESSURE_NEG_DEFAULT = "pressure clear"
 
 # Joy bar -> brightness, reported as a trailing clause when meaningful.
@@ -292,7 +314,7 @@ def _tone_line(state: AffectState, dials: PersonaDials) -> str | None:
 def render_felt_block(
     state: AffectState,
     *,
-    dials: PersonaDials = None,
+    dials: PersonaDials | None = None,
     time_line: str = "",
     cfg: Config = DEFAULT_CONFIG,
     header: str = "[how I feel right now]",

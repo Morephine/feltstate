@@ -9,12 +9,13 @@ Two halves with two deliberate precisions:
 
 Times are constructed explicitly so nothing depends on the wall clock.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from feltstate.timeawareness import time_since_phrase, now_phrase
 from feltstate.config import DEFAULT_CONFIG
+from feltstate.timeawareness import now_phrase, time_since_phrase
 
 TCFG = DEFAULT_CONFIG.time
 NOW = datetime(2030, 6, 5, 8, 11)  # a Wednesday morning, 8:11
@@ -61,9 +62,9 @@ def test_phrases_coarsen_with_distance():
     assert _phrase_for_gap(40) == "half an hour"
     assert _phrase_for_gap(120) == "almost two hours"
     assert _phrase_for_gap(150) == "a couple of hours"
-    assert _phrase_for_gap(60 * 24 * 1.5) == "a day or so"      # ~1.5 days
-    assert _phrase_for_gap(60 * 24 * 3) == "a few days"          # ~3 days
-    assert _phrase_for_gap(60 * 24 * 8) == "about a week"        # ~8 days
+    assert _phrase_for_gap(60 * 24 * 1.5) == "a day or so"  # ~1.5 days
+    assert _phrase_for_gap(60 * 24 * 3) == "a few days"  # ~3 days
+    assert _phrase_for_gap(60 * 24 * 8) == "about a week"  # ~8 days
 
 
 def test_beyond_ladder_falls_back_to_absolute_day():
@@ -89,11 +90,11 @@ def test_now_phrase_contains_weekday_part_and_clock():
 
 def test_now_phrase_parts_of_day():
     # Map a few hours to their part-of-day label.
-    assert "night" in now_phrase(NOW.replace(hour=3))     # pre-dawn
+    assert "night" in now_phrase(NOW.replace(hour=3))  # pre-dawn
     assert "morning" in now_phrase(NOW.replace(hour=9))
     assert "afternoon" in now_phrase(NOW.replace(hour=14))
     assert "evening" in now_phrase(NOW.replace(hour=19))
-    assert "night" in now_phrase(NOW.replace(hour=23))    # late evening
+    assert "night" in now_phrase(NOW.replace(hour=23))  # late evening
 
 
 def test_now_phrase_uses_12_hour_clock():

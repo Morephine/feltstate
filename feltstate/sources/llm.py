@@ -24,12 +24,13 @@ Two robustness rules, both so the affect loop never takes down the agent:
 * **Stdlib only.** Uses :mod:`urllib`; no third-party HTTP client. Drop it into
   any environment without pulling in dependencies.
 """
+
 from __future__ import annotations
 
 import json
 import urllib.error
 import urllib.request
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
 from ..config import DEFAULT_LABELS
 from ..state import AffectDelta, AffectState
@@ -45,7 +46,7 @@ _VALID_LABELS = {lbl.lower(): lbl for lbl in DEFAULT_LABELS}
 _SYSTEM_PROMPT = (
     "You MEASURE the affect of a character (persona below) reacting to the "
     "latest user input. Output ONLY JSON "
-    '{valence,arousal,labels,confidence,monologue}. '
+    "{valence,arousal,labels,confidence,monologue}. "
     "The character reacts from its own baseline; do NOT mirror/paraphrase the "
     "user.\n"
     "Field meanings:\n"
@@ -93,7 +94,7 @@ class LLMSource(AffectSource):
         self,
         base_url: str,
         model: str,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         timeout: float = 20,
     ) -> None:
         self.url = base_url.rstrip("/") + "/chat/completions"
@@ -182,7 +183,7 @@ class LLMSource(AffectSource):
         body = {
             "model": self.model,
             "messages": chat,
-            "temperature": 0.0,           # measurement should be repeatable
+            "temperature": 0.0,  # measurement should be repeatable
             "max_tokens": 256,
             # Honoured by OpenAI and most compatible servers; harmlessly
             # ignored by those that don't implement it.
@@ -255,7 +256,7 @@ def _format_transcript(messages: Sequence[dict], max_turns: int = 8) -> str:
 # --------------------------------------------------------------------------- #
 # Parsing & sanitising the measurement                                        #
 # --------------------------------------------------------------------------- #
-def _parse_json_object(text: str) -> Optional[dict]:
+def _parse_json_object(text: str) -> dict | None:
     """Best-effort extraction of a single JSON object from model output.
 
     Tries a direct parse first; if the model wrapped the object in prose or a
@@ -308,9 +309,9 @@ def _clean_labels(value) -> list[str]:
     just noise. Accepts a list or a comma-separated string.
     """
     if isinstance(value, str):
-        items = value.split(",")
+        items: list = value.split(",")
     elif isinstance(value, (list, tuple)):
-        items = value
+        items = list(value)
     else:
         return []
 

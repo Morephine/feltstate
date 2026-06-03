@@ -15,6 +15,7 @@ Decay is age-driven, so to simulate the passage of days without sleeping we age
 an entry by rewriting its on-disk ``ts`` field. That is the only "time travel"
 trick used.
 """
+
 from __future__ import annotations
 
 import json
@@ -198,9 +199,9 @@ def test_correct_and_retract_on_missing_target_return_empty(tmp_path):
 # --------------------------------------------------------------------------- #
 def test_compact_moves_archived_drops_forgotten_keeps_visible(tmp_path):
     c = _canon(tmp_path)
-    c.add("user", "vivid memory", intensity=0.95)        # permanent -> visible
-    c.add("user", "fading memory", intensity=0.5)        # will be archived
-    c.add("user", "lost memory", intensity=0.5)          # will be forgotten
+    c.add("user", "vivid memory", intensity=0.95)  # permanent -> visible
+    c.add("user", "fading memory", intensity=0.5)  # will be archived
+    c.add("user", "lost memory", intensity=0.5)  # will be forgotten
 
     # Age only the two non-permanent ones by editing their ts selectively.
     lines = [json.loads(ln) for ln in c.path.read_text(encoding="utf-8").splitlines() if ln.strip()]
@@ -210,7 +211,9 @@ def test_compact_moves_archived_drops_forgotten_keeps_visible(tmp_path):
             rec["ts"] = (datetime.now(timezone.utc) - timedelta(days=22)).isoformat()
         elif obj == "lost memory":
             rec["ts"] = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
-    c.path.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in lines) + "\n", encoding="utf-8")
+    c.path.write_text(
+        "\n".join(json.dumps(r, ensure_ascii=False) for r in lines) + "\n", encoding="utf-8"
+    )
 
     c.compact()
 
@@ -218,7 +221,7 @@ def test_compact_moves_archived_drops_forgotten_keeps_visible(tmp_path):
     remaining = [e["object"] for e in c.view()]
     assert "vivid memory" in remaining
     assert "fading memory" not in remaining  # moved to archive
-    assert "lost memory" not in remaining    # dropped
+    assert "lost memory" not in remaining  # dropped
 
     # The archived sibling file now holds the faded fact.
     archived_raw = c.archived_path.read_text(encoding="utf-8")

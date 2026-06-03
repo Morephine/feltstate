@@ -26,11 +26,12 @@ Both functions are pure, standard-library only, and character-agnostic. Caller
 owns the "last spoke" timestamp and the gate decision of whether to surface the
 line at all; this module only turns timestamps into words.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
 
-from ..config import TimeConfig, DEFAULT_CONFIG
+from ..config import DEFAULT_CONFIG, TimeConfig
 
 __all__ = ["time_since_phrase", "now_phrase"]
 

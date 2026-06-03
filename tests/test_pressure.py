@@ -12,13 +12,13 @@ key behaviours pinned here:
   whether a release fires;
 * accumulation is suspended while venting; idle decay always runs.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from feltstate import AffectDelta, Traits, Relationship, PersonaDials, DEFAULT_CONFIG
-from feltstate import PressureState
-from feltstate.affect import step, compute_power
+from feltstate import DEFAULT_CONFIG, AffectDelta, PersonaDials, PressureState, Relationship, Traits
+from feltstate.affect import compute_power, step
 from feltstate.config import BAR_TO_RELEASE, BAR_TO_RELEASE_SUPPRESS
 
 PCFG = DEFAULT_CONFIG.pressure
@@ -48,8 +48,9 @@ def _drive(pressure, *, delta, traits, rel, dials, start_min=0.0, step_min=1.0, 
     """Run ``n`` ticks on a monotonic clock; return the pressure (mutated)."""
     t = start_min
     for _ in range(n):
-        step(pressure, delta=delta, traits=traits, relationship=rel,
-             dials=dials, cfg=PCFG, ts=_ts(t))
+        step(
+            pressure, delta=delta, traits=traits, relationship=rel, dials=dials, cfg=PCFG, ts=_ts(t)
+        )
         t += step_min
     return pressure
 
@@ -87,8 +88,7 @@ def test_sustained_joy_builds_then_releases_burst_joy():
     fired = False
     t = 10.0
     for _ in range(80):
-        step(p, delta=joy_delta, traits=traits, relationship=rel,
-             dials=dials, cfg=PCFG, ts=_ts(t))
+        step(p, delta=joy_delta, traits=traits, relationship=rel, dials=dials, cfg=PCFG, ts=_ts(t))
         t += 1.0
         if p.phase == "releasing":
             fired = True
@@ -109,8 +109,7 @@ def test_release_then_time_returns_to_calm_at_nonzero_floor():
     # Drive to a release.
     t = 0.0
     for _ in range(120):
-        step(p, delta=joy_delta, traits=traits, relationship=rel,
-             dials=dials, cfg=PCFG, ts=_ts(t))
+        step(p, delta=joy_delta, traits=traits, relationship=rel, dials=dials, cfg=PCFG, ts=_ts(t))
         t += 1.0
         if p.phase == "releasing":
             break
@@ -123,8 +122,7 @@ def test_release_then_time_returns_to_calm_at_nonzero_floor():
     t = release_start + 5.0
     reached_calm = False
     for _ in range(400):
-        step(p, delta=neutral, traits=traits, relationship=rel,
-             dials=dials, cfg=PCFG, ts=_ts(t))
+        step(p, delta=neutral, traits=traits, relationship=rel, dials=dials, cfg=PCFG, ts=_ts(t))
         t += 5.0
         if p.phase == "calm":
             reached_calm = True
@@ -153,8 +151,7 @@ def test_low_power_suppresses_the_same_release():
     fired = False
     t = 0.0
     for _ in range(20):
-        step(p, delta=sad_delta, traits=traits, relationship=rel,
-             dials=dials, cfg=PCFG, ts=_ts(t))
+        step(p, delta=sad_delta, traits=traits, relationship=rel, dials=dials, cfg=PCFG, ts=_ts(t))
         t += 1.0
         if p.phase == "releasing":
             fired = True
@@ -175,8 +172,7 @@ def test_high_power_expresses_open_channel_for_sadness():
     fired = False
     t = 0.0
     for _ in range(20):
-        step(p, delta=sad_delta, traits=traits, relationship=rel,
-             dials=dials, cfg=PCFG, ts=_ts(t))
+        step(p, delta=sad_delta, traits=traits, relationship=rel, dials=dials, cfg=PCFG, ts=_ts(t))
         t += 1.0
         if p.phase == "releasing":
             fired = True
@@ -198,8 +194,7 @@ def test_no_accumulation_while_releasing():
     # Fire a release.
     t = 0.0
     while p.phase != "releasing" and t < 20:
-        step(p, delta=joy_delta, traits=traits, relationship=rel,
-             dials=dials, cfg=PCFG, ts=_ts(t))
+        step(p, delta=joy_delta, traits=traits, relationship=rel, dials=dials, cfg=PCFG, ts=_ts(t))
         t += 1.0
     assert p.phase == "releasing"
 
@@ -208,8 +203,7 @@ def test_no_accumulation_while_releasing():
     # and only decay runs.
     joy_before = p.bars.joy
     for _ in range(3):
-        step(p, delta=joy_delta, traits=traits, relationship=rel,
-             dials=dials, cfg=PCFG, ts=_ts(t))
+        step(p, delta=joy_delta, traits=traits, relationship=rel, dials=dials, cfg=PCFG, ts=_ts(t))
         t += 0.2  # stay within the (>=2 min) burst_joy window
     assert p.phase == "releasing"
     assert p.bars.joy <= joy_before  # decayed or flat, never accumulated
@@ -246,7 +240,14 @@ def test_chronic_temperament_keeps_a_floor_in_its_bar():
 
 def test_step_mutates_and_returns_same_object():
     p = PressureState()
-    out = step(p, delta=AffectDelta(), traits=Traits(), relationship=Relationship(),
-               dials=PersonaDials(), cfg=PCFG, ts=_ts(0))
+    out = step(
+        p,
+        delta=AffectDelta(),
+        traits=Traits(),
+        relationship=Relationship(),
+        dials=PersonaDials(),
+        cfg=PCFG,
+        ts=_ts(0),
+    )
     assert out is p
     assert p.last_tick_ts == _ts(0)

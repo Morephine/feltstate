@@ -4,6 +4,7 @@
 a fact; the library only handles decay, dedup, and visibility. Nothing here is
 auto-injected into a prompt.
 """
+
 from .canon import Canon
 
 __all__ = ["Canon"]

@@ -8,6 +8,7 @@ back cache-safely.
 * :func:`build_injection` attaches that block to the latest user message so the
   static, cached system prompt is never disturbed.
 """
+
 from .felt import render_felt_block
 from .inject import build_injection
 

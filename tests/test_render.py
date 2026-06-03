@@ -11,6 +11,7 @@ Two properties matter here:
 And for injection: the felt block must ride at the end (in the user turn), with
 the user's words after it, never spliced into a static system prompt.
 """
+
 from __future__ import annotations
 
 import re
@@ -18,13 +19,13 @@ import re
 from feltstate import (
     AffectState,
     Mood,
-    Traits,
-    Relationship,
-    PressureState,
-    PressureBars,
     PersonaDials,
-    render_felt_block,
+    PressureBars,
+    PressureState,
+    Relationship,
+    Traits,
     build_injection,
+    render_felt_block,
 )
 
 
@@ -87,8 +88,8 @@ def test_block_uses_words_not_raw_numbers():
     # is only added via time_line, which we don't pass here).
     assert not re.search(r"\d+\.\d+", block), f"raw number leaked: {block!r}"
     # And the phrase bands themselves show up as words.
-    assert "close" in block            # closeness 0.72 band
-    assert "lightly lifted" in block   # valence ~0.31 band
+    assert "close" in block  # closeness 0.72 band
+    assert "lightly lifted" in block  # valence ~0.31 band
 
 
 # --------------------------------------------------------------------------- #
@@ -105,10 +106,12 @@ def test_small_drift_renders_byte_identical():
         pressure=PressureState(bars=PressureBars(joy=0.30)),
     )
     s2 = _state(
-        relationship=Relationship(closeness=0.74, trust=0.74, safety=0.74),   # still "close"/"trusted"/"safe"
+        relationship=Relationship(
+            closeness=0.74, trust=0.74, safety=0.74
+        ),  # still "close"/"trusted"/"safe"
         mood=Mood(valence=0.30, arousal=0.55, labels=["content", "curious"]),  # still same bands
         traits=Traits(depression=0.52, optimism=0.48, anxiety=0.51, curiosity=0.49),  # still "mid"
-        pressure=PressureState(bars=PressureBars(joy=0.33)),                   # still "a flicker of joy"
+        pressure=PressureState(bars=PressureBars(joy=0.33)),  # still "a flicker of joy"
     )
     assert render_felt_block(s1) == render_felt_block(s2)
 

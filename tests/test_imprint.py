@@ -1,6 +1,7 @@
 """Imprint — permanent symmetric marks: ingest, one-time trait shift (idempotent),
 slow floored decay, throttled echo, and the symmetry that keeps an agent from
 drifting cold."""
+
 from datetime import datetime, timedelta
 
 from feltstate.affect.imprint import (
@@ -107,7 +108,7 @@ def test_echo_needs_keywords_and_text():
     with_kw = ingest_milestones(
         [{"kind": "warmth", "severity": 0.7, "echo_keywords": ["tea"]}], T0
     )[0]
-    assert check_echo([with_kw], "", _plus(T0, days=1)) == []          # empty text
+    assert check_echo([with_kw], "", _plus(T0, days=1)) == []  # empty text
     assert check_echo([with_kw], "coffee please", _plus(T0, days=1)) == []  # no match
 
 

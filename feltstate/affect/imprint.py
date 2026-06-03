@@ -44,6 +44,7 @@ the resulting shifts once via :func:`apply_trait_shift`, age them with
 :func:`decay_imprints`, and surface flares with :func:`check_echo`. Skipping it
 entirely just means the agent has a shorter memory.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -55,10 +56,10 @@ from ..state import Traits
 # --------------------------------------------------------------------------- #
 # Tunables (intentionally local — these are imprint dynamics, not global cfg). #
 # --------------------------------------------------------------------------- #
-DEFAULT_DECAY_PER_DAY = 0.001   # ~years to fade from 1.0 toward the floor
-DEFAULT_MIN_FLOOR = 0.15        # an imprint can scar over but never disappear
-DEFAULT_ECHO_THROTTLE_H = 4.0   # surface a given imprint at most this often
-ECHO_INTENSITY_BUMP = 0.05      # a touched subject flares back to vividness
+DEFAULT_DECAY_PER_DAY = 0.001  # ~years to fade from 1.0 toward the floor
+DEFAULT_MIN_FLOOR = 0.15  # an imprint can scar over but never disappear
+DEFAULT_ECHO_THROTTLE_H = 4.0  # surface a given imprint at most this often
+ECHO_INTENSITY_BUMP = 0.05  # a touched subject flares back to vividness
 # Trait clamp — kept loose so one imprint never pins a trait to the extreme;
 # many small shifts can stack, but a single signal always leaves headroom.
 _TRAIT_CLAMP_LO = 0.05
@@ -78,31 +79,31 @@ _TRAIT_NAMES = ("depression", "optimism", "anxiety", "curiosity")
 # Each entry: substring -> (valence_sign, {trait: base_shift}).
 _POSITIVE_KINDS: dict[str, tuple[int, dict[str, float]]] = {
     # being cared for / loved — lifts optimism, eases the low mood
-    "care":      (+1, {"optimism": +0.05, "depression": -0.04, "curiosity": +0.03}),
-    "warmth":    (+1, {"optimism": +0.05, "depression": -0.04, "curiosity": +0.03}),
-    "love":      (+1, {"optimism": +0.05, "depression": -0.04, "curiosity": +0.03}),
+    "care": (+1, {"optimism": +0.05, "depression": -0.04, "curiosity": +0.03}),
+    "warmth": (+1, {"optimism": +0.05, "depression": -0.04, "curiosity": +0.03}),
+    "love": (+1, {"optimism": +0.05, "depression": -0.04, "curiosity": +0.03}),
     # thanks / being valued — a quieter lift
     "gratitude": (+1, {"optimism": +0.04, "depression": -0.03}),
-    "thanks":    (+1, {"optimism": +0.04, "depression": -0.03}),
+    "thanks": (+1, {"optimism": +0.04, "depression": -0.03}),
     # felt safety / trust — mainly calms anxiety
-    "secure":    (+1, {"anxiety": -0.05, "depression": -0.03}),
-    "safety":    (+1, {"anxiety": -0.05, "depression": -0.03}),
-    "trust":     (+1, {"anxiety": -0.04, "optimism": +0.03}),
+    "secure": (+1, {"anxiety": -0.05, "depression": -0.03}),
+    "safety": (+1, {"anxiety": -0.05, "depression": -0.03}),
+    "trust": (+1, {"anxiety": -0.04, "optimism": +0.03}),
     # a promise kept — restores faith
     "kept_promise": (+1, {"optimism": +0.04, "anxiety": -0.02}),
 }
 _NEGATIVE_KINDS: dict[str, tuple[int, dict[str, float]]] = {
     # being deceived / let down by someone trusted — wariness, lost faith
-    "betrayal":       (-1, {"optimism": -0.06, "anxiety": +0.04}),
-    "deception":      (-1, {"optimism": -0.06, "anxiety": +0.04}),
+    "betrayal": (-1, {"optimism": -0.06, "anxiety": +0.04}),
+    "deception": (-1, {"optimism": -0.06, "anxiety": +0.04}),
     # a loss — settles into the low mood
-    "loss":           (-1, {"depression": +0.05, "optimism": -0.03}),
-    "grief":          (-1, {"depression": +0.05, "optimism": -0.03}),
+    "loss": (-1, {"depression": +0.05, "optimism": -0.03}),
+    "grief": (-1, {"depression": +0.05, "optimism": -0.03}),
     # a broken promise / being let down — dims optimism, withdraws a little
     # curiosity ("next time I won't reach out as far").
     "disappointment": (-1, {"optimism": -0.05, "anxiety": +0.02, "curiosity": -0.02}),
     "broken_promise": (-1, {"optimism": -0.05, "anxiety": +0.02, "curiosity": -0.02}),
-    "abandonment":    (-1, {"depression": +0.04, "anxiety": +0.04, "optimism": -0.03}),
+    "abandonment": (-1, {"depression": +0.04, "anxiety": +0.04, "optimism": -0.03}),
 }
 
 
@@ -149,7 +150,7 @@ def _days_between(earlier: datetime | None, later: datetime | None) -> float:
 
 
 def _hash_id(kind: str, label: str, ts: str) -> str:
-    h = hashlib.sha1(f"{kind}|{label}|{ts}".encode("utf-8")).hexdigest()[:8]
+    h = hashlib.sha1(f"{kind}|{label}|{ts}".encode()).hexdigest()[:8]
     return f"imprint_{h}"
 
 
@@ -200,7 +201,7 @@ class Imprint:
     id: str = ""
     ts: str = ""
     kind: str = ""
-    valence_sign: int = 0           # +1 positive, -1 negative
+    valence_sign: int = 0  # +1 positive, -1 negative
     severity: float = 0.5
     intensity: float = 0.5
     decay_per_day: float = DEFAULT_DECAY_PER_DAY
@@ -211,7 +212,7 @@ class Imprint:
     # internal bookkeeping (not part of the contract signature, but persisted)
     shifts_applied: bool = False
     echo_count: int = 0
-    label: str = ""                 # short human tag, for rendering / dedup
+    label: str = ""  # short human tag, for rendering / dedup
 
     def to_dict(self) -> dict:
         return {
@@ -232,7 +233,7 @@ class Imprint:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> "Imprint":
+    def from_dict(cls, d: dict) -> Imprint:
         d = d or {}
         return cls(
             id=str(d.get("id", "") or ""),
@@ -309,7 +310,7 @@ def ingest_milestones(milestones: list[dict], ts: str) -> list[Imprint]:
                 kind=kind,
                 valence_sign=sign,
                 severity=severity,
-                intensity=severity,          # starts as vivid as it was deep
+                intensity=severity,  # starts as vivid as it was deep
                 decay_per_day=DEFAULT_DECAY_PER_DAY,
                 # floor scales with depth: a deeper mark leaves a higher residue,
                 # but never below the global minimum.
