@@ -110,6 +110,11 @@ python examples/quickstart.py     # pure stdlib, no install needed
 The reply model reads the felt block and **decides for itself** how to act. The
 library never writes "be sad now" into the prompt — it only ever supplies state.
 
+*Off* this per-turn path, `Engine.dream()` can run on a sleep cycle (between
+sessions, or after a long idle): it recombines the agent's own charged material
+into a short, illogical dream that leaves a faint, **untraceable** mood the agent
+wakes with and can't trace back. See §5 of [PHILOSOPHY.md](PHILOSOPHY.md).
+
 ---
 
 ## Layout
@@ -121,9 +126,10 @@ library never writes "be sad now" into the prompt — it only ever supplies stat
 | `feltstate/sources/` | `AffectSource` interface + `KeywordSource` (rules, zero-dep) + `LLMSource` (any OpenAI-compatible endpoint). The pluggable "how does it feel?" seam. |
 | `feltstate/affect/` | The dynamics: `pressure` (multi-bar release), `traits` (asymmetric adaptation), `imprint` (permanent marks), `relationship` (the bond evolving), `tide` (mood's rise & fall), `smooth` (label hysteresis). |
 | `feltstate/memory/` | `Canon` — a decaying 5W1H fact store (intensity fades, repetition reinforces, recall slows decay); `extract` — optional second-model fact extraction into it. |
+| `feltstate/dream.py` | Off-path, zero-LLM: recombines the agent's charged material (`Fragment`s) into an *illogical* dream that leaves a faint, **untraceable** mood residue. Swap the `Phrasebook` for another language. |
 | `feltstate/timeawareness/` | Fuzzy "how long since we last talked" + precise "now". |
 | `feltstate/render/` | `render_felt_block` (state → first-person block) + `build_injection` (cache-safe). |
-| `feltstate/engine.py` | `Engine` — the façade that ties it together: `tick()`, `render()`, `inject()`. |
+| `feltstate/engine.py` | `Engine` — the façade that ties it together: `tick()`, `render()`, `inject()`, `dream()`. |
 
 ---
 

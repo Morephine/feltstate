@@ -138,6 +138,7 @@ class Engine:
         self._labels_committed: list[str] = []
         self._label_candidate: str | None = None
         self._label_streak: int = 0
+        self._last_dream: str = ""  # most recent dream's text, for possible recall
         self._load_meta()
 
     # ------------------------------------------------------------------ #
@@ -334,6 +335,43 @@ class Engine:
         return build_injection(self.render(), user_message)
 
     # ------------------------------------------------------------------ #
+    # Dreaming (optional, off the per-turn path)                         #
+    # ------------------------------------------------------------------ #
+    def dream(self, *, fragments: list | None = None, phrasebook=None, rng=None):
+        """Produce one dream and apply its faint residue to the felt mood.
+
+        Call this on a *sleep* cycle — between sessions, or on a long idle —
+        **not** every turn. It gathers dream material (rich
+        :class:`~feltstate.dream.Fragment` objects you pass in, or a thin
+        best-effort set from the current state when ``fragments`` is ``None``),
+        recombines it illogically (see :mod:`feltstate.dream`), nudges the mood by
+        the dream's small residue (which then decays through the ordinary tick
+        dynamics), stashes the dream text for possible later recall, and returns
+        the :class:`~feltstate.dream.Dream`.
+
+        The reply model is never told to feel anything — the agent simply wakes
+        slightly moved, with no cause it can trace.
+        """
+        from .dream import DEFAULT_PHRASEBOOK, gather_fragments
+        from .dream import dream as _dream
+
+        material = list(fragments) if fragments is not None else gather_fragments(self.state)
+        d = _dream(
+            material,
+            phrasebook=phrasebook or DEFAULT_PHRASEBOOK,
+            cfg=self.config.dream,
+            rng=rng,
+        )
+        # Apply the residue as a small, untraceable nudge to the felt mood; it
+        # then carries and decays through the ordinary tick dynamics.
+        m = self.state.mood
+        m.valence = max(-1.0, min(1.0, m.valence + d.valence))
+        m.arousal = max(0.0, min(1.0, m.arousal + d.arousal))
+        self._last_dream = d.text
+        self.save()
+        return d
+
+    # ------------------------------------------------------------------ #
     # Persistence                                                        #
     # ------------------------------------------------------------------ #
     def save(self) -> None:
@@ -358,6 +396,7 @@ class Engine:
         self._labels_committed = list(data.get("labels_committed") or [])
         self._label_candidate = data.get("label_candidate") or None
         self._label_streak = int(data.get("label_streak") or 0)
+        self._last_dream = str(data.get("last_dream", "") or "")
 
     def _save_meta(self) -> None:
         """Atomically write the engine sidecar beside the state file."""
@@ -369,6 +408,7 @@ class Engine:
             "labels_committed": list(self._labels_committed),
             "label_candidate": self._label_candidate,
             "label_streak": int(self._label_streak),
+            "last_dream": self._last_dream,
         }
         p = self._meta_path
         p.parent.mkdir(parents=True, exist_ok=True)

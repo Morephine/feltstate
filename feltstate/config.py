@@ -307,6 +307,22 @@ class RelationshipConfig:
     clamp_hi: float = 0.95
 
 
+# --------------------------------------------------------------------------- #
+# Dream — illogical recombination and the faint residue it leaves             #
+# --------------------------------------------------------------------------- #
+@dataclass(frozen=True)
+class DreamConfig:
+    """Tunables for :mod:`feltstate.dream`. The residue is meant to stay a wisp;
+    raise ``residue_scale`` only if you want dreams to colour the next session
+    more strongly."""
+
+    min_fragments: int = 3  # fewest images a dream draws
+    max_fragments: int = 5  # most images a dream draws
+    dissonance_arousal: float = 0.15  # clashing material -> more activated
+    dissonance_murk: float = 0.30  # clashing material -> valence pulled toward neutral
+    residue_scale: float = 0.25  # shrink the blended affect to a faint nudge
+
+
 @dataclass(frozen=True)
 class Config:
     """Bundle of every sub-config. Pass a customised one to the engine, or use
@@ -318,6 +334,7 @@ class Config:
     memory: MemoryConfig = field(default_factory=MemoryConfig)
     time: TimeConfig = field(default_factory=TimeConfig)
     relationship: RelationshipConfig = field(default_factory=RelationshipConfig)
+    dream: DreamConfig = field(default_factory=DreamConfig)
 
 
 DEFAULT_CONFIG = Config()

@@ -8,6 +8,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Dreams** (`feltstate.dream` + `Engine.dream`): off-the-per-turn-path,
+  zero-LLM recombination of the agent's own charged material into a short,
+  illogical dream that leaves a faint, *untraceable* mood residue — a feeling
+  with its causal thread cut on purpose. Clashing material muddies valence and
+  raises arousal; the residue decays through the normal dynamics. Supply rich
+  `Fragment`s (or a swapped-in `Phrasebook` for another language); the default
+  phrasebook is English.
 - **Fact extraction** (`memory.extract`): an optional second-model pass that
   proposes 5W1H facts for a `Canon` — model-agnostic, grey-zone by default, so
   the agent confirms what it keeps.

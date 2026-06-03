@@ -25,6 +25,7 @@ Quickstart::
 """
 
 from .config import DEFAULT_CONFIG, Config, PersonaDials
+from .dream import DEFAULT_PHRASEBOOK, Dream, Fragment, Phrasebook
 from .engine import Engine
 from .memory.canon import Canon
 from .render import build_injection, render_felt_block
@@ -60,6 +61,10 @@ __all__ = [
     "KeywordSource",
     "LLMSource",
     "Canon",
+    "Fragment",
+    "Phrasebook",
+    "Dream",
+    "DEFAULT_PHRASEBOOK",
     "time_since_phrase",
     "render_felt_block",
     "build_injection",

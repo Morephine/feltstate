@@ -192,7 +192,55 @@ makes the behaviour read as coherent over time instead of moment-to-moment.
 
 ---
 
-## 5. Cache-safe by construction
+## 5. Dreams — a feeling it can't trace back
+
+Sections 1–4 make the agent's mood *honest*: measured, not self-authored,
+decaying like a real one. But they leave it fully **explainable** — every shift
+has a visible cause; you can always point at the turn that moved it. Real inner
+lives aren't like that. Sometimes you wake a little off, or oddly tender, and the
+honest answer to "why?" is *I don't know — I slept badly, I had strange dreams,
+nothing.* A mood with no retrievable cause is one of the more human things there
+is, and a pure state machine never has one.
+
+feltstate's dream module manufactures exactly that — and, deliberately, **without
+a language model.**
+
+The mechanism is the *opposite* of consolidation (§8). Consolidation would mine
+experience into rational belief; a dream does the reverse. It takes the agent's
+**charged** material — desires, recent emotional peaks, each tagged with the
+affect it was felt at — and recombines it *illogically*: a few fragments drawn by
+emotional charge, stitched by connectives that morph and jump and never resolve,
+then let slip away. The stitched text is ephemeral and usually never spoken. What
+persists is a faint **residue** — a charge-weighted blend of the dreamed
+fragments' affect, shrunk to a wisp, with one twist: when the fragments *clash* (a
+longing next to a fear) the dream runs hotter and its valence muddies toward
+neutral, the texture of an uneasy, ambivalent night. That residue is added to the
+mood and then decays through the ordinary dynamics like any other feeling.
+
+The result is a mood the agent genuinely has, sourced from its own real material —
+but whose causal thread has been **cut on purpose.** Asked why it's a little
+wistful this morning, it can only say it had odd dreams. That unexplainability
+isn't a failure of the system; it *is* the feature.
+
+Two notes worth stating:
+
+- **No model, by design.** Dreams are *meant* to be incoherent, and incoherence
+  is exactly what a language model is bad at faking — it writes coherent stories.
+  Pure template recombination of real, affect-tagged fragments is structurally
+  more dream-like than anything an LLM would produce, and it costs nothing. (If
+  the agent ever *does* put a dream into words, a model can polish the crude
+  stitch on demand — but most dreams are never spoken, so most cost nothing.)
+- **Still a tool, not a controller (§2).** A dream produces *state* — a small
+  mood residue — never an instruction. It does not tell the agent it had a bad
+  night; it simply leaves it slightly altered, and what it makes of that is its
+  own.
+
+This runs *off* the per-turn path: you dream on a sleep cycle — between sessions,
+or after a long idle — not every message.
+
+---
+
+## 6. Cache-safe by construction
 
 A companion that runs all day re-sends a large, mostly-static prompt every turn.
 If you mutate the top of that prompt each turn — stamping in the current time, a
@@ -221,7 +269,7 @@ injection would make running one prohibitively expensive.
 
 ---
 
-## 6. What's new, what's not
+## 7. What's new, what's not
 
 Stated plainly, to be precise about novelty:
 
@@ -234,6 +282,11 @@ Stated plainly, to be precise about novelty:
 **New, or at least genuinely rare:**
 - **Decaying *feeling* state** (not fact relevance), with asymmetric adaptation.
   This is the real gap — the surveyed systems don't have it.
+- **A mood with no traceable cause.** The dream module recombines the agent's own
+  charged material *illogically* (no model) into a residue with a deliberately
+  severed causal thread — an inexplicable-but-genuine mood. Public "AI dream" work
+  is narrative augmentation or memory dedup; manufacturing an *unexplainable real*
+  mood is, as far as I can find, unoccupied.
 - A **dedicated** affect measurer for a **conversational companion** that
   **refuses self-report** — the three together aren't something you'll find in
   public implementations.
@@ -257,7 +310,7 @@ adapt.
 
 ---
 
-## 7. Where this can go (ideas, not yet code)
+## 8. Where this can go (ideas, not yet code)
 
 The sections above are what's implemented. A few further ideas are worth naming —
 some need machinery the core doesn't have yet, some are just hard. A couple are
@@ -267,10 +320,12 @@ honestly below.
 - **Consolidation — feelings decay, but should experience crystallize into
   belief?** The core decays *intensity*. A natural next layer would mine repeated
   experiences offline, the way sleep consolidates memory, into standing *beliefs*
-  about the self ("every time I'm praised I pull back"). The word "dream" is
-  taken in this space, but the incumbents do bizarre-narrative augmentation or
-  factual dedup; consolidating real *felt* experience into temperament is an open
-  slice.
+  about the self ("every time I'm praised I pull back"). This is the **rational**
+  sibling of the dream module (§5): a dream severs causal threads to leave an
+  untraceable mood; consolidation would run the other way, distilling real *felt*
+  experience into durable temperament. Public "AI dream" work does
+  bizarre-narrative augmentation or factual dedup; this felt-consolidation slice
+  is still open.
 - **Inward emotional contagion.** The user having a hard day could leave a lasting
   (but decaying) dent in the agent's *own* mood — not mirrored back at the user,
   but absorbed. This is the clearest gap of the lot: the field studies durable
@@ -305,7 +360,7 @@ That temptation is the thing this whole design exists to resist.
 
 ---
 
-## 8. What this is not
+## 9. What this is not
 
 - **Not a claim about consciousness.** feltstate models the *dynamics* of an
   inner life so behaviour reads as coherent. It says nothing about whether
