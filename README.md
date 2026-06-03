@@ -13,14 +13,15 @@ relationship state that **decays back to neutral over time** like a real one,
 and the state is rendered back into a first-person block the agent reads as **its
 own** feelings — never as data to recite, never as a command telling it how to act.
 
-> Working name. Distilled and rewritten — clean and general — from a private
-> production companion. None of that system's data, models, or persona is here.
+> Distilled and rewritten as a clean, general library from a real production
+> companion system. None of that system's private data, trained models, or
+> persona is included here — only the mechanisms and the design.
 
 ---
 
 ## Why this exists (and how it differs)
 
-The honest version, after surveying the landscape:
+How feltstate relates to existing work:
 
 - **Agent memory layers** (Letta/MemGPT, mem0, Zep/Graphiti) store *facts*, with
   recency ranking or bi-temporal validity. None of them model an emotional
@@ -132,9 +133,9 @@ library never writes "be sad now" into the prompt — it only ever supplies stat
   free at the core. Bring your own `AffectSource`, persona text, and a place to
   store state.
 - **Isn't:** a drop-in companion. There's no bundled personality, no trained
-  model, no conversational data — those are yours to supply. The production
-  system this came from is deeply tied to one character and one person; that
-  coupling (and all private data) was left behind on purpose.
+  model, no conversational data — those are yours to supply. The companion
+  system this was extracted from was deeply tied to one specific character and
+  user; that coupling — and all private data — was deliberately left out.
 - The default `KeywordSource` is intentionally crude. The interesting affect
   signal comes from `LLMSource` or a model you fine-tune for the job.
 
@@ -158,10 +159,9 @@ mypy feltstate        # type check
 pytest -q             # tests
 ```
 
-All four run in CI (`.github/workflows/ci.yml`) on Python 3.10–3.13. To take this
-public, see **[PUBLISHING.md](PUBLISHING.md)** — set your identity, then push.
+All four run in CI (`.github/workflows/ci.yml`) on Python 3.10–3.13. See
+[CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
 ## License
 
-MIT — see [LICENSE](LICENSE). (Set your own name/handle in `LICENSE` and
-`pyproject.toml` before publishing.)
+MIT — see [LICENSE](LICENSE).

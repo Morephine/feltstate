@@ -10,9 +10,9 @@ where *ground truth, not self-report* lives: the source is a separate component
 from whatever model generates the agent's replies. The reply-generating model
 never decides how it feels — it only reads the felt state back afterwards.
 
-The production system this was distilled from used a small fine-tuned model for
-this. That model can't be shipped (it was trained on private data), so this
-package ships the **interface** plus two reference sources you can run today:
+A natural implementation uses a small fine-tuned model for this. Such a model is
+necessarily trained on private data and so isn't shippable, so this package ships
+the **interface** plus two reference sources you can run today:
 
 * :class:`~feltstate.sources.keyword.KeywordSource` — zero-dependency, rule
   based. Runs out of the box, good for tests and a baseline.
@@ -22,7 +22,8 @@ package ships the **interface** plus two reference sources you can run today:
 Swap in your own (a fine-tuned classifier, a sentiment model, anything) by
 subclassing :class:`AffectSource`.
 
-Two design rules carried over from production, both about not fooling yourself:
+Two design rules worth carrying into any implementation, both about not fooling
+yourself:
 
 1. **Read the user, not the agent's own words.** Feeding the agent's own past
    replies back in creates a self-reinforcing loop (it sounded sad, so it reads

@@ -1,9 +1,9 @@
 """feltstate.config — every tunable in one place.
 
-The production system this is distilled from had its constants scattered across
-~60 files; pulling them into frozen dataclasses means you tune behaviour by
-editing config, not by hunting through logic. Every magic number below has a
-one-line rationale so you know what moving it does.
+In ad-hoc implementations these constants tend to scatter across dozens of files;
+pulling them into frozen dataclasses means you tune behaviour by editing config,
+not by hunting through logic. Every magic number below has a one-line rationale
+so you know what moving it does.
 
 Nothing here is character-specific. Personality is expressed through
 :class:`PersonaDials` (passed in per agent), not through code.

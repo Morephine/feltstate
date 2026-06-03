@@ -34,9 +34,8 @@ Put together: a static, cached persona at the top; the agent's freshly felt
 state riding in on the back of its newest user message. The agent reads the
 block as its own feeling (identity-merge) and the cache stays warm.
 
-This mirrors what the production system this was distilled from does: the felt
-block is attached as a *dynamic prefix to the turn's instruction*, never folded
-into the static system prompt that the cache pins.
+Concretely: the felt block is attached as a *dynamic prefix to the turn's
+instruction*, never folded into the static system prompt that the cache pins.
 """
 
 from __future__ import annotations
