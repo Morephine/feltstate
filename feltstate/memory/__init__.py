@@ -6,5 +6,6 @@ auto-injected into a prompt.
 """
 
 from .canon import Canon
+from .extract import FactExtractor, LLMFactExtractor, commit_to_canon
 
-__all__ = ["Canon"]
+__all__ = ["Canon", "FactExtractor", "LLMFactExtractor", "commit_to_canon"]
