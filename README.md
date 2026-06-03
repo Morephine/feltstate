@@ -6,12 +6,19 @@
 &nbsp;![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 &nbsp;![License: MIT](https://img.shields.io/badge/license-MIT-green)
 
-Most "AI companion" memory work gives an agent *facts* it can recall. feltstate
-gives it *feelings* it can't fake: a small, separate component measures how the
-agent feels each turn, that reading is integrated into a mood / temperament /
-relationship state that **decays back to neutral over time** like a real one,
-and the state is rendered back into a first-person block the agent reads as **its
-own** feelings — never as data to recite, never as a command telling it how to act.
+feltstate is a small, opinionated reference implementation of one idea: a
+companion that stays the **same someone** over a long relationship. It gives an
+agent a felt inner state it experiences as its own but cannot author at will —
+affect *measured* each turn by a component separate from the reply model,
+integrated into a mood / temperament / relationship state that **decays like a
+real one** (good moods fade fast, bad ones linger), and handed back as a
+first-person feeling the agent reads as **its own** — never as data to recite,
+never as a command telling it how to act. It can even *dream*: leave itself a
+faint mood it can't trace back.
+
+None of the individual mechanisms are new — see **[PHILOSOPHY §7](PHILOSOPHY.md)**
+for the 2024–2026 prior art, named honestly. The rare thing is the **coherence**:
+every piece serving that one goal, and the lines it refuses to cross to get there.
 
 > Distilled and rewritten as a clean, general library from a real production
 > companion system. None of that system's private data, trained models, or
@@ -21,33 +28,34 @@ own** feelings — never as data to recite, never as a command telling it how to
 
 ## Why this exists (and how it differs)
 
-How feltstate relates to existing work:
+By 2026 the field has independent versions of most pieces here — a dedicated
+affect estimator ([co-r-e](https://arxiv.org/abs/2601.16087)), a decaying mood
+state with momentum (REMT, [PSYA](https://arxiv.org/abs/2507.19495)), the
+separate appraisal step ([Chain-of-Emotion](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0301033)),
+even dreams for companions ([2601.06115](https://arxiv.org/abs/2601.06115)). So
+feltstate is **not** a claim to have invented affective computing. It is the
+**coherent assembly + the discipline** — and no surveyed system, research or
+product, holds all of these at once:
 
-- **Agent memory layers** (Letta/MemGPT, mem0, Zep/Graphiti) store *facts*, with
-  recency ranking or bi-temporal validity. None of them model an emotional
-  **state**, and none decay *feeling intensity* — they decay fact relevance.
-- **Roleplay frontends** (SillyTavern lorebooks, author's notes) inject static
-  text on keyword hits. No state, no decay, no measurement.
-- **Commercial companions** (Replika, Character.AI) surface emotion as something
-  the language model *says* ("I feel sad") — self-reported, not measured — and
-  keep memory as manual pins + background summaries.
-- **Academic work** that computes emotion outside the model (Chain-of-Emotion,
-  PAD-state agents, small-empathetic-model plugins) almost always uses the LLM
-  *itself* to appraise, represents emotion as free text, and has **no decay** and
-  no notion of cache-safe re-injection.
+- **Affect is measured, not self-reported.** A separate component appraises the
+  *agent's own* state (most estimators read the *user*); the reply model can't
+  flatter itself into a mood.
+- **It decays — asymmetrically.** Good moods fade fast, bad ones linger. The
+  agents that model decay tune it the *opposite* way (damping negativity for
+  stability); feltstate sustains it, because that asymmetry is what makes a
+  temperament rather than a mood ring.
+- **It's handed back as the agent's own feeling, never as a command.**
+  First-person identity-merge — not a `valence=-0.3` readout, not "respond in a
+  sad tone."
+- **It can dream** — a zero-LLM recombination that leaves a small, deliberately
+  *un-traceable* mood, so the agent can wake a little off with no cause it names.
+- **It's cache-safe**, so a persistent always-on companion isn't prohibitively
+  expensive to run.
 
-Each *piece* has prior art. What was missing — and what feltstate is — is the
-**combination, built as one runnable whole under a low-latency companion's
-constraints**:
-
-1. A **dedicated, separate** component measures affect as ground truth (the
-   reply model never gets to self-report how it feels).
-2. That affect is a **state that decays back toward neutral** — the genuine blank
-   spot in the ecosystem.
-3. It's fed back **cache-safely** and **as the agent's own first-person felt
-   sense**, with the library never injecting a command.
-
-See **[PHILOSOPHY.md](PHILOSOPHY.md)** for the full reasoning.
+The honest pitch is not "novel mechanisms." It is "the cleanest opinionated whole
+— measured, decaying, identity-merged, never commanding — while that combination
+is still rare." See **[PHILOSOPHY.md](PHILOSOPHY.md)** for the full reasoning and
+the prior-art map.
 
 ---
 
