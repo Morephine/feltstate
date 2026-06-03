@@ -174,6 +174,9 @@ class Mood:
     # {"stage","intensity"} — where the mood sits in its rising/falling tide
     # (computed from recent valence trajectory), or None when flat/calm
     tide: dict | None = None
+    # A1: recent rate-of-change of felt valence; carries the downswing momentum
+    # that gives a low mood a trough and a slow recovery. 0.0 when momentum is off.
+    velocity: float = 0.0
 
     def to_dict(self) -> dict:
         return {
@@ -183,6 +186,7 @@ class Mood:
             "aftertaste": self.aftertaste,
             "mixed_blend": self.mixed_blend,
             "tide": self.tide,
+            "velocity": round(self.velocity, 4),
         }
 
     @classmethod
@@ -195,6 +199,7 @@ class Mood:
             aftertaste=d.get("aftertaste"),
             mixed_blend=d.get("mixed_blend"),
             tide=d.get("tide"),
+            velocity=float(d.get("velocity", 0.0) or 0.0),
         )
 
 

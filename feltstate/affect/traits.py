@@ -180,8 +180,28 @@ def update_mood(mood: Mood, delta: AffectDelta, traits: Traits, cfg: MoodConfig)
 
     # 2. Felt EWMA toward the blended reading (runs every tick).
     va = cfg.va_alpha
-    felt_v = mood.valence * (1.0 - va) + reading_v * va
+    target_v = mood.valence * (1.0 - va) + reading_v * va
     felt_a = mood.arousal * (1.0 - va) + reading_a * va
+
+    # A1: negative-channel momentum. A dip carries inertia — it overshoots its
+    # target and recovers slowly, the way a bad mood doesn't lift the instant the
+    # cause passes (a sulk has a trough). Good moods, by contrast, stay on the
+    # plain fast EWMA ("开心快淡"). Off when momentum_mu == 0 → identical to the
+    # bare EWMA. mu is held below the range where momentum would stop recovering.
+    mu = _clamp(cfg.momentum_mu, 0.0, 0.9)
+    velocity = mood.velocity
+    if mu > 0.0:
+        new_velocity = mu * velocity + (1.0 - mu) * (target_v - mood.valence)
+        rising_in_positive = mood.valence >= 0.0 and target_v >= mood.valence
+        if cfg.momentum_negative_only and rising_in_positive:
+            felt_v = target_v  # bright side: plain fast EWMA, no momentum
+            velocity = 0.0
+        else:
+            felt_v = mood.valence + new_velocity  # carry the downswing / slow climb
+            velocity = new_velocity
+    else:
+        felt_v = target_v
+        velocity = 0.0
 
     # 3. Trait gravity — drag the felt point toward the temperament's resting
     #    point. trait_gravity scales the per-tick pull so the effect accrues
@@ -208,4 +228,5 @@ def update_mood(mood: Mood, delta: AffectDelta, traits: Traits, cfg: MoodConfig)
         labels=list(delta.labels),
         aftertaste=new_aftertaste,
         mixed_blend=delta.mixed_blend,
+        velocity=round(velocity, 4),
     )

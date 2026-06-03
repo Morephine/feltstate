@@ -50,10 +50,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from datetime import datetime, timezone
 from pathlib import Path
 
 from ..config import MemoryConfig
+from .feeling import blend, derive, neutral_profile, observe
 
 __all__ = ["Canon"]
 
@@ -95,6 +97,30 @@ def _entry_id(entry: dict) -> str:
 def _entry_text(entry: dict) -> str:
     """Whole record flattened to lowercase text for keyword matching."""
     return json.dumps(entry, ensure_ascii=False).lower()
+
+
+def _affect_field(prof: tuple[float, float, float], w: float) -> dict:
+    """Pack a sentiment profile + evidence weight into a fact's ``affect`` field."""
+    return {
+        "pos": round(prof[0], 4),
+        "neg": round(prof[1], 4),
+        "neu": round(prof[2], 4),
+        "w": round(w, 4),
+    }
+
+
+def _lexical_score(query: str, text: str) -> float:
+    """Default recall scorer: fraction of the query's tokens present in ``text``.
+
+    Splits on whitespace for space-delimited text and on characters otherwise, so
+    it degrades gracefully for CJK. Replace with an embedding-based scorer (passed
+    to :meth:`Canon.recall`) for semantic recall.
+    """
+    q = query.split() if " " in query else list(query)
+    q = [t for t in q if t.strip()]
+    if not q:
+        return 0.0
+    return sum(1.0 for t in q if t in text) / len(q)
 
 
 def _load_jsonl(path: Path) -> list[dict]:
@@ -156,12 +182,31 @@ class Canon:
     # ------------------------------------------------------------------ #
     # Decay / salience                                                   #
     # ------------------------------------------------------------------ #
+    def _affect_signals(self, entry: dict) -> dict:
+        """Derived ``{valence, charge, entropy}`` for a fact's affect, or zeros if
+        the fact carries none (M1)."""
+        aff = entry.get("affect")
+        if not isinstance(aff, dict):
+            return {"valence": 0.0, "charge": 0.0, "entropy": 0.0}
+        prof = (
+            float(aff.get("pos", 0.0)),
+            float(aff.get("neg", 0.0)),
+            float(aff.get("neu", 1.0)),
+        )
+        return derive(prof)
+
     def _current_intensity(self, entry: dict, now: datetime) -> float:
         """Salience an entry should be shown at *now*, after decay and boosts.
 
         Permanent entries (``base >= permanent_above``) hold their base intensity.
-        Everything else loses ``decay_per_day`` per day, is bumped by repeats
-        (``_reinforce_count``) and by recalls (capped), and floors at 0.
+        The decay curve is ``cfg.decay_curve``: ``"linear"`` is the additive
+        original (base − age·rate, + reinforce, + recall); ``"fsrs"`` (M2) is a
+        stretched-exponential whose rate slows with a fact's importance and whose
+        tail is fattened for negative-valence facts — low memories linger while
+        bright ones fade. Repeats and recalls slow the fade either way. With
+        ``salience_charge_weight`` (M1) set, emotionally flat facts are dimmed in
+        what's *shown*, so frequency without feeling stops crowding out meaning —
+        the reinforce of charged facts is untouched. Floors at 0.
         """
         cfg = self.cfg
         base = float(entry.get("intensity", cfg.default_intensity))
@@ -171,10 +216,29 @@ class Canon:
         age_days = max(0.0, (now - ts).total_seconds() / 86400.0) if ts else 0.0
         reinforce = int(entry.get("_reinforce_count", 0))
         recalls = int(entry.get("recalls", 0))
-        recall_boost = min(cfg.recall_boost_cap, recalls * cfg.recall_boost_each)
-        current = (
-            base - age_days * cfg.decay_per_day + reinforce * cfg.reinforce_boost + recall_boost
-        )
+        sig = self._affect_signals(entry)
+
+        if cfg.decay_curve == "fsrs":
+            # Importance (emotional charge + repetition + recall) slows the rate;
+            # valence sign picks the tail — negative lingers, positive fades fast.
+            importance = min(
+                1.0,
+                sig["charge"] * 0.6
+                + (reinforce / (1.0 + reinforce)) * 0.3
+                + min(cfg.recall_boost_cap, recalls * cfg.recall_boost_each),
+            )
+            lam = cfg.decay_lambda * math.exp(-cfg.decay_importance_mu * importance)
+            beta = cfg.decay_beta_durable if sig["valence"] < 0 else cfg.decay_beta_fast
+            current = base * math.exp(-lam * (age_days**beta))
+        else:
+            recall_boost = min(cfg.recall_boost_cap, recalls * cfg.recall_boost_each)
+            current = (
+                base - age_days * cfg.decay_per_day + reinforce * cfg.reinforce_boost + recall_boost
+            )
+
+        scw = cfg.salience_charge_weight
+        if scw > 0.0:
+            current *= 1.0 - scw * (1.0 - sig["charge"])
         return max(0.0, current)
 
     def _tier(self, current: float) -> str:
@@ -197,6 +261,7 @@ class Canon:
         sort without re-deriving them.
         """
         current = self._current_intensity(entry, now)
+        sig = self._affect_signals(entry)
         ts = _parse_ts(entry.get("ts", ""))
         who = entry.get("who") or {}
         what = entry.get("what") or {}
@@ -217,6 +282,9 @@ class Canon:
             "tier": self._tier(current),
             "reinforced": int(entry.get("_reinforce_count", 0)),
             "recalls": int(entry.get("recalls", 0)),
+            "valence": sig["valence"],  # M1: how the fact leans (-1..1)
+            "charge": sig["charge"],  # M1: how emotionally loaded (0..1)
+            "entropy": sig["entropy"],  # M1: ambivalence / uncertainty
             "age_days": round((now - ts).total_seconds() / 86400.0, 1) if ts else None,
         }
         return out
@@ -236,11 +304,17 @@ class Canon:
         intensity: float | None = None,
         confidence: float = 0.9,
         default_intensity: float | None = None,
+        emotion: float | None = None,
     ) -> dict:
-        """Assemble a fresh 5W1H record from keyword fields."""
+        """Assemble a fresh 5W1H record from keyword fields.
+
+        ``emotion`` (a valence in [-1, 1], optional) seeds the fact's
+        evidence-weighted affect (M1): a young feeling starting from neutral, moved
+        by this first reading in proportion to ``confidence``.
+        """
         if default_intensity is None:
             default_intensity = self.cfg.default_intensity
-        return {
+        entry = {
             "ts": _now_iso(),
             "who": {"actor": actor},
             "what": {"action": action or "", "object": obj},
@@ -251,13 +325,25 @@ class Canon:
             "confidence": float(confidence),
             "recalls": 0,
         }
+        if emotion is not None:
+            prof, w = blend(
+                neutral_profile(), self.cfg.sentiment_prior_weight, observe(emotion), confidence
+            )
+            entry["affect"] = _affect_field(prof, w)
+        return entry
 
-    def _write_or_reinforce(self, path: Path, entry: dict) -> dict:
+    def _write_or_reinforce(
+        self, path: Path, entry: dict, *, emotion: float | None = None, confidence: float = 0.9
+    ) -> dict:
         """Append ``entry``, or reinforce an existing active entry with the same id.
 
         Reinforcing bumps ``_reinforce_count`` (which slows that fact's decay) and
-        refreshes its timestamp. Retracted/superseded entries are ignored when
-        matching, so retract-then-readd yields a fresh active fact.
+        refreshes its timestamp — salience reinforce is unchanged. If ``emotion``
+        is given, this turn's reading is *also* folded into the fact's
+        evidence-weighted affect (M1): a recurring feeling settles and gains
+        inertia; a recurring *flat* mention keeps the fact neutral. Retracted /
+        superseded entries are ignored when matching, so retract-then-readd yields
+        a fresh active fact.
         """
         new_id = _entry_id(entry)
         existing = _load_jsonl(path)
@@ -268,6 +354,19 @@ class Canon:
                 e["_reinforce_count"] = int(e.get("_reinforce_count", 0)) + 1
                 e["_last_reinforced"] = _now_iso()
                 e["ts"] = _now_iso()
+                if emotion is not None:
+                    aff = e.get("affect")
+                    if isinstance(aff, dict):
+                        prof = (
+                            float(aff.get("pos", 0.0)),
+                            float(aff.get("neg", 0.0)),
+                            float(aff.get("neu", 1.0)),
+                        )
+                        w = float(aff.get("w", self.cfg.sentiment_prior_weight))
+                    else:
+                        prof, w = neutral_profile(), self.cfg.sentiment_prior_weight
+                    prof, w = blend(prof, w, observe(emotion), confidence)
+                    e["affect"] = _affect_field(prof, w)
                 _rewrite_jsonl(path, existing)
                 return self._render(e, datetime.now(timezone.utc))
         _append_jsonl(path, entry)
@@ -302,12 +401,15 @@ class Canon:
         when: str = "",
         intensity: float | None = None,
         confidence: float = 0.9,
+        emotion: float | None = None,
     ) -> dict:
         """Record a confirmed fact, or reinforce it if it already exists.
 
         ``why`` is encouraged: an *object* says what happened, a *why* says what
-        it meant — the meaning is what makes a memory worth keeping. Returns the
-        stored (or reinforced) entry as a rendered view dict.
+        it meant — the meaning is what makes a memory worth keeping. ``emotion``
+        (a valence in [-1, 1], optional) records *how it felt*; repeated emotional
+        mentions settle the feeling, repeated flat ones keep it neutral (M1).
+        Returns the stored (or reinforced) entry as a rendered view dict.
         """
         entry = self._build_entry(
             actor,
@@ -318,8 +420,9 @@ class Canon:
             intensity=intensity,
             confidence=confidence,
             default_intensity=self.cfg.default_intensity,
+            emotion=emotion,
         )
-        return self._write_or_reinforce(self.path, entry)
+        return self._write_or_reinforce(self.path, entry, emotion=emotion, confidence=confidence)
 
     def ask(
         self,
@@ -331,12 +434,14 @@ class Canon:
         when: str = "",
         intensity: float | None = None,
         confidence: float = 0.9,
+        emotion: float | None = None,
     ) -> dict:
         """Record a *grey-zone* fact — something not yet decided or only half-believed.
 
         Grey-zone facts live in a separate file and start at a lower intensity
         (``pending_intensity``) so an unconfirmed hunch fades faster than a sealed
-        fact. Promote one later with :meth:`confirm`. Returns the rendered entry.
+        fact. ``emotion`` seeds its affect (M1) as for :meth:`add`. Promote one
+        later with :meth:`confirm`. Returns the rendered entry.
         """
         entry = self._build_entry(
             actor,
@@ -347,8 +452,11 @@ class Canon:
             intensity=intensity,
             confidence=confidence,
             default_intensity=self.cfg.pending_intensity,
+            emotion=emotion,
         )
-        return self._write_or_reinforce(self.pending_path, entry)
+        return self._write_or_reinforce(
+            self.pending_path, entry, emotion=emotion, confidence=confidence
+        )
 
     def confirm(self, id_or_keyword: str) -> list[dict]:
         """Promote matching grey-zone fact(s) into the confirmed store.
@@ -503,6 +611,89 @@ class Canon:
         # Most salient first; ties broken by recency (newer ts first).
         rendered.sort(key=lambda r: (r["intensity"], r["ts"]), reverse=True)
         return rendered
+
+    def recall(
+        self,
+        query: str,
+        *,
+        object_type: str | None = None,
+        mood: float | None = None,
+        scorer=None,
+        limit: int = 8,
+        congruence: float = 0.3,
+    ) -> list[dict]:
+        """Two-stage recall the agent *chooses* to call — never auto-injected (M4).
+
+        Stage 1 is a cheap metadata prefilter: keep active, non-forgotten facts
+        whose flattened text contains ``query`` (and whose action contains
+        ``object_type`` if given), then hard-cap the candidate set so scoring stays
+        bounded no matter how large the store grows. Stage 2 scores each candidate
+        with ``scorer(query, fact_text) -> float`` (default: lexical token overlap;
+        pass an embedding scorer for semantic recall), and — if ``mood`` (a
+        valence) is given — adds a **mood-congruent** term (weighted by
+        ``congruence``) so a low mood surfaces low memories and a bright one bright
+        memories, the way human recall is state-dependent. A faint tie-break on
+        salience keeps a vivid match ahead of a faded one.
+
+        Like :meth:`search`, a returned fact's ``recalls`` is bumped ("used memory
+        sticks"). Returns the top ``limit`` rendered view dicts, best first. This
+        is a *tool*: what it returns, and whether to act on it, is the agent's —
+        it injects nothing on its own.
+        """
+        kw = str(query).lower()
+        ot = str(object_type).lower() if object_type else None
+        now = datetime.now(timezone.utc)
+        confirmed = _load_jsonl(self.path)
+
+        # Stage 1 — metadata prefilter (cheap; keep the candidate set small).
+        candidates = []
+        for e in confirmed:
+            if not self._is_active(e):
+                continue
+            if self._tier(self._current_intensity(e, now)) == "forgotten":
+                continue
+            if kw and kw not in _entry_text(e):
+                continue
+            if ot is not None:
+                what = e.get("what") or {}
+                action = (what.get("action") if isinstance(what, dict) else "") or ""
+                if ot not in action.lower():
+                    continue
+            candidates.append(e)
+        candidates = candidates[: max(limit * 8, 40)]
+        if not candidates:
+            return []
+
+        score_fn = scorer if scorer is not None else _lexical_score
+
+        # Stage 2 — score (+ optional mood-congruent re-rank + salience tie-break).
+        scored = []
+        for e in candidates:
+            s = float(score_fn(kw, _entry_text(e)))
+            if mood is not None:
+                fv = self._affect_signals(e)["valence"]
+                sim = 1.0 - abs(fv - float(mood)) / 2.0  # 1=lean matches mood, 0=opposite
+                s = s * (1.0 - congruence) + sim * congruence
+            s += 0.15 * self._current_intensity(e, now)
+            scored.append((s, e))
+        scored.sort(key=lambda t: t[0], reverse=True)
+        ranked_ids = [_entry_id(e) for _, e in scored[:limit]]
+        order = {eid: i for i, eid in enumerate(ranked_ids)}
+        top_ids = set(ranked_ids)
+
+        # Recall feedback: bump recalls on returned facts and persist.
+        for e in confirmed:
+            if _entry_id(e) in top_ids and self._is_active(e):
+                e["recalls"] = int(e.get("recalls", 0)) + 1
+                e["_last_recalled"] = _now_iso()
+        _rewrite_jsonl(self.path, confirmed)
+        out = [
+            self._render(e, now)
+            for e in confirmed
+            if _entry_id(e) in top_ids and self._is_active(e)
+        ]
+        out.sort(key=lambda r: order.get(r["id"], 999))  # preserve the scored ranking
+        return out
 
     def view(self, *, include_archived: bool = False) -> list[dict]:
         """Return the agent's currently-felt memories, decayed and sorted.

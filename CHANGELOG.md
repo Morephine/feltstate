@@ -8,6 +8,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Evidence-weighted affect on facts** (`feltstate.memory.feeling`, opt-in via
+  `Canon.add(..., emotion=...)`): a fact carries a Bayesian `{pos, neg, neu}`
+  confidence distribution. Repetition still reinforces *salience* unchanged — but
+  a repeated *flat* mention stays neutral (a catch-phrase doesn't masquerade as
+  meaning) while a repeated *felt* one settles and gains inertia. `Canon` views
+  expose `valence` / `charge` / `entropy`; `MemoryConfig.salience_charge_weight`
+  optionally dims emotionally-flat facts in what's shown.
+- **Importance-modulated decay curve** (`MemoryConfig.decay_curve="fsrs"`): a
+  stretched-exponential whose rate slows with a fact's importance and whose tail
+  is fattened for negative-valence facts — low memories linger, bright ones fade.
+  Default stays `"linear"`.
+- **Negative-channel mood momentum** (`MoodConfig.momentum_mu`, default 0/off): a
+  low mood overshoots and recovers slowly (a sulk has a trough), while good moods
+  stay on the plain fast EWMA. Carried on the new `Mood.velocity`.
+- **`Canon.recall()`** — an agent-called two-stage retrieval tool (metadata
+  prefilter → pluggable scorer) with an optional **mood-congruent** re-rank, so a
+  low mood surfaces low memories. It returns a list for the agent to use; it never
+  injects anything on its own.
 - **Dreams** (`feltstate.dream` + `Engine.dream`): off-the-per-turn-path,
   zero-LLM recombination of the agent's own charged material into a short,
   illogical dream that leaves a faint, *untraceable* mood residue — a feeling

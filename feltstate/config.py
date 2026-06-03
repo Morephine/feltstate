@@ -65,6 +65,15 @@ class MoodConfig:
     # Label hysteresis: a new top label must persist this many ticks before it
     # replaces the shown one (anti-flicker; keeps the rendered block cache-stable).
     label_smooth_ticks: int = 2
+    # --- A1: negative-channel momentum (a sulk has a trough + slow recovery) - #
+    # Second-order inertia applied to felt valence on the way DOWN only: a dip
+    # overshoots its target and recovers slowly, the way a bad mood doesn't lift
+    # the instant the cause passes — while good moods stay on the plain fast EWMA
+    # ("开心快淡"). 0.0 = off (plain EWMA both ways, current behaviour). 0.3–0.5 is
+    # a believable trough without locking the mood in (kept well below the ~0.8
+    # range where momentum stops recovering at all).
+    momentum_mu: float = 0.0
+    momentum_negative_only: bool = True  # momentum on downswings / negative only
 
 
 # --------------------------------------------------------------------------- #
@@ -148,6 +157,32 @@ class MemoryConfig:
     archive_threshold: float = 0.10
     default_intensity: float = 0.50
     pending_intensity: float = 0.40  # "grey zone" (undecided) facts start lower
+
+    # --- M1: affect-confidence per fact (evidence-weighted emotion) --------- #
+    # A fact carries a {pos, neg, neu} confidence distribution + an evidence
+    # weight. Repeating a fact still REINFORCES its salience (unchanged); this is
+    # a *separate* signal that tells "repeated-and-emotional" from
+    # "repeated-but-flat" — a catch-phrase stays neutral instead of accreting fake
+    # weight. Lower prior weight = a young fact's feeling moves fast; as evidence
+    # accrues it gains inertia (one stray message can't flip a settled feeling).
+    sentiment_prior_weight: float = 1.0
+    # Optional: dampen the SHOWN salience of low-charge (emotionally flat) facts so
+    # frequent-but-flat noise doesn't crowd out meaningful memories — WITHOUT
+    # capping the reinforce of charged facts. 0.0 = off (salience unchanged). When
+    # > 0, a fully-flat fact's salience is multiplied by (1 - this).
+    salience_charge_weight: float = 0.0
+
+    # --- M2: importance-modulated decay curve ------------------------------ #
+    # "linear" = the additive curve above (default, unchanged). "fsrs" = a
+    # stretched-exponential v(t)=base*exp(-lambda*age^beta) whose rate slows with
+    # importance and whose *shape* is asymmetric by valence: negative facts get a
+    # fat slow tail (linger), positive ones fade faster — "开心快淡, 低落黏" for
+    # memories too. Reinforce/recall feed importance; permanence still short-circuits.
+    decay_curve: str = "linear"
+    decay_lambda: float = 1.0 / 45.0  # base rate (per day^beta) at importance 0
+    decay_importance_mu: float = 1.3  # importance slows decay: lambda *= exp(-mu*I)
+    decay_beta_durable: float = 0.7  # beta for negative-valence facts (fat tail, linger)
+    decay_beta_fast: float = 1.1  # beta for positive / flat facts (fade faster)
 
 
 # --------------------------------------------------------------------------- #
