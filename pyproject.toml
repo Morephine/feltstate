@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "feltstate"
+version = "0.1.0"
+description = "Give an LLM agent a felt inner life it experiences as its own: ground-truth affect state, decaying memory, and cache-safe identity-merge injection."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+keywords = ["llm", "agent", "affective-computing", "emotion", "memory", "ai-companion", "appraisal"]
+authors = [{ name = "Kai" }]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+# The core (engine, pressure, traits, memory, time, render, KeywordSource) is
+# pure standard library — pull and run, no install-time dependencies.
+dependencies = []
+
+[project.optional-dependencies]
+# LLMSource talks to any OpenAI-compatible endpoint over stdlib urllib, so it
+# needs nothing extra either; this extra is just dev tooling.
+dev = ["pytest>=7"]
+
+[project.urls]
+Homepage = "https://github.com/USER/feltstate"
+Source = "https://github.com/USER/feltstate"
+
+[tool.hatch.build.targets.wheel]
+packages = ["feltstate"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

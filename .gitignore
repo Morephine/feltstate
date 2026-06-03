@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.venv/
+venv/
+
+# feltstate runtime data — an agent's persisted felt state and memories are
+# personal. Never commit them.
+*.state.json
+state.json
+*.canon.jsonl
+canon*.jsonl
+*.affect.jsonl
+.feltstate/
+runtime/
