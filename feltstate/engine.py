@@ -423,6 +423,58 @@ class Engine:
         return abs(m.valence) < _DREAM_FORGET_EPS and abs(m.arousal - 0.4) < _DREAM_FORGET_EPS
 
     # ------------------------------------------------------------------ #
+    # Skill region (optional; needs a Canon). Thin pass-throughs.        #
+    # ------------------------------------------------------------------ #
+    def recall_skills(self, query: str, **kw) -> list[dict]:
+        """The agent's skill-lookup tool. Returns ``[]`` when no canon is attached.
+        Skills are retrieve-on-demand only — never auto-injected, never in
+        :meth:`render`/:meth:`inject`, so the static prompt prefix is untouched."""
+        if self.canon is None:
+            return []
+        from .memory.skill import recall_skills
+
+        return recall_skills(self.canon, query, **kw)
+
+    def record_rating(
+        self,
+        skill_id_or_trigger: str,
+        rating: int,
+        *,
+        source: str = "human",
+        note: str = "",
+        actor: str = "self",
+    ) -> dict:
+        """Fold one human 1/2/3 rating into a skill (the real-use verdict; may
+        auto-promote/retire). ``{}`` when no canon is attached, or ``source`` is not
+        observed (the reply model cannot rate its own work)."""
+        if self.canon is None:
+            return {}
+        from .memory.skill import record_rating
+
+        return record_rating(
+            self.canon, skill_id_or_trigger, rating, source=source, note=note, actor=actor
+        )
+
+    def record_task_rating(self, skill_ids, rating: int, *, source: str = "human") -> list[dict]:
+        """Apply one completed-task rating across the skills that task used. ``[]``
+        if no canon is attached."""
+        if self.canon is None:
+            return []
+        from .memory.skill import record_task_rating
+
+        return record_task_rating(self.canon, skill_ids, rating, source=source)
+
+    def review_skills(self, **kw) -> list[dict]:
+        """Read-only overview of the skill library, for introspection — where the
+        agent tidies its own skills (merge, retire, ratify). ``[]`` if no canon.
+        Consolidation is this reflective work, not an automatic daemon pass."""
+        if self.canon is None:
+            return []
+        from .memory.skill import review_skills
+
+        return review_skills(self.canon, **kw)
+
+    # ------------------------------------------------------------------ #
     # Persistence                                                        #
     # ------------------------------------------------------------------ #
     def save(self) -> None:

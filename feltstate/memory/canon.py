@@ -90,7 +90,12 @@ def _entry_id(entry: dict) -> str:
     what = entry.get("what") or {}
     actor = (who.get("actor") if isinstance(who, dict) else who) or ""
     obj = (what.get("object") if isinstance(what, dict) else what) or ""
-    key = f"{actor}|{obj}".strip().lower()
+    # Region namespaces the id so a skill and a fact about the same (actor|object)
+    # never collide or cross-reinforce. Facts carry no region -> no prefix -> their
+    # id is byte-identical to before (no existing store is silently re-id'd).
+    region = entry.get("region") or "fact"
+    prefix = f"{region}|" if region != "fact" else ""
+    key = f"{prefix}{actor}|{obj}".strip().lower()
     return hashlib.sha1(key.encode("utf-8")).hexdigest()[:8]
 
 
@@ -231,10 +236,15 @@ class Canon:
             beta = cfg.decay_beta_durable if sig["valence"] < 0 else cfg.decay_beta_fast
             current = base * math.exp(-lam * (age_days**beta))
         else:
-            recall_boost = min(cfg.recall_boost_cap, recalls * cfg.recall_boost_each)
-            current = (
-                base - age_days * cfg.decay_per_day + reinforce * cfg.reinforce_boost + recall_boost
+            # Skills fade slower than facts: a grey candidate needs a long lease to
+            # be tried and rated a few times before disuse forgets it.
+            dpd = (
+                cfg.skill_gray_decay_per_day
+                if (entry.get("region") == "skill")
+                else cfg.decay_per_day
             )
+            recall_boost = min(cfg.recall_boost_cap, recalls * cfg.recall_boost_each)
+            current = base - age_days * dpd + reinforce * cfg.reinforce_boost + recall_boost
 
         scw = cfg.salience_charge_weight
         if scw > 0.0:
@@ -307,6 +317,7 @@ class Canon:
         confidence: float = 0.9,
         default_intensity: float | None = None,
         emotion: float | None = None,
+        region: str = "",
     ) -> dict:
         """Assemble a fresh 5W1H record from keyword fields.
 
@@ -329,6 +340,8 @@ class Canon:
             "recalls": 0,
             "valid_at": ts,  # M3 (bi-temporal): when this belief became true
         }
+        if region:
+            entry["region"] = region
         if emotion is not None:
             prof, w = blend(
                 neutral_profile(), self.cfg.sentiment_prior_weight, observe(emotion), confidence
@@ -630,7 +643,9 @@ class Canon:
     # ------------------------------------------------------------------ #
     # Public API — read                                                  #
     # ------------------------------------------------------------------ #
-    def search(self, keyword: str, *, actor: str | None = None) -> list[dict]:
+    def search(
+        self, keyword: str, *, actor: str | None = None, region: str | None = None
+    ) -> list[dict]:
         """Find visible/archived facts matching ``keyword`` (optionally by actor).
 
         A hit increments each matched fact's ``recalls`` and persists it: a fact
@@ -645,6 +660,8 @@ class Canon:
 
         def matches(e: dict) -> bool:
             if not self._is_active(e):
+                return False
+            if (e.get("region") or "fact") != (region or "fact"):
                 return False
             if kw not in _entry_text(e):
                 return False
@@ -686,6 +703,7 @@ class Canon:
         scorer=None,
         limit: int = 8,
         congruence: float = 0.3,
+        region: str | None = None,
     ) -> list[dict]:
         """Two-stage recall the agent *chooses* to call — never auto-injected (M4).
 
@@ -714,6 +732,10 @@ class Canon:
         candidates = []
         for e in confirmed:
             if not self._is_active(e):
+                continue
+            # Region prefilter (None -> "fact"): ordinary recall never returns
+            # skills; recall(region="skill") returns only skills.
+            if (e.get("region") or "fact") != (region or "fact"):
                 continue
             if self._tier(self._current_intensity(e, now)) == "forgotten":
                 continue
@@ -760,7 +782,7 @@ class Canon:
         out.sort(key=lambda r: order.get(r["id"], 999))  # preserve the scored ranking
         return out
 
-    def view(self, *, include_archived: bool = False) -> list[dict]:
+    def view(self, *, include_archived: bool = False, region: str | None = None) -> list[dict]:
         """Return the agent's currently-felt memories, decayed and sorted.
 
         By default only **visible** facts (salience >= ``visible_threshold``) are
@@ -774,6 +796,8 @@ class Canon:
         out = []
         for e in _load_jsonl(self.path):
             if not self._is_active(e):
+                continue
+            if (e.get("region") or "fact") != (region or "fact"):
                 continue
             current = self._current_intensity(e, now)
             if self._tier(current) in wanted:

@@ -28,6 +28,17 @@ from .config import DEFAULT_CONFIG, Config, PersonaDials, TirednessConfig
 from .dream import DEFAULT_PHRASEBOOK, Dream, Fragment, Phrasebook
 from .engine import Engine
 from .memory.canon import Canon
+from .memory.skill import (
+    RatingGate,
+    SkillRatifier,
+    add_skill,
+    ratify_skill,
+    rating_priority,
+    recall_skills,
+    record_rating,
+    record_task_rating,
+    review_skills,
+)
 from .render import build_injection, render_felt_block
 from .sleep import Tiredness
 from .sources.base import AffectSource
@@ -62,6 +73,15 @@ __all__ = [
     "KeywordSource",
     "LLMSource",
     "Canon",
+    "add_skill",
+    "record_rating",
+    "record_task_rating",
+    "recall_skills",
+    "review_skills",
+    "ratify_skill",
+    "rating_priority",
+    "RatingGate",
+    "SkillRatifier",
     "Fragment",
     "Phrasebook",
     "Dream",

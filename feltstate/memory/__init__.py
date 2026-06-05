@@ -7,5 +7,30 @@ auto-injected into a prompt.
 
 from .canon import Canon
 from .extract import FactExtractor, LLMFactExtractor, commit_to_canon
+from .skill import (
+    RatingGate,
+    SkillRatifier,
+    add_skill,
+    ratify_skill,
+    rating_priority,
+    recall_skills,
+    record_rating,
+    record_task_rating,
+    review_skills,
+)
 
-__all__ = ["Canon", "FactExtractor", "LLMFactExtractor", "commit_to_canon"]
+__all__ = [
+    "Canon",
+    "FactExtractor",
+    "LLMFactExtractor",
+    "commit_to_canon",
+    "add_skill",
+    "record_rating",
+    "record_task_rating",
+    "recall_skills",
+    "review_skills",
+    "ratify_skill",
+    "rating_priority",
+    "RatingGate",
+    "SkillRatifier",
+]

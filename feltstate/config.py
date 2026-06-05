@@ -184,6 +184,34 @@ class MemoryConfig:
     decay_beta_durable: float = 0.7  # beta for negative-valence facts (fat tail, linger)
     decay_beta_fast: float = 1.1  # beta for positive / flat facts (fade faster)
 
+    # --- Skill region: a human-rated, self-growing capability store inside canon #
+    # A "skill" is an ordinary 5W1H entry tagged region=="skill" plus a parallel
+    # "skill" sub-dict holding HUMAN 1/2/3 ratings (1=lousy, 2=ok, 3=excellent).
+    # Verification attaches ONLY to this region; fact/emotion entries are never
+    # scored or gated. A skill's value is the human's real-use verdict — never
+    # self-reported, never "did it run", never a function of recall frequency.
+    skill_seed: float = 0.25  # prior utility of an unrated skill (the mean shrinks toward this)
+    skill_prior_n: float = 2.0  # pseudo-count: how much evidence the prior is worth (inertia)
+    skill_base_cap: float = 0.84  # < permanent_above: a skill may never become permanent
+    skill_promote_excellent_count: int = (
+        3  # this many "3" ratings (and no "1") -> auto-promote to main
+    )
+    skill_retire_bad_count: int = 3  # this many "1" ratings -> retire (lousy in real use)
+    # Gray decay: slow on purpose (slower than a dream) — a candidate gets a long
+    # lease to be tried and rated a few times before it fades from disuse.
+    skill_gray_decay_per_day: float = 1.0 / 180.0  # ~6-month fade if never used (vs 90d for facts)
+    # Selection is probabilistic, weighted by rating (explore/exploit): proven
+    # skills win most, but a low one keeps a non-zero chance to be re-tried and
+    # redeem itself, so no skill permanently monopolizes.
+    skill_select_floor: float = 0.05  # non-zero selection-weight floor (the exploration tap)
+    skill_select_temperature: float = 0.5  # >0; lower = exploit (steep), higher = explore (flat)
+    skill_select_promoted_boost: float = (
+        2.0  # confirmed skills weigh this much more than their utility
+    )
+    # Rating UX: never nag. At most one rating request per cooldown, capped per day.
+    rating_cooldown_s: float = 600.0  # 10-min cooldown between rating requests
+    rating_daily_cap: int = 8  # max rating requests per day
+
 
 # --------------------------------------------------------------------------- #
 # Time awareness — fuzzy distance, precise now                                #
