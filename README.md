@@ -141,6 +141,25 @@ trace back, which decays over the next hours like any feeling. See §5 of
 | `feltstate/timeawareness/` | Fuzzy "how long since we last talked" + precise "now". |
 | `feltstate/render/` | `render_felt_block` (state → first-person block) + `build_injection` (cache-safe). |
 | `feltstate/engine.py` | `Engine` — the façade that ties it together: `tick()`, `render()`, `inject()`, `dream()`, `maybe_dream()`. |
+| `feltstate/companion/` | The orchestration + seams that make it a *runnable companion*: `LLMBackend` / `FrontendAdapter` / `VoiceAdapter` / `UserPresenceAdapter` adapters, `companion_turn` (one feel→reply→express→speak round), and `CompanionScheduler` (the proactive heartbeat: when to speak, introspect, dream, write a diary). `Companion` wires it all together. |
+
+---
+
+## The companion loop
+
+The core engine gives an agent a felt inner life; `feltstate.companion` turns
+the parts into a *running companion*. Implement two adapters — a
+`FrontendAdapter` (your avatar/skin) and a `VoiceAdapter` (your TTS) — bring an
+`AffectSource`, a reply `LLMBackend`, and a persona, and `Companion` wires the
+rest: a foreground `say()` turn (feel → reply → express → speak) and a
+`CompanionScheduler` heartbeat that decides, on its own clock, when to speak
+unprompted, introspect, dream, or write a diary — all the timing and gating
+generalised from a real production companion, with the endpoints and prompts
+left to you.
+
+```bash
+python examples/companion.py   # a whole pet from four stub adapters — no deps, no network
+```
 
 ---
 
@@ -149,10 +168,13 @@ trace back, which decays over the next hours like any feeling. See §5 of
 - **Is:** a clean, runnable *reference implementation* of the ideas, dependency-
   free at the core. Bring your own `AffectSource`, persona text, and a place to
   store state.
-- **Isn't:** a drop-in companion. There's no bundled personality, no trained
-  model, no conversational data — those are yours to supply. The companion
-  system this was extracted from was deeply tied to one specific character and
-  user; that coupling — and all private data — was deliberately left out.
+- **Isn't:** a finished product. There's no bundled personality, no trained
+  model, no conversational data, no avatar or TTS — those are yours. But it is
+  no longer just parts: the `feltstate.companion` layer is the whole
+  orchestration, so a runnable pet is *implement two adapters (a skin + a
+  voice) and bring a persona* away — see `examples/companion.py`. The system
+  this was extracted from was deeply tied to one character and user; that
+  coupling — and all private data — was deliberately left out.
 - The default `KeywordSource` is intentionally crude. The interesting affect
   signal comes from `LLMSource` or a model you fine-tune for the job.
 

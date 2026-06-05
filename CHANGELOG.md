@@ -58,6 +58,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (dopamine pre-payment) instead of staying flat.
 - **Top-label hysteresis** (`affect.smooth`): a noisy source no longer flickers
   the rendered block from turn to turn.
+- **Companion layer** (`feltstate.companion`): the orchestration + seams that
+  turn the engine into a runnable desktop pet. Adapters — `LLMBackend` (reply
+  model, with `EchoBackend` / `OpenAICompatBackend`), `FrontendAdapter`
+  (avatar/skin), `VoiceAdapter` (TTS), `UserPresenceAdapter`,
+  `BehaviorDispatcher`; `companion_turn` (one feel→reply→express→speak round);
+  and `CompanionScheduler` — a proactive heartbeat generalised from a production
+  companion daemon (pending topics, time windows, focus nudges, random openers,
+  bursts, solitude introspection, dreaming, a daily diary), all timing/gating
+  configurable via `SchedulerConfig`. `Companion` / `run_companion` tie it
+  together; see `examples/companion.py` for a full pet from stub adapters. The
+  core engine is unchanged and there are no new dependencies.
 
 ## [0.1.0] - initial
 
