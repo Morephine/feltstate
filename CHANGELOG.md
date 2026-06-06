@@ -69,6 +69,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   configurable via `SchedulerConfig`. `Companion` / `run_companion` tie it
   together; see `examples/companion.py` for a full pet from stub adapters. The
   core engine is unchanged and there are no new dependencies.
+- **Memory context expansion** (`feltstate.memory.context`): given a
+  transcript and an anchor (a timestamp string -- e.g. a canon entry's `ts`
+  -- or an integer index), `get_turn_context` returns the surrounding N turns
+  on each side, so a distilled fact can be opened back to the exchange it came
+  from. Source-agnostic and read-only: pass your own turns, or use the
+  `load_turns` helper. Zero-dependency.
 
 ## [0.1.0] - initial
 

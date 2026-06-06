@@ -6,6 +6,7 @@ auto-injected into a prompt.
 """
 
 from .canon import Canon
+from .context import get_turn_context, load_turns
 from .extract import FactExtractor, LLMFactExtractor, commit_to_canon
 from .skill import (
     RatingGate,
@@ -21,6 +22,8 @@ from .skill import (
 
 __all__ = [
     "Canon",
+    "get_turn_context",
+    "load_turns",
     "FactExtractor",
     "LLMFactExtractor",
     "commit_to_canon",

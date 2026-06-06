@@ -135,7 +135,7 @@ trace back, which decays over the next hours like any feeling. See §5 of
 | `feltstate/config.py` | Every tunable in one place (EWMA rates, decay, pressure thresholds, label maps) + `PersonaDials`. |
 | `feltstate/sources/` | `AffectSource` interface + `KeywordSource` (rules, zero-dep) + `LLMSource` (any OpenAI-compatible endpoint). The pluggable "how does it feel?" seam. |
 | `feltstate/affect/` | The dynamics: `pressure` (multi-bar release), `traits` (asymmetric adaptation), `imprint` (permanent marks), `relationship` (the bond evolving), `tide` (mood's rise & fall), `smooth` (label hysteresis). |
-| `feltstate/memory/` | `Canon` — a decaying 5W1H fact store (intensity fades, repetition reinforces, recall slows decay); `extract` — optional second-model fact extraction into it. |
+| `feltstate/memory/` | `Canon` — a decaying 5W1H fact store (intensity fades, repetition reinforces, recall slows decay); `extract` — optional second-model fact extraction into it; `context` — expand a fact back to the surrounding transcript turns it came from. |
 | `feltstate/dream.py` | Off-path, zero-LLM: recombines the agent's charged material (`Fragment`s) into an *illogical* dream that leaves a faint, **untraceable** mood residue. Swap the `Phrasebook` for another language. |
 | `feltstate/sleep.py` | The single sleep-pressure accumulator (`Tiredness`) that decides *when* to dream: rises with arousal, gated by threshold + idle + a hard refractory floor, discharged by a dream. Homeostatic, not clock-driven. |
 | `feltstate/timeawareness/` | Fuzzy "how long since we last talked" + precise "now". |

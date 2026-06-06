@@ -28,6 +28,7 @@ from .config import DEFAULT_CONFIG, Config, PersonaDials, TirednessConfig
 from .dream import DEFAULT_PHRASEBOOK, Dream, Fragment, Phrasebook
 from .engine import Engine
 from .memory.canon import Canon
+from .memory.context import get_turn_context, load_turns
 from .memory.skill import (
     RatingGate,
     SkillRatifier,
@@ -73,6 +74,8 @@ __all__ = [
     "KeywordSource",
     "LLMSource",
     "Canon",
+    "get_turn_context",
+    "load_turns",
     "add_skill",
     "record_rating",
     "record_task_rating",
