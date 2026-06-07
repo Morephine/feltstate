@@ -44,6 +44,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+# Windows terminals often default to a legacy codepage; the rendered felt block
+# uses a few non-ASCII glyphs (a middle dot, an em dash). Force UTF-8 so the demo
+# prints cleanly instead of as mojibake.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 from feltstate import Engine, KeywordSource, PersonaDials
 
 

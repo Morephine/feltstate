@@ -44,13 +44,13 @@ def test_reinforce_kept_but_flat_repeat_stays_low_charge(tmp_path):
     c = Canon(tmp_path / "canon.jsonl")
     r = {}
     for _ in range(10):  # a catch-phrase: repeated, always emotionally flat
-        r = c.add("user", "口头禅啦", emotion=0.0)
+        r = c.add("user", "haha", emotion=0.0)
     assert r["reinforced"] == 9  # reinforce STILL happens (the wanted behaviour)
     assert r["charge"] < 0.1  # but it never gains emotional weight (the filter)
 
     r2 = {}
     for _ in range(10):  # a real recurring feeling
-        r2 = c.add("user", "谢谢你一直陪着我", emotion=0.7)
+        r2 = c.add("user", "thank you for being here", emotion=0.7)
     assert r2["reinforced"] == 9
     assert r2["charge"] > 0.5 and r2["valence"] > 0.5  # this one IS charged, and warm
 
@@ -58,17 +58,17 @@ def test_reinforce_kept_but_flat_repeat_stays_low_charge(tmp_path):
 def test_salience_charge_weight_dampens_flat_not_charged(tmp_path):
     cfg = MemoryConfig(salience_charge_weight=0.5)
     c = Canon(tmp_path / "canon.jsonl", cfg)
-    flat = c.add("user", "嗯嗯", intensity=0.6, emotion=0.0)
+    flat = c.add("user", "mm-hm", intensity=0.6, emotion=0.0)
     charged = {}
     for _ in range(6):  # build the charged fact's emotional evidence over mentions
-        charged = c.add("user", "你救了我", intensity=0.6, emotion=-0.8)
+        charged = c.add("user", "you saved me", intensity=0.6, emotion=-0.8)
     assert flat["intensity"] < 0.35  # an emotionally flat fact is dimmed to ~half
     assert charged["intensity"] > flat["intensity"] * 1.5  # the charged one keeps far more
 
 
 def test_fact_without_emotion_is_unaffected(tmp_path):
     c = Canon(tmp_path / "canon.jsonl")
-    r = c.add("user", "普通的事")  # no emotion -> no affect field
+    r = c.add("user", "an ordinary thing")  # no emotion -> no affect field
     assert r["charge"] == 0.0 and r["valence"] == 0.0
 
 
@@ -142,38 +142,40 @@ def test_momentum_zero_is_plain_ewma():
 # --- M4: agent-called recall with mood-congruent re-rank ------------------ #
 def test_recall_is_mood_congruent(tmp_path):
     c = Canon(tmp_path / "canon.jsonl")
-    c.add("user", "晴天一起出去玩", emotion=0.8)
-    c.add("user", "下雨天摔了一跤", emotion=-0.8)
-    assert c.recall("天", mood=-0.7)[0]["object"] == "下雨天摔了一跤"  # sad surfaces sad
-    assert c.recall("天", mood=0.7)[0]["object"] == "晴天一起出去玩"  # bright surfaces bright
+    c.add("user", "a sunny day out", emotion=0.8)
+    c.add("user", "slipped over on a rainy day", emotion=-0.8)
+    assert (
+        c.recall("day", mood=-0.7)[0]["object"] == "slipped over on a rainy day"
+    )  # sad surfaces sad
+    assert c.recall("day", mood=0.7)[0]["object"] == "a sunny day out"  # bright surfaces bright
 
 
 def test_recall_bumps_recalls_and_returns_a_list(tmp_path):
     c = Canon(tmp_path / "canon.jsonl")
-    c.add("user", "某件值得记的事")
-    r = c.recall("值得记")
+    c.add("user", "something worth remembering")
+    r = c.recall("worth remembering")
     assert isinstance(r, list) and len(r) == 1
     assert r[0]["recalls"] == 1  # used memory sticks; recall is the agent's tool
 
 
 def test_recall_object_type_filter(tmp_path):
     c = Canon(tmp_path / "canon.jsonl")
-    c.add("user", "苹果", action="吃")
-    c.add("user", "电影", action="看")
-    objs = [x["object"] for x in c.recall("", object_type="吃")]
-    assert "苹果" in objs and "电影" not in objs
+    c.add("user", "apple", action="eat")
+    c.add("user", "movie", action="watch")
+    objs = [x["object"] for x in c.recall("", object_type="eat")]
+    assert "apple" in objs and "movie" not in objs
 
 
 # --- M3: bi-temporal (a belief that changed is kept, not erased) ---------- #
 def test_correct_records_a_validity_window(tmp_path):
     c = Canon(tmp_path / "canon.jsonl")
-    c.add("user", "在 A 公司上班", action="工作")
-    c.correct("工作", object="在 B 公司上班", action="工作")
-    hist = {h["object"]: h for h in c.history("上班")}
-    assert hist["在 A 公司上班"]["status"] == "superseded"
-    assert hist["在 B 公司上班"]["status"] == "active"
-    assert hist["在 A 公司上班"]["invalid_at"] is not None  # the old belief has an end
-    assert hist["在 B 公司上班"]["invalid_at"] is None  # the current one is still open
+    c.add("user", "working at company A", action="work")
+    c.correct("work", object="working at company B", action="work")
+    hist = {h["object"]: h for h in c.history("company")}
+    assert hist["working at company A"]["status"] == "superseded"
+    assert hist["working at company B"]["status"] == "active"
+    assert hist["working at company A"]["invalid_at"] is not None  # the old belief has an end
+    assert hist["working at company B"]["invalid_at"] is None  # the current one is still open
 
 
 def test_as_of_returns_the_belief_held_then(tmp_path):
@@ -184,7 +186,7 @@ def test_as_of_returns_the_belief_held_then(tmp_path):
         {
             "ts": "2026-01-01T00:00:00+00:00",
             "who": {"actor": "u"},
-            "what": {"action": "工作", "object": "A 公司"},
+            "what": {"action": "work", "object": "company A"},
             "valid_at": "2026-01-01T00:00:00+00:00",
             "invalid_at": "2026-03-01T00:00:00+00:00",
             "_superseded_by": "xx",
@@ -193,12 +195,12 @@ def test_as_of_returns_the_belief_held_then(tmp_path):
         {
             "ts": "2026-03-01T00:00:00+00:00",
             "who": {"actor": "u"},
-            "what": {"action": "工作", "object": "B 公司"},
+            "what": {"action": "work", "object": "company B"},
             "valid_at": "2026-03-01T00:00:00+00:00",
             "intensity": 0.5,
         },
     ]
     p.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows), encoding="utf-8")
     c = Canon(p)
-    assert [x["object"] for x in c.as_of("公司", "2026-02-01T00:00:00+00:00")] == ["A 公司"]
-    assert [x["object"] for x in c.as_of("公司", "2026-04-01T00:00:00+00:00")] == ["B 公司"]
+    assert [x["object"] for x in c.as_of("company", "2026-02-01T00:00:00+00:00")] == ["company A"]
+    assert [x["object"] for x in c.as_of("company", "2026-04-01T00:00:00+00:00")] == ["company B"]

@@ -15,9 +15,8 @@ surface it without ever capping the reinforce of things that do matter.
 Pure functions, standard library only. The update is Bayesian: a fact starts with
 a small prior evidence weight (a young feeling moves fast); each observation folds
 in proportional to its own weight and accrues evidence, so a settled feeling gains
-inertia and one stray message can't overturn it. The shape mirrors the
-affect-confidence update in "Dynamic Affective Memory Management for Personalized
-LLM Agents" (arXiv 2510.27418), reduced to its load-bearing arithmetic.
+inertia and one stray message can't overturn it — a standard Bayesian
+evidence-weighting, reduced to its load-bearing arithmetic.
 """
 
 from __future__ import annotations

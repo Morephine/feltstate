@@ -16,9 +16,10 @@ first-person feeling the agent reads as **its own** — never as data to recite,
 never as a command telling it how to act. It can even *dream*: leave itself a
 faint mood it can't trace back.
 
-None of the individual mechanisms are new — see **[PHILOSOPHY §7](PHILOSOPHY.md)**
-for the 2024–2026 prior art, named honestly. The rare thing is the **coherence**:
-every piece serving that one goal, and the lines it refuses to cross to get there.
+None of the individual mechanisms are new on their own. The point is the
+**coherence** — every piece serving that one goal, and the lines it refuses to
+cross to get there. See **[PHILOSOPHY.md](PHILOSOPHY.md)** for the reasoning
+behind each choice.
 
 > Distilled and rewritten as a clean, general library from a real production
 > companion system. None of that system's private data, trained models, or
@@ -26,24 +27,17 @@ every piece serving that one goal, and the lines it refuses to cross to get ther
 
 ---
 
-## Why this exists (and how it differs)
+## Why this exists
 
-By 2026 the field has independent versions of most pieces here — a dedicated
-affect estimator ([co-r-e](https://arxiv.org/abs/2601.16087)), a decaying mood
-state with momentum (REMT, [PSYA](https://arxiv.org/abs/2507.19495)), the
-separate appraisal step ([Chain-of-Emotion](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0301033)),
-even dreams for companions ([2601.06115](https://arxiv.org/abs/2601.06115)). So
-feltstate is **not** a claim to have invented affective computing. It is the
-**coherent assembly + the discipline** — and no surveyed system, research or
-product, holds all of these at once:
+None of these pieces is new on its own. A separate affect estimator, a decaying
+mood state, an appraisal step, even a dream layer for a companion — each has been
+built before. feltstate is **not** a claim to have invented affective computing.
+It is one **coherent assembly**, held to a single stance:
 
 - **Affect is measured, not self-reported.** A separate component appraises the
-  *agent's own* state (most estimators read the *user*); the reply model can't
-  flatter itself into a mood.
-- **It decays — asymmetrically.** Good moods fade fast, bad ones linger. The
-  agents that model decay tune it the *opposite* way (damping negativity for
-  stability); feltstate sustains it, because that asymmetry is what makes a
-  temperament rather than a mood ring.
+  *agent's own* state, so the reply model can't flatter itself into a mood.
+- **It decays — asymmetrically.** Good moods fade fast, bad ones linger; that
+  asymmetry is what makes a temperament rather than a mood ring.
 - **It's handed back as the agent's own feeling, never as a command.**
   First-person identity-merge — not a `valence=-0.3` readout, not "respond in a
   sad tone."
@@ -52,10 +46,9 @@ product, holds all of these at once:
 - **It's cache-safe**, so a persistent always-on companion isn't prohibitively
   expensive to run.
 
-The honest pitch is not "novel mechanisms." It is "the cleanest opinionated whole
-— measured, decaying, identity-merged, never commanding — while that combination
-is still rare." See **[PHILOSOPHY.md](PHILOSOPHY.md)** for the full reasoning and
-the prior-art map.
+The honest pitch is not "novel mechanisms." It is "one clean, opinionated whole —
+measured, decaying, identity-merged, never commanding." See
+**[PHILOSOPHY.md](PHILOSOPHY.md)** for the reasoning behind each choice.
 
 ---
 
@@ -135,7 +128,7 @@ trace back, which decays over the next hours like any feeling. See §5 of
 | `feltstate/config.py` | Every tunable in one place (EWMA rates, decay, pressure thresholds, label maps) + `PersonaDials`. |
 | `feltstate/sources/` | `AffectSource` interface + `KeywordSource` (rules, zero-dep) + `LLMSource` (any OpenAI-compatible endpoint). The pluggable "how does it feel?" seam. |
 | `feltstate/affect/` | The dynamics: `pressure` (multi-bar release), `traits` (asymmetric adaptation), `imprint` (permanent marks), `relationship` (the bond evolving), `tide` (mood's rise & fall), `smooth` (label hysteresis). |
-| `feltstate/memory/` | `Canon` — a decaying 5W1H fact store (intensity fades, repetition reinforces, recall slows decay); `extract` — optional second-model fact extraction into it; `context` — expand a fact back to the surrounding transcript turns it came from. |
+| `feltstate/memory/` | `Canon` — a decaying 5W1H fact store (intensity fades, repetition reinforces, recall slows decay); `feeling` — optional evidence-weighted emotion per fact (a catch-phrase stays neutral, a felt thing accrues weight); `extract` — optional second-model fact extraction into it; `context` — expand a fact back to the surrounding transcript turns it came from; `skill` — an optional human-rated capability sub-region, walled off from affect. |
 | `feltstate/dream.py` | Off-path, zero-LLM: recombines the agent's charged material (`Fragment`s) into an *illogical* dream that leaves a faint, **untraceable** mood residue. Swap the `Phrasebook` for another language. |
 | `feltstate/sleep.py` | The single sleep-pressure accumulator (`Tiredness`) that decides *when* to dream: rises with arousal, gated by threshold + idle + a hard refractory floor, discharged by a dream. Homeostatic, not clock-driven. |
 | `feltstate/timeawareness/` | Fuzzy "how long since we last talked" + precise "now". |

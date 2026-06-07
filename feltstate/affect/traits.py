@@ -186,7 +186,7 @@ def update_mood(mood: Mood, delta: AffectDelta, traits: Traits, cfg: MoodConfig)
     # A1: negative-channel momentum. A dip carries inertia — it overshoots its
     # target and recovers slowly, the way a bad mood doesn't lift the instant the
     # cause passes (a sulk has a trough). Good moods, by contrast, stay on the
-    # plain fast EWMA ("开心快淡"). Off when momentum_mu == 0 → identical to the
+    # plain fast EWMA. Off when momentum_mu == 0 → identical to the
     # bare EWMA. mu is held below the range where momentum would stop recovering.
     mu = _clamp(cfg.momentum_mu, 0.0, 0.9)
     velocity = mood.velocity

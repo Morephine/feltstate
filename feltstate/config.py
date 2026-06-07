@@ -68,8 +68,8 @@ class MoodConfig:
     # --- A1: negative-channel momentum (a sulk has a trough + slow recovery) - #
     # Second-order inertia applied to felt valence on the way DOWN only: a dip
     # overshoots its target and recovers slowly, the way a bad mood doesn't lift
-    # the instant the cause passes — while good moods stay on the plain fast EWMA
-    # ("开心快淡"). 0.0 = off (plain EWMA both ways, current behaviour). 0.3–0.5 is
+    # the instant the cause passes — while good moods stay on the plain fast EWMA.
+    # 0.0 = off (plain EWMA both ways, current behaviour). 0.3–0.5 is
     # a believable trough without locking the mood in (kept well below the ~0.8
     # range where momentum stops recovering at all).
     momentum_mu: float = 0.0
@@ -176,7 +176,7 @@ class MemoryConfig:
     # "linear" = the additive curve above (default, unchanged). "fsrs" = a
     # stretched-exponential v(t)=base*exp(-lambda*age^beta) whose rate slows with
     # importance and whose *shape* is asymmetric by valence: negative facts get a
-    # fat slow tail (linger), positive ones fade faster — "开心快淡, 低落黏" for
+    # fat slow tail (linger), positive ones fade faster — good fades fast, bad lingers, for
     # memories too. Reinforce/recall feed importance; permanence still short-circuits.
     decay_curve: str = "linear"
     decay_lambda: float = 1.0 / 45.0  # base rate (per day^beta) at importance 0
