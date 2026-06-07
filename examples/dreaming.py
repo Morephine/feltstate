@@ -38,9 +38,12 @@ Seeds are fixed, so every run prints the same dreams.
 from __future__ import annotations
 
 import random
+import sys
 import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from feltstate import Engine, Fragment, KeywordSource, Tiredness, TirednessConfig
 from feltstate.dream import dream, residue

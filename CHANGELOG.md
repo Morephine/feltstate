@@ -99,5 +99,5 @@ felt inner-state engine for LLM agents.
 - README and PHILOSOPHY; two runnable examples; tests across every module;
   ruff + mypy + CI configuration.
 
-[Unreleased]: https://github.com/USER/feltstate/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/USER/feltstate/releases/tag/v0.1.0
+[Unreleased]: https://github.com/Morephine/feltstate/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Morephine/feltstate/releases/tag/v0.1.0

@@ -13,6 +13,7 @@ venv/
 # personal. Never commit them.
 *.state.json
 state.json
+*.meta.json
 *.canon.jsonl
 canon*.jsonl
 *.affect.jsonl

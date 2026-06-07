@@ -26,8 +26,8 @@ dependencies = []
 dev = ["pytest>=7", "ruff>=0.6", "mypy>=1.8"]
 
 [project.urls]
-Homepage = "https://github.com/USER/feltstate"
-Source = "https://github.com/USER/feltstate"
+Homepage = "https://github.com/Morephine/feltstate"
+Source = "https://github.com/Morephine/feltstate"
 
 [tool.hatch.build.targets.wheel]
 packages = ["feltstate"]
@@ -44,6 +44,12 @@ select = ["E", "F", "W", "I", "B", "UP"]
 # E501 (line length) is not enforced: prose in docstrings is allowed to run long,
 # and the formatter wraps code. Everything else is on.
 ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# Examples insert the repo root on sys.path so they run uninstalled
+# (`python examples/foo.py`); that pushes the feltstate import below the
+# sys.path line, which E402 would otherwise flag.
+"examples/*.py" = ["E402"]
 
 [tool.mypy]
 python_version = "3.10"

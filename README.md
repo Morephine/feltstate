@@ -2,7 +2,7 @@
 
 **Give an LLM agent a felt inner life it experiences as its own.**
 
-[![CI](https://github.com/USER/feltstate/actions/workflows/ci.yml/badge.svg)](https://github.com/USER/feltstate/actions/workflows/ci.yml)
+[![CI](https://github.com/Morephine/feltstate/actions/workflows/ci.yml/badge.svg)](https://github.com/Morephine/feltstate/actions/workflows/ci.yml)
 &nbsp;![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 &nbsp;![License: MIT](https://img.shields.io/badge/license-MIT-green)
 
