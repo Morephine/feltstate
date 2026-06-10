@@ -24,7 +24,13 @@ Quickstart::
     print(eng.render())   # -> a first-person felt block to prepend to the agent's context
 """
 
-from .config import DEFAULT_CONFIG, Config, PersonaDials, TirednessConfig
+from .config import (
+    DEFAULT_CONFIG,
+    Config,
+    PersonaDials,
+    TirednessConfig,
+    agent_scale_config,
+)
 from .dream import DEFAULT_PHRASEBOOK, Dream, Fragment, Phrasebook
 from .engine import Engine
 from .memory.canon import Canon
@@ -40,7 +46,7 @@ from .memory.skill import (
     record_task_rating,
     review_skills,
 )
-from .render import build_injection, render_felt_block
+from .render import build_injection, render_agent_feeling, render_felt_block
 from .sleep import Tiredness
 from .sources.base import AffectSource
 from .sources.keyword import KeywordSource
@@ -70,6 +76,7 @@ __all__ = [
     "Config",
     "DEFAULT_CONFIG",
     "PersonaDials",
+    "agent_scale_config",
     "AffectSource",
     "KeywordSource",
     "LLMSource",
@@ -93,5 +100,6 @@ __all__ = [
     "TirednessConfig",
     "time_since_phrase",
     "render_felt_block",
+    "render_agent_feeling",
     "build_injection",
 ]

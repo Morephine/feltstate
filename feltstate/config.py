@@ -89,6 +89,13 @@ class PressureConfig:
     bar_floor: float = 0.40  # bars settle here after release, not to zero
     reset_keep: float = 0.15  # after aftertaste, bar = floor + (cur-floor)*this
     idle_decay: float = 0.018  # per-tick natural cooling
+    # Multiplier on label-driven bar inflow. 1.0 = companion scale (a tick is a
+    # conversation turn; bars are mostly moved by milestone shocks, and per-label
+    # charge sits below idle_decay on purpose so ordinary chatter cannot ratchet
+    # a bar up). Raise it when a tick is a fast agent/tool step and labels are
+    # the only inflow: charge must exceed idle_decay for the mid layer to
+    # integrate at all (see agent_scale_config).
+    label_pressure_scale: float = 1.0
     power_threshold: float = 0.50  # power above this -> express; below -> suppress
     # Power = perceived control / self-efficacy (Lazarus appraisal, Bandura).
     # Weights sum to 1.0. High power -> dares to express; low -> suppresses.
@@ -425,3 +432,30 @@ class Config:
 
 
 DEFAULT_CONFIG = Config()
+
+
+def agent_scale_config(label_scale: float = 4.0) -> Config:
+    """Config preset for agent-step-scale monitoring (one tick = one tool step).
+
+    The default config is tuned for companionship: ticks are conversation turns
+    minutes apart, and pressure bars are charged mainly by milestone shocks, so
+    the per-label charge (0.013-0.015) deliberately sits *below* ``idle_decay``
+    (0.018) — ordinary chatter cannot ratchet a bar up. At agent scale that
+    inversion makes the mid layer inert: labels are the only inflow, and a bar
+    that loses more per tick than any label can add stays pinned to the
+    trait-derived floor.
+
+    ``label_scale=4.0`` lifts label charge to ~0.052-0.060 per failing step
+    (net ~+0.034 after decay), which puts the mid layer's effective half-life
+    in the 5-10 step band: a 4-step stall reads ~0.17, a 16-step stall ~0.67,
+    and a healthy retry loop (transient failures amid net progress) stays
+    under 0.05 because decay keeps up between hits. One principled knob — the
+    fast (va_alpha) and slow (trait ewma) layers already operate fine at agent
+    scale and are left untouched.
+    """
+    from dataclasses import replace
+
+    return replace(
+        DEFAULT_CONFIG,
+        pressure=replace(DEFAULT_CONFIG.pressure, label_pressure_scale=label_scale),
+    )

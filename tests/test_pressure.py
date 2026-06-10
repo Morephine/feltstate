@@ -251,3 +251,45 @@ def test_step_mutates_and_returns_same_object():
     )
     assert out is p
     assert p.last_tick_ts == _ts(0)
+
+
+# --------------------------------------------------------------------------- #
+# label_pressure_scale / agent_scale_config                                   #
+# --------------------------------------------------------------------------- #
+def test_label_scale_default_changes_nothing():
+    """scale=1.0 must reproduce the historical companion-scale behaviour:
+    per-label charge sits below idle_decay, so a label-only stream cannot
+    ratchet a bar above the trait floor (here zero)."""
+    traits, rel, dials = Traits(), Relationship(), PersonaDials()
+    p = PressureState()
+    anxious = AffectDelta(valence=-0.2, arousal=0.6, labels=["anxious"])
+    _drive(p, delta=anxious, traits=traits, rel=rel, dials=dials, n=20)
+    assert p.bars.anxiety == 0.0  # 0.013 charge - 0.018 decay never accumulates
+
+
+def test_agent_scale_makes_mid_layer_integrate():
+    """At agent scale the same label stream must accumulate (charge > decay),
+    and a quiet stretch must drain it back down (no permanent ratchet)."""
+    from dataclasses import replace as dc_replace
+
+    from feltstate.config import agent_scale_config
+
+    cfg = agent_scale_config().pressure
+    traits, rel, dials = Traits(), Relationship(), PersonaDials()
+    p = PressureState()
+    anxious = AffectDelta(valence=-0.2, arousal=0.6, labels=["anxious"])
+    for i in range(10):
+        step(p, delta=anxious, traits=traits, relationship=rel, dials=dials, cfg=cfg, ts=_ts(i))
+    peak = p.bars.anxiety
+    # 10 failing steps at net +0.034 -> ~0.34; assert the band, not the exact value.
+    assert 0.25 <= peak <= 0.45
+
+    neutral = AffectDelta(valence=0.0, arousal=0.4, labels=[])
+    for i in range(10, 22):
+        step(p, delta=neutral, traits=traits, relationship=rel, dials=dials, cfg=cfg, ts=_ts(i))
+    assert p.bars.anxiety < peak / 2  # decays once the signal stops
+
+    # The factory must not mutate the shared default config.
+    assert DEFAULT_CONFIG.pressure.label_pressure_scale == 1.0
+    custom = dc_replace(cfg, label_pressure_scale=2.0)
+    assert custom.label_pressure_scale == 2.0

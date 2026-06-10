@@ -189,11 +189,14 @@ def _accumulate(
     inflow = {k: 0.0 for k in BAR_NAMES}
 
     # --- (1) label-driven inflow, max() per bar so duplicates don't stack ---
+    # label_pressure_scale rescales this channel for fast tick rates (agent
+    # steps vs conversation turns); milestone/trait/valence inflow is untouched.
     labels = list(delta.labels or [])
+    scale = float(getattr(cfg, "label_pressure_scale", 1.0))
     for label in labels:
         for bar, amount in (LABEL_TO_PRESSURE.get(label) or {}).items():
             if bar in inflow:
-                inflow[bar] = max(inflow[bar], float(amount))
+                inflow[bar] = max(inflow[bar], float(amount) * scale)
 
     # --- (2) trait / relationship simmer ---
     depression = _clamp01(float(traits.depression))
