@@ -61,6 +61,29 @@ point is structural: **measurement is a different step from generation.**
 > reply model can't flatter itself into a mood. The refusal-to-self-report is the
 > part worth keeping.
 
+### Illustrative example
+
+Two adapters exist alongside the library:
+[`kaishuiji/vheart-affect-v8`](https://huggingface.co/kaishuiji/vheart-affect-v8)
+on a 1.5B base, and
+[`kaishuiji/vheart-affect-v9`](https://huggingface.co/kaishuiji/vheart-affect-v9)
+on a 4B base. They are loaded by `feltstate.sources.vheart.VheartSource`.
+Training data is not released. Neither adapter is a benchmarked
+classifier — they are illustrations of the interface, kept around to
+make "or a classifier you fine-tune" concrete.
+
+A few implementation notes from this run, not empirical claims:
+
+- This run expanded the label vocab in stages rather than starting at
+  the target size, and used anchor examples between stages.
+- This run split the training centre of each label by context instead
+  of collapsing all instances of a label to one point.
+- This run emitted a primary/secondary blend with weights alongside the
+  flat label.
+
+These are choices, not prescriptions. A different fine-tune will make
+different ones.
+
 ---
 
 ## 2. Tool, not controller

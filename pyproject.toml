@@ -24,6 +24,14 @@ dependencies = []
 # LLMSource talks to any OpenAI-compatible endpoint over stdlib urllib, so it
 # needs nothing extra either; this extra is just dev tooling.
 dev = ["pytest>=7", "ruff>=0.6", "mypy>=1.8"]
+# VheartSource loads a fine-tuned LoRA adapter from the Hub. Pulls the torch
+# stack only when the user opts in with `pip install "feltstate[vheart]"`.
+vheart = [
+    "torch>=2.0",
+    "transformers>=4.40",
+    "peft>=0.10",
+    "huggingface_hub>=0.20",
+]
 
 [project.urls]
 Homepage = "https://github.com/Morephine/feltstate"
