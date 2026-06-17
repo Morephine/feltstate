@@ -111,6 +111,36 @@ python examples/quickstart.py     # pure stdlib, no install needed
 The reply model reads the felt block and **decides for itself** how to act. The
 library never writes "be sad now" into the prompt — it only ever supplies state.
 
+### A fine-tuned source
+
+`KeywordSource` and `LLMSource` are the two example sources the core
+ships. A third lives in `feltstate.sources.vheart.VheartSource`: it
+loads a LoRA adapter from the Hub instead of writing rules or hitting an
+endpoint. Two illustrative adapters exist —
+[`kaishuiji/vheart-affect-v8`](https://huggingface.co/kaishuiji/vheart-affect-v8)
+on a 1.5B base, and
+[`kaishuiji/vheart-affect-v9`](https://huggingface.co/kaishuiji/vheart-affect-v9)
+on a 4B base. Training data is not released; the adapters are not
+benchmarked classifiers, just runnable examples of the interface.
+
+```bash
+pip install "feltstate[vheart]"
+```
+
+```python
+from feltstate import Engine
+from feltstate.sources.vheart import VheartSource
+
+eng = Engine(source=VheartSource("kaishuiji/vheart-affect-v9"))
+```
+
+Constructing `VheartSource` downloads the base model and the adapter and
+loads both onto the GPU (or CPU), which is several gigabytes and a
+visible startup pause. Download, load and network failures during
+construction propagate. After construction, `read()` itself never raises
+— tokenizer, generation and parse failures collapse to a low-confidence
+neutral reading.
+
 *Off* this per-turn path, the agent **dreams**: `Engine.maybe_dream()` fires only
 when a single sleep-pressure accumulator (driven by arousal, not the clock) says
 it's tired enough — then recombines the agent's own charged material into a short,
