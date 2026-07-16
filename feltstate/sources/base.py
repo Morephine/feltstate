@@ -5,19 +5,18 @@ An :class:`AffectSource` answers one question per turn:
     "Given what the user just said, and given who this character is and how it
      has been feeling, how does it feel *now*?"
 
-It returns a measured :class:`~feltstate.state.AffectDelta`. This is the seam
-where *ground truth, not self-report* lives: the source is a separate component
+It returns an estimated :class:`~feltstate.state.AffectDelta`. This is the seam
+where *independently appraised affect* lives: the source is a separate component
 from whatever model generates the agent's replies. The reply-generating model
-never decides how it feels — it only reads the felt state back afterwards.
+does not directly author the state — it receives the rendered estimate afterwards.
 
-A natural implementation uses a small fine-tuned model for this. Such a model is
-necessarily trained on private data and so isn't shippable, so this package ships
-the **interface** plus two reference sources you can run today:
+An implementation may use rules, a general model call, or a task-specific
+classifier. This package ships the **interface** plus two reference sources:
 
 * :class:`~feltstate.sources.keyword.KeywordSource` — zero-dependency, rule
   based. Runs out of the box, good for tests and a baseline.
 * :class:`~feltstate.sources.llm.LLMSource` — points at any OpenAI-compatible
-  endpoint (a local model or a hosted one) and asks it to *measure* affect.
+  endpoint (a local model or a hosted one) and asks it to *estimate* affect.
 
 Swap in your own (a fine-tuned classifier, a sentiment model, anything) by
 subclassing :class:`AffectSource`.
@@ -45,7 +44,7 @@ from ..state import AffectDelta, AffectState
 
 
 class AffectSource(ABC):
-    """Measures one :class:`AffectDelta` per turn from recent conversation."""
+    """Estimates one :class:`AffectDelta` per turn from recent conversation."""
 
     @abstractmethod
     def read(
@@ -55,7 +54,7 @@ class AffectSource(ABC):
         baseline: AffectState,
         persona: str = "",
     ) -> AffectDelta:
-        """Measure how the character feels in reaction to the latest input.
+        """Estimate the character reaction to the latest input.
 
         Parameters
         ----------
@@ -76,7 +75,7 @@ class AffectSource(ABC):
         Returns
         -------
         AffectDelta
-            The measured reaction. Return a near-neutral delta (low ``confidence``)
+            The estimated reaction. Return a near-neutral delta (low ``confidence``)
             rather than raising when the signal is unclear.
         """
         raise NotImplementedError

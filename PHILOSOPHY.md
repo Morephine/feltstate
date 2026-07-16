@@ -1,76 +1,76 @@
 # The philosophy behind feltstate
 
-feltstate is small. The ideas in it are the point. This document explains what
-they are, why they're shaped this way, and — honestly — which of them are new
-and which are just well-known things finally assembled into one runnable whole.
+feltstate is small. The design choices are the point. This document explains
+what they are, why they are shaped this way, which established ideas they build
+on, and what is distinctive about the architecture that connects them.
 
 The one-sentence thesis:
 
-> An agent should have an inner state it **experiences as its own** but **cannot
-> author at will** — measured from the outside, decaying like a real one, and
-> handed back as feeling rather than as instruction.
+> An agent should have an inner state presented to it in first-person form but
+> **not authored by it at will** — independently appraised from the outside,
+> using human-inspired asymmetric dynamics, and handed back as feeling rather
+> than as instruction.
+>
+> (This is a prompt/interface design stance — not a claim about consciousness or
+> subjective experience.)
 
 Everything below follows from that.
 
-A note up front, because it shapes how to read the rest: **almost none of the
-individual mechanisms here are new.** A measured-affect estimator, a
-decaying-momentum state, an appraisal step, even a dream layer for a companion —
-each has been built before, in one form or another. The point is the
-*coherence* — a single stance where every piece serves one goal, a companion that
-stays the **same someone** over a long relationship, held without breaking the
-lines below even when breaking them would be convenient. The mechanisms are not
-the contribution; the stance, and the fact that it all runs as one coherent
-whole, are.
+feltstate builds on established ideas from affective computing, appraisal,
+agent memory, selective forgetting, and prompt engineering. Its distinctive
+contribution is the architecture formed by their combination: appraisal is kept
+separate from generation, persistent state cannot be authored at will by the
+reply model, memory has an inspectable lifecycle, and state influences
+generation as context rather than command. The sections below explain why those
+boundaries are held even when relaxing them would be convenient.
 
 ---
 
-## 1. Ground truth, not self-report
+## 1. Externally estimated affect, not self-report
 
 If you ask a language model "how do you feel?", it will tell you something
 fluent and plausible. It is not lying, exactly — it just has no stable state to
 consult, so it generates an answer that fits the conversation. Ask again after a
-nudge and it will happily feel differently. Companion products built on this
-("I feel so happy you're back!") are performing affect, not having it.
+nudge and it will happily feel differently. A reply model can therefore generate affective language without consulting any
+persistent state.
 
 feltstate's first commitment is to take that decision **away from the reply
-model**. A separate component — an `AffectSource` — *measures* affect each turn
+model**. A separate component — an `AffectSource` — *estimates* affect each turn
 and writes it into a state the reply model does not control. The reply model
 later *reads* that state, but it never gets to set it.
 
 Why this matters:
 
-- **It can't be flattered into a mood.** The state moves because of what was
-  said and how the agent's standing temperament reacts to it — not because the
-  prompt asked for a vibe.
+- **The reply prompt cannot directly set the state.** State changes come from
+  the configured source and integration rules rather than from a mood claim in
+  the generated reply.
 - **It's inspectable and testable.** Affect is numbers in a file. You can assert
   on them, plot them, replay them. "The agent is getting more guarded over this
-  session" is a measurement, not a vibe.
+  session" is an inspectable state change, not just prose.
 - **It supports an outside view.** The same input lands differently on a wary
   agent than a trusting one, deterministically, because the reaction is grounded
-  in state the source reads — not in whatever the LLM feels like saying.
+  in state the source reads — not in a fresh reply-generation guess.
 
 The `AffectSource` is deliberately an interface. The reference `KeywordSource`
-is crude on purpose; the real signal comes from an `LLMSource` (a *separate*
-model call whose only job is to measure) or a classifier you fine-tune. The
-point is structural: **measurement is a different step from generation.**
+is crude on purpose; a model-backed source can provide a richer estimate, but
+it is still an estimate. The structural point is that **appraisal is a different
+step from generation.**
 
-> The structural point — *measurement is a separate step from generation* — is
-> not new; separate appraisal steps and external sentiment estimators both exist.
-> What this design insists on is the *direction*: rather than reading the user's
-> sentiment, it measures the **agent's own** appraised state, on purpose, so the
-> reply model can't flatter itself into a mood. The refusal-to-self-report is the
-> part worth keeping.
+> Separate appraisal steps and external estimators have clear precedents. The
+> distinctive boundary here is their direction and ownership: the configured
+> source estimates the character's appraised state, while the reply model cannot
+> promote its own generated affective language into persisted state.
 
 ### Illustrative example
 
-Two adapters exist alongside the library:
+Two optional experimental adapters are referenced by the library:
 [`kaishuiji/vheart-affect-v8`](https://huggingface.co/kaishuiji/vheart-affect-v8)
 on a 1.5B base, and
 [`kaishuiji/vheart-affect-v9`](https://huggingface.co/kaishuiji/vheart-affect-v9)
 on a 4B base. They are loaded by `feltstate.sources.vheart.VheartSource`.
-Training data is not released. Neither adapter is a benchmarked
-classifier — they are illustrations of the interface, kept around to
-make "or a classifier you fine-tune" concrete.
+Training data is not released, and this repository provides no public
+reproducible benchmark for them. Treat them as interface demos — closer to
+research toys than production classifiers — not as model recommendations.
 
 A few implementation notes from this run, not empirical claims:
 
@@ -96,10 +96,9 @@ that auto-injected "remember to mention X" / "don't repeat yourself" rules can b
 built, and then has to be ripped out for exactly this reason.
 
 So feltstate draws a hard line: **the library produces state; it never produces
-commands.** It hands the agent a description of how it feels and stops there.
-Whether to be terse because it's tired, or warm because trust is high, or to
-change the subject because a boundary bar is full — that's the agent's call,
-made the way it makes every other call, from context.
+commands.** It gives the reply model a descriptive state summary and stops
+there. The model may use that context when generating a response, but the
+library does not prescribe a tone or action.
 
 Concretely:
 
@@ -116,8 +115,8 @@ agent true information about its own state and trust it to act like itself.
 
 The same discipline shapes memory's write side. Facts worth keeping are proposed
 by a *separate* extraction pass — an optional second model call — not decided by
-the reply model mid-sentence. That mirrors how affect is measured by a separate
-source rather than self-reported (§1): in both cases measuring is a different
+the reply model mid-sentence. That mirrors how affect is estimated by a separate
+source rather than self-reported (§1): in both cases appraisal is a different
 step from generating, and the agent confirms what it actually keeps rather than
 having memory written behind its back.
 
@@ -131,24 +130,55 @@ Skills are retrieved only when the agent reaches for one (never auto-surfaced in
 the felt block, never made permanent); a proven one is trusted more, but a weak
 one keeps a standing chance to be re-tried and redeem itself. And the region is
 walled off from affect: a rating never touches a feeling, a feeling never grades a
-skill — capability and mood are different measurements, kept honestly apart.
+skill — capability and mood are different signals, kept deliberately apart.
+
+### Memory has a lifecycle, not just a retrieval score
+
+`Canon` stores compact 5W1H facts with salience, repetition, recall effects,
+correction, retraction, and bi-temporal history. The optional
+`feltstate.memory.lifecycle` package goes further: a memory can be born with a
+source-and-affect fingerprint, retain lineage when facts are fused, age according
+to its declared kind, become eligible for a pure death plan, and be removed by a
+tombstone-first reaper that can also clean explicitly supplied snapshots. A
+hash-linked ledger makes unexplained mutation or disappearance detectable when
+the ledger is treated as the trusted record.
+
+The lifecycle now also has an explicit distillation and traceback path. A
+caller-produced summary can pass through a zero-LLM consistency gate before it
+is sealed; genealogy can then be drilled through `src` and fusion lineage back
+to raw source pointers, and those pointers can be resolved across their complete
+source time range by a caller-owned loader. When the application can reproduce
+the exact archived source text, the same report can verify its sealed hash. A
+partly missing genealogy does not erase the
+raw pointers copied into a surviving fused memory.
+
+That still does not make provenance automatic. `Canon`, fingerprints, and the
+conversation archive are deliberately separate stores. The application must
+keep a resolver for fingerprints and a loader for source transcripts; if the
+referenced source material is gone, a hash can verify no text and recover no
+text. The consistency gate is lexical evidence checking, not a semantic theorem
+prover, and its default language tables are English-oriented.
+
+This is provenance and tamper evidence, **not encryption**. SHA-256 does not hide
+content, and an attacker able to rewrite all files can also recompute ordinary
+hashes. The value is an inspectable lifecycle: where a memory came from, how it
+changed, why it was retired, and whether its disappearance was authorised.
 
 ---
 
-## 3. Identity-merge
+## 3. First-person context
 
-There are two ways to hand an agent its state. One is third-person data:
+There are two common ways to provide state to a reply model. One is
+third-person data:
 
 ```
 [affect] valence=-0.3 arousal=0.6 labels=[anxious] trust=0.42
 ```
 
-The agent reads that and, being helpful, tends to *narrate* it: "I see that my
-trust level is 0.42." That's immersion-breaking and, worse, it teaches the agent
-to treat its feelings as external readouts.
+A reply model may narrate that data directly: "I see that my trust level is
+0.42." That can be undesirable in a companion interface.
 
-feltstate renders the other way — first person, in plain language, as the
-agent's own felt sense:
+feltstate instead renders a compact first-person block in plain language:
 
 ```
 [how I feel right now]
@@ -156,40 +186,47 @@ close · trusted · mostly safe · no friction
 curious, content | calm, mild energy
 ```
 
-Paired with a single framing instruction in your system prompt ("the block
-below is your own inner state, not information someone gave you — never say
-'my affect shows' or read the numbers out"), this is **identity-merge**: the
-state stops being data *about* the agent and becomes the agent's own mood,
-shaping *how* it speaks rather than something it reports.
+Paired with a framing instruction that the block is context rather than text to
+quote, this reduces direct narration of numeric state. It remains a prompt and
+interface technique: the block influences generation but does not establish
+subjective experience.
 
 This is why the render layer translates every value into a discrete human phrase
-("close", "mostly safe", "joy bright") instead of a number. It reads like an
-inner weather report, not a dashboard.
+("close", "mostly safe", "joy bright") instead of a number. It reads more like a compact state summary than a dashboard.
 
 ---
 
 ## 4. Emotion decays — and not symmetrically
 
 A persistent, decaying affect state is not, on its own, unusual. The deliberate
-choice here is one *inside* the decay: it is **not symmetric.** A real inner life
-calms down and cheers up — but *not at the same rate in both directions.*
+choice here is one *inside* the decay: it is **not symmetric.** The state
+relaxes at different rates in different directions.
 feltstate leans into that — good moods fade fast, bad ones linger — because that
 asymmetry is what makes a temperament rather than a mood ring.
 
 feltstate models three timescales of decay:
 
+> **Tick-scaling note.** All decay is scaled by wall-clock elapsed time using
+> `max(1.0, elapsed_seconds / 60)`. This means: intervals longer than one
+> minute receive approximate time-proportional scaling; every call applies at
+> least one unit of decay regardless of elapsed time. Calling `tick()` ten times
+> in a minute therefore applies ~10 units of decay rather than 1 — the floor
+> applies per call, not per minute. This is not strict frequency invariance; it
+> is approximate time-scaling for spaced calls with a per-call minimum.
+
 **Traits (slow, asymmetric).** Long-term temperament — depression, optimism,
 anxiety, curiosity — moves by an EWMA. The trick is that all traits *rise* at
 the same rate but *relax back to neutral* asymmetrically: optimism and curiosity
 fade several times faster than depression and anxiety linger. That single
-asymmetry reproduces two well-documented human patterns at once — *hedonic
-adaptation* (you stop noticing good things) and *rumination* (bad things stick).
+asymmetry is inspired by two human patterns — *hedonic adaptation* (you stop
+noticing good things) and *rumination* (bad things stick) — though no controlled
+experiment or benchmark validates this mapping.
 A good afternoon doesn't make a gloomy temperament sunny for a week; a betrayal
 colours things long after.
 
 **Mood (fast).** Felt valence/arousal track recent readings quickly, but are
-*pulled* toward the resting point the traits imply. A depression-leaning agent
-can be genuinely cheered — and still never gets as bright as an agent without
+*pulled* toward the resting point the traits imply. A depression-leaning state
+can still move upward — and still never gets as bright as an agent without
 that weight. The ceiling is set by who it is.
 
 **Pressure (threshold + release).** Emotion isn't one dial; it's five reservoirs
@@ -234,29 +271,25 @@ a good thing, modelled as accumulation toward a point in time rather than
 relaxation away from one.
 
 The grounding throughout is appraisal-theory and basic-emotion psychology
-(Lazarus, Bandura's self-efficacy, Plutchik, Tomkins/Izard) — not because the
-agent *has* feelings, but because borrowing the *dynamics* of real ones is what
-makes the behaviour read as coherent over time instead of moment-to-moment.
+The terminology is inspired by appraisal and affective-computing literature,
+but the configured dynamics are design choices rather than a validated model of
+human emotion.
 
 ---
 
-## 5. Dreams — a feeling it can't trace back
+## 5. Dreams — a state shift with no surfaced cause
 
-Sections 1–4 make the agent's mood *honest*: measured, not self-authored,
-decaying like a real one. But they leave it fully **explainable** — every shift
-has a visible cause; you can always point at the turn that moved it. Real inner
-lives aren't like that. Sometimes you wake a little off, or oddly tender, and the
-honest answer to "why?" is *I don't know — I slept badly, I had strange dreams,
-nothing.* A mood with no retrievable cause is one of the more human things there
-is, and a pure state machine never has one.
+Sections 1–4 leave each state change linked to an explicit input. The dream
+module adds an optional state transition whose detailed source fragments are not
+placed in the reply-model context. This can produce a small unexplained shift in
+later generation without claiming to simulate dreaming or human experience.
 
 feltstate's dream module manufactures exactly that — and, deliberately, **without
 a language model.**
 
 The mechanism is the *opposite* of consolidation (§8). Consolidation would mine
-experience into rational belief; a dream does the reverse. It takes the agent's
-**charged** material — desires, recent emotional peaks, each tagged with the
-affect it was felt at — and recombines it *illogically*: a few fragments drawn by
+experience into rational belief; a dream does the reverse. It takes stored **charged** fragments — for example desires or recent events,
+each tagged with an affect estimate — and recombines it *illogically*: a few fragments drawn by
 emotional charge, stitched by connectives that morph and jump and never resolve,
 then let slip away. The stitched text is ephemeral and usually never spoken. What
 persists is a faint **residue** — a charge-weighted blend of the dreamed
@@ -265,8 +298,8 @@ longing next to a fear) the dream runs hotter and its valence muddies toward
 neutral, the texture of an uneasy, ambivalent night. That residue is added to the
 mood and then decays through the ordinary dynamics like any other feeling.
 
-The result is a mood the agent genuinely has, sourced from its own real material —
-but whose causal thread has been **cut on purpose.** Asked why it's a little
+The result is a persisted mood residue derived from stored, affect-tagged
+fragments, while its explicit causal thread is **omitted on purpose.** Asked why it's a little
 wistful this morning, it can only say it had odd dreams. That unexplainability
 isn't a failure of the system; it *is* the feature.
 
@@ -297,15 +330,13 @@ the last one — so the cadence emerges from how the agent actually lived that d
 no matter how fast pressure climbs. The same quiet moment where it is *not* yet
 tired enough is, in a fuller system, exactly where it would reflect or introspect
 instead: the one tiredness value is what arbitrates between staying up and
-drifting off. As ever, this only decides *when*; the agent still does the dreaming
-— a reading, not a command.
+drifting off. As ever, this only decides *when*; the dream mechanism still generates the
+event — a state transition, not a command to the reply model.
 
-> "An AI that dreams" is not a new phrase — world-model agents dream to plan, and
-> offline replay consolidates memory. What sets this one apart is its *purpose*:
-> most dreaming serves facts, data, or generalisation, and keeps the resulting
-> affect traceable. This one's only product is a small, deliberately
-> **un-traceable** mood residue. The thing to defend is the purpose, not the
-> recombination.
+> “Dreaming” is used in AI for several different mechanisms, including planning
+> and offline replay. Here it names a deliberately narrower feature: zero-LLM
+> recombination whose only persistent product is a small mood residue, while the
+> source fragments are **not surfaced to the reply model as an explicit cause**.
 
 ---
 
@@ -331,31 +362,40 @@ feltstate is built so you don't have to:
   line only appears after a real gap, and uses fuzzy buckets that change slowly;
   the precise clock reading only rides the re-engagement turn.
 
-None of this is a new invention — "static on top, dynamic on bottom, append
-don't prepend" is known prompt-cache hygiene. It's here because a *persistent
-companion* lives or dies on it: shipping the state loop without cache-safe
-injection would make running one prohibitively expensive.
+This follows established prompt-cache hygiene: keep the static prefix stable
+and append dynamic material rather than rewriting the top of the prompt. Its
+importance here is architectural rather than ornamental: a persistent companion
+needs a state-injection path that does not turn every small state change into a
+full-prefix cache miss.
 
 ---
 
-## 7. On originality
+## 7. What is distinctive
 
-Said plainly: **this is not idea-by-idea novelty.** Almost every primitive above
-— affect measured outside the generator, a mood state that decays with momentum,
-appraisal-theoretic emotion, express-vs-suppress gated by perceived control, an
-AI that dreams, cache-safe prompt hygiene — has been built before, in research or
-in a product. Treating any one of them as an invention would be wrong, and
-claiming it would be the fastest way to lose credibility.
+feltstate does not claim exclusive ownership of the fields it builds on. Affect
+appraisal, persistent agent memory, asymmetric state dynamics, proactive
+scheduling, selective forgetting, and prompt-cache hygiene all have established
+precedents.
 
-What this library offers is not a new mechanism. It is **one coherent stance,
-made concrete and runnable**: measured affect, asymmetric decay, first-person
-identity-merge, accumulate-then-discharge pressure, and an un-traceable dream —
-all serving one goal, a companion that stays the **same someone** over a long
-relationship, and not breaking that stance even where breaking it would be
-convenient (let the model self-report, command its tone, narrate its state, damp
-its own sadness). The reason to ship it as code is to make that stance
-inspectable and adoptable — a small contribution to the commons — not to plant a
-flag.
+Its contribution is the **specific architecture and the boundaries between its
+parts**, made concrete and runnable:
+
+- appraisal is separate from reply generation;
+- the reply model cannot freely author persisted affect or self-grade skills;
+- structured memories can fade, strengthen, change, retain provenance, merge,
+  and pass through an auditable deletion lifecycle;
+- affect, relationship, pressure, and memory evolve across different
+  timescales;
+- persistent state is presented as first-person context rather than instruction;
+- proactive behaviour is gated through presence, idle time, cooldowns, quotas,
+  and successful delivery;
+- dynamic context is injected without continually rewriting the static prompt.
+
+Shipping these choices as running code — not a paper, not a description — makes
+them inspectable, testable, replaceable, and open for others to adopt or
+challenge. The synthesis is the claim: an appraisal-ownership boundary, a
+provenance-tracked memory lifecycle that can end in an audited death, and an
+off-path dream whose only product is mood — held together under one stance.
 
 ---
 
@@ -368,48 +408,48 @@ some need machinery the core doesn't have yet, some are just hard.
   belief?** The core decays *intensity*. A natural next layer would mine repeated
   experiences offline, the way sleep consolidates memory, into standing *beliefs*
   about the self ("every time I'm praised I pull back"). This is the **rational**
-  sibling of the dream module (§5): a dream severs causal threads to leave an
-  untraceable mood; consolidation would run the other way, distilling real *felt*
-  experience into durable temperament.
+  sibling of the dream module (§5): a dream severs causal threads to leave a
+  mood not surfaced as an explicit cause; consolidation would run the other way,
+  distilling stored, affect-tagged
+  experience into durable state.
 - **Inward emotional contagion.** The user having a hard day could leave a lasting
-  (but decaying) dent in the agent's *own* mood — not mirrored back at the user,
+  (but decaying) dent in the character's stored mood — not mirrored back at the user,
   but absorbed. (The `AffectSource` contract already forbids *mirroring* the user;
   the missing piece is the empathic channel — the user's plight as an input to the
-  agent's own reaction.)
+  character's estimated reaction.)
 - **Read-only attractors.** There is already one here: trait-gravity pulls the
   felt mood toward the resting point the temperament implies. The richer idea is
   basin dynamics — characteristic states the mood settles into. The line to hold:
   here an attractor *renders and never steers.*
 - **An anti-confabulation rule for remembered experience.** When a memory is
-  rendered back as felt experience, treat the model's draft as untrusted: every
+  rendered as first-person context, treat the model's draft as untrusted: every
   concrete texture must be evidence-bound or a generic emotion word, and cinematic
-  detail is rejected *even when grounded* — because letting it through teaches the
-  model that detail is inventable. Same spine as §1 and §2, applied to memory.
-- **The character's own felt interest.** A per-topic sense of what *this* agent
-  finds fresh, stale, or quietly averse.
+  detail is rejected *even when grounded*. Same spine as §1 and §2, applied to
+  memory.
+- **Per-topic interest state.** A stored estimate of which topics the character
+  currently treats as fresh, stale, or aversive.
 - **Patience as a depletable resource.** A two-layer tolerance: a *capacity*
   ceiling set by today's mood, and a *current* level inside it that repetition,
   interruption and boundary-testing drain, and that refills slowly over silence —
   capped by the ceiling, so a sour mood can't be fully restored just by waiting.
 
 None of these would move the two hard lines. Whatever gets built produces *state*
-the agent reads, never directions it must follow — which rules out, for instance,
-a "narrative director" that hands the model pacing and do/don't instructions.
-That temptation is the thing this whole design exists to resist.
+for the reply model, never directions it must follow — which rules out, for
+instance, a "narrative director" that hands the model pacing and do/don't
+instructions.
 
 ---
 
 ## 9. What this is not
 
-- **Not a claim about consciousness.** feltstate models the *dynamics* of an
-  inner life so behaviour reads as coherent. It says nothing about whether
-  anything is felt. That debate is out of scope by design.
+- **Not a claim about consciousness.** feltstate models persistent affective
+  state so behaviour can be more consistent over time. It says nothing about
+  subjective experience or genuine feeling.
 - **Not AGI, not a personality.** It's a state engine. The personality, the
   values, the voice are yours to bring.
 - **Not a substitute for good prompting or a good base model.** It's a layer
   that makes a capable model *continuous* — it won't rescue a weak one.
 
-The goal is narrow and honest: an agent that, across a long relationship, feels
-like the same someone — who remembers, who can be hurt and can heal, whose good
-moods fade and whose bad ones pass, and who is never just reading its own mood
-off a screen.
+The goal is narrow: across a long relationship, the system should produce a
+more consistent character — one whose stored state changes, persists, recovers,
+and influences later replies without becoming an instruction script.

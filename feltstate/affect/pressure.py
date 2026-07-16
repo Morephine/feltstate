@@ -170,18 +170,26 @@ def _accumulate(
     relationship: Relationship,
     cfg: PressureConfig,
     ts: str,
+    ticks: float = 1.0,
 ) -> None:
     """Add this turn's inflow into the bars (mutating ``pressure.bars``).
 
     Inflow comes from three places, merged so nothing double-counts:
 
-    1. the measured emotion *labels* of the turn, routed through
+    1. the estimated emotion *labels* of the turn, routed through
        :data:`~feltstate.config.LABEL_TO_PRESSURE` (max per bar);
     2. a slow trait-driven simmer (a high-depression / high-anxiety temperament
-       feeds its bar a little every tick) plus relationship tension feeding anger
-       and boundary;
+       feeds its bar a little *per unit time*) plus relationship tension feeding
+       anger and boundary;
     3. discrete *milestone* shocks (appraised events such as care, conflict,
        loss) — one-off impulses with a sign and a severity.
+
+    ``ticks`` is the elapsed wall-clock span since the previous tick in reference
+    ticks (one tick = one minute). Only the **continuous** trait/tension simmer
+    (item 2) scales with it — it is a background drip that accrues per unit time,
+    so a bar must not simmer five times faster merely because it is ticked five
+    times as often. The label, valence and milestone inflows (items 1 and 3) are
+    *per-event* readings of this turn and are deliberately not elapsed-scaled.
 
     Finally, valence-opposite mutual inhibition drains the antagonist bar.
     Called only when the cooker is not already releasing/aftertaste.
@@ -198,22 +206,26 @@ def _accumulate(
             if bar in inflow:
                 inflow[bar] = max(inflow[bar], float(amount) * scale)
 
-    # --- (2) trait / relationship simmer ---
+    # --- (2) trait / relationship simmer (continuous; scales with elapsed time) ---
     depression = _clamp01(float(traits.depression))
     anxiety_t = _clamp01(float(traits.anxiety))
     tension = max(0.0, float(relationship.unresolved_tension))
 
     if depression > _TRAIT_FEED_ABOVE:
-        inflow["sadness"] += 0.015 * (depression - _TRAIT_FEED_ABOVE) / (1.0 - _TRAIT_FEED_ABOVE)
+        inflow["sadness"] += (
+            0.015 * (depression - _TRAIT_FEED_ABOVE) / (1.0 - _TRAIT_FEED_ABOVE) * ticks
+        )
     if anxiety_t > _TRAIT_FEED_ABOVE:
-        inflow["anxiety"] += 0.013 * (anxiety_t - _TRAIT_FEED_ABOVE) / (1.0 - _TRAIT_FEED_ABOVE)
+        inflow["anxiety"] += (
+            0.013 * (anxiety_t - _TRAIT_FEED_ABOVE) / (1.0 - _TRAIT_FEED_ABOVE) * ticks
+        )
 
     # Standing friction with the person leaks into anger, and (when it runs high)
     # into the boundary bar — the urge to withdraw or draw a line.
     if tension > 0.5:
-        inflow["anger"] += 0.013
+        inflow["anger"] += 0.013 * ticks
     if tension > 0.6:
-        inflow["boundary"] += 0.013
+        inflow["boundary"] += 0.013 * ticks
 
     # A negative-valence turn nudges sadness; a positive one nudges joy. This is
     # the affective pull of the reading itself, on top of any labels.
@@ -309,15 +321,26 @@ def _apply_milestone(inflow: dict, pressure: PressureState, m: dict) -> None:
 # --------------------------------------------------------------------------- #
 # Decay + trait floor (always applied, even mid-release)                      #
 # --------------------------------------------------------------------------- #
-def _decay_and_floor(pressure: PressureState, traits: Traits, cfg: PressureConfig) -> None:
-    """Apply natural cooling to every bar and clamp to a trait-derived floor.
+def _decay_and_floor(
+    pressure: PressureState, traits: Traits, cfg: PressureConfig, ticks: float = 1.0
+) -> None:
+    """Cool every bar by elapsed time and clamp to a trait-derived floor.
 
     This runs every tick regardless of phase — feelings cool whether or not the
     agent is mid-release. The floor is what keeps decay from erasing a chronic
     temperament: a high-depression agent's sadness bar never falls all the way to
     zero, a high-optimism agent keeps a little joy on tap.
+
+    ``ticks`` is the elapsed span since the previous tick in reference ticks (one
+    tick = one minute). The cooling is ``idle_decay`` **per reference tick**, so
+    the total cooling over a fixed real interval is the same however finely the
+    interval is ticked — the bar cooldown is a function of wall-clock time, not of
+    call count. This linear-in-time cooling composes exactly through the floor
+    clamp (``max(f, max(f, x-a)-b) == max(f, x-a-b)``), so subdividing an interval
+    lands a bar at the identical level. ``ticks=1`` reproduces the historical
+    per-tick cooling.
     """
-    decay = float(cfg.idle_decay)
+    decay = float(cfg.idle_decay) * max(0.0, ticks)
     floors = {
         "sadness": max(0.0, (float(traits.depression) - 0.5) * _TRAIT_SLOPE),
         "anxiety": max(0.0, (float(traits.anxiety) - 0.5) * _TRAIT_SLOPE),
@@ -475,18 +498,24 @@ def _trigger_release(pressure: PressureState, decision: dict, cfg: PressureConfi
 
 
 # --------------------------------------------------------------------------- #
-# Phase 3 — time-based phase progression                                      #
+# Phase 3 — phase progression (time-driven expiry + level-driven build)       #
 # --------------------------------------------------------------------------- #
-def _advance_phase(pressure: PressureState, cfg: PressureConfig, ts: str) -> None:
-    """Walk the phase machine forward by the clock and by bar levels.
+def _advance_time_phase(pressure: PressureState, cfg: PressureConfig, ts: str) -> None:
+    """Expire the timed phases by the wall clock — runs *before* accumulation.
 
-    Time-driven: ``releasing`` -> ``aftertaste`` once the release window passes,
-    then ``aftertaste`` -> ``calm`` once the aftertaste window passes (at which
-    point bars are pulled most of the way down to the floor — a release should
-    *feel* like relief, not a 30%% trim). Level-driven, with hysteresis: ``calm``
-    rises to ``building`` above the build-up threshold, and ``building`` falls
-    back to ``calm`` below the (lower) build-down threshold. The two thresholds
-    are separated so a bar hovering near the line does not flicker phases.
+    ``releasing`` -> ``aftertaste`` once the release window passes, then
+    ``aftertaste`` -> ``calm`` once the aftertaste window passes (at which point
+    bars are pulled most of the way down to the floor — a release should *feel*
+    like relief, not a 30%% trim).
+
+    This is deliberately applied at the *top* of a tick, before the accumulate
+    gate decides whether to take inflow (finding #13). The accumulate gate keys
+    off ``pressure.phase``; if an ``aftertaste`` window has *already* elapsed by
+    the clock but the phase field still reads ``aftertaste``, running expiry only
+    at the end of the tick would make the first post-aftertaste event fall through
+    the gate and lose its inflow, its increment silently swallowed by a window
+    that was already over. Expiring first means an event that arrives after the
+    aftertaste has passed sees ``calm`` and accumulates normally.
     """
     now = _parse(ts)
 
@@ -512,7 +541,16 @@ def _advance_phase(pressure: PressureState, cfg: PressureConfig, ts: str) -> Non
                 cur = getattr(pressure.bars, k)
                 setattr(pressure.bars, k, floor + (cur - floor) * keep)
 
-    # calm <-> building by level, with hysteresis (single transition per tick)
+
+def _advance_level_phase(pressure: PressureState, cfg: PressureConfig) -> None:
+    """Move ``calm`` <-> ``building`` by bar level, with hysteresis.
+
+    ``calm`` rises to ``building`` above the build-up threshold, and ``building``
+    falls back to ``calm`` below the (lower) build-down threshold. The two
+    thresholds are separated so a bar hovering near the line does not flicker
+    phases. Runs at the *end* of a tick, after this turn's inflow and cooling, so
+    a bar that just crossed (or fell below) the line transitions on its new level.
+    """
     _max_name, max_val = pressure.bars.max_bar()
     if pressure.phase == "calm":
         if max_val > cfg.threshold_build_up:
@@ -552,11 +590,18 @@ def step(
     dials: PersonaDials,
     cfg: PressureConfig,
     ts: str,
+    elapsed_ticks: float | None = None,
 ) -> PressureState:
     """Advance the pressure cooker by one full tick and return it.
 
     A tick runs in order:
 
+    0. **expire timed phases by the clock** — a ``releasing`` whose window has
+       passed becomes ``aftertaste``; an ``aftertaste`` whose window has passed
+       settles to ``calm``. This runs *first* so the accumulate gate below sees
+       the phase the clock actually implies (finding #13): an event arriving after
+       the aftertaste has elapsed must accumulate, not be dropped because the phase
+       field still read ``aftertaste`` from a window that was already over;
     1. **accumulate** this turn's reading into the bars — but only when the
        cooker is ``calm``/``building`` (a ``releasing``/``aftertaste`` cooker
        suspends inflow, so the agent does not re-stack pressure while venting);
@@ -566,14 +611,30 @@ def step(
        :attr:`~feltstate.config.PressureConfig.threshold_release` (power-aware
        channel, with hybrid/collapse handling) and, if so, move into
        ``releasing``;
-    4. **advance the phase machine** by the clock and by bar levels.
+    4. **advance ``calm`` <-> ``building`` by bar level** (hysteresis), on the
+       levels this tick's inflow and cooling produced.
 
-    The passed ``pressure`` is mutated in place and also returned for
-    convenience. ``ts`` is the tick's ISO timestamp (its caller's clock); all
-    release/aftertaste windows are computed from it, so feeding a monotonic clock
-    keeps the dynamics deterministic and testable.
+    ``ts`` is the tick's ISO timestamp (its caller's clock); all release /
+    aftertaste windows are computed from it, so feeding a monotonic clock keeps the
+    dynamics deterministic and testable.
+
+    ``elapsed_ticks`` is the wall-clock span since the previous tick in *reference
+    ticks* (one tick = one minute; the engine threads it in from its own clock).
+    The two continuous, per-time dynamics — the bar **cooldown** (step 2) and the
+    **trait/tension simmer** (step 1's background drip) — scale with it, so the same
+    real elapsed time cools and simmers the bars the same amount however often
+    :func:`step` is called (frequency-invariance, finding #12). Per-event inflow
+    (labels, valence, milestones) and the wall-clock release/aftertaste windows are
+    already time-correct and are not scaled. ``None`` means exactly one reference
+    tick, reproducing the historical per-tick behaviour, so a caller that does not
+    thread a clock is unchanged. The passed ``pressure`` is mutated in place and
+    also returned for convenience.
     """
     ts = ts or _now_iso()
+    ticks = 1.0 if elapsed_ticks is None else max(0.0, float(elapsed_ticks))
+
+    # (0) expire timed phases by the clock, BEFORE the accumulate gate (#13).
+    _advance_time_phase(pressure, cfg, ts)
 
     # (1) accumulate — only outside the vent.
     if pressure.phase not in ("releasing", "aftertaste"):
@@ -584,10 +645,11 @@ def step(
             relationship=relationship,
             cfg=cfg,
             ts=ts,
+            ticks=ticks,
         )
 
-    # (2) decay + trait floor, every tick.
-    _decay_and_floor(pressure, traits, cfg)
+    # (2) decay + trait floor, every tick (cooling scales with elapsed time).
+    _decay_and_floor(pressure, traits, cfg, ticks)
 
     # (3) release selection — only when not already venting.
     if pressure.phase not in ("releasing", "aftertaste"):
@@ -596,8 +658,8 @@ def step(
         if decision is not None:
             _trigger_release(pressure, decision, cfg)
 
-    # (4) phase progression by clock + levels.
-    _advance_phase(pressure, cfg, ts)
+    # (4) calm <-> building by level, on this tick's resulting levels.
+    _advance_level_phase(pressure, cfg)
 
     pressure.last_tick_ts = ts
     return pressure

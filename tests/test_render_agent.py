@@ -20,9 +20,7 @@ from feltstate.state import AffectState
 
 # Words that would leak the conclusion into the prompt; the agent must reach
 # "stuck" on its own (exp7b's de-priming guarantee).
-COGNITION_WORDS = re.compile(
-    r"stuck|progress|attempt|landing|moving|task|step|fail", re.IGNORECASE
-)
+COGNITION_WORDS = re.compile(r"stuck|progress|attempt|landing|moving|task|step|fail", re.IGNORECASE)
 
 
 def state_with(mid: float, labels: list[str] | None = None) -> AffectState:
@@ -53,8 +51,7 @@ def test_no_cognition_vocabulary_in_any_band():
 
 
 def test_labels_are_shown_and_default_to_even():
-    assert "frustrated, anxious" in render_agent_feeling(
-        state_with(0.3, ["frustrated", "anxious"]))
+    assert "frustrated, anxious" in render_agent_feeling(state_with(0.3, ["frustrated", "anxious"]))
     assert "even" in render_agent_feeling(state_with(0.0))
 
 

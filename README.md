@@ -1,54 +1,90 @@
 # feltstate
 
-**Give an LLM agent a felt inner life it experiences as its own.**
+**Give an LLM agent a mood it can carry forward—and memories that can age, change, and die.**
+
+> Mechanism: persistent affect is estimated by a component separate from the
+> reply model, while structured memory is managed through explicit storage,
+> recall, provenance, ageing, and deletion tools. This is a prompt/interface and
+> state-management design — not a claim about consciousness, subjective
+> experience, genuine emotion, or human-like memory.
 
 [![CI](https://github.com/Morephine/feltstate/actions/workflows/ci.yml/badge.svg)](https://github.com/Morephine/feltstate/actions/workflows/ci.yml)
 &nbsp;![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 &nbsp;![License: MIT](https://img.shields.io/badge/license-MIT-green)
 
-feltstate is a small, opinionated reference implementation of one idea: a
-companion that stays the **same someone** over a long relationship. It gives an
-agent a felt inner state it experiences as its own but cannot author at will —
-affect *measured* each turn by a component separate from the reply model,
-integrated into a mood / temperament / relationship state that **decays like a
-real one** (good moods fade fast, bad ones linger), and handed back as a
-first-person feeling the agent reads as **its own** — never as data to recite,
-never as a command telling it how to act. It can even *dream*: leave itself a
-faint mood it can't trace back.
+feltstate is a small, opinionated reference library for **persistent affect and
+provenance-aware memory** in long-running LLM companions. It keeps affect
+appraisal outside the reply model, maintains structured memories that can fade,
+strengthen, change, merge, or be retired, and returns compact state as context
+rather than behavioural instruction.
 
-None of the individual mechanisms are new on their own. The point is the
-**coherence** — every piece serving that one goal, and the lines it refuses to
-cross to get there. See **[PHILOSOPHY.md](PHILOSOPHY.md)** for the reasoning
-behind each choice.
+It draws on affective computing, agent memory, appraisal, and selective
+forgetting, but the architecture is its own: affect is appraised outside the
+reply model and cannot be authored by it, structured memory carries provenance
+through an auditable birth-to-death lifecycle, persisted state moves across
+several timescales, and dynamic context is injected without rewriting the static
+prompt. Several of these are uncommon in agent libraries — memory that can *die*
+with a traceable lineage, a hard ownership boundary on persisted affect, and
+off-path zero-LLM dreaming — and they are built that way on purpose, not
+reassembled from off-the-shelf parts.
 
-> Distilled and rewritten as a clean, general library from a real production
-> companion system. None of that system's private data, trained models, or
-> persona is included here — only the mechanisms and the design.
+> Distilled and rewritten as a clean, general library, adapted from mechanisms
+> used in a private companion prototype. None of that prototype's private data,
+> trained models, or persona is included here — only the implementation and
+> design choices represented in this repository.
 
 ---
 
 ## Why this exists
 
-None of these pieces is new on its own. A separate affect estimator, a decaying
-mood state, an appraisal step, even a dream layer for a companion — each has been
-built before. feltstate is **not** a claim to have invented affective computing.
-It is one **coherent assembly**, held to a single stance:
+Most agent-memory libraries focus on storing and retrieving text, while many
+agent-affect demos reduce mood to a value placed in a prompt. feltstate explores
+a narrower but deeper question: **how persistent affect, memory, capability, and
+proactive behaviour can change together over the lifetime of a long-running
+companion.**
 
-- **Affect is measured, not self-reported.** A separate component appraises the
-  *agent's own* state, so the reply model can't flatter itself into a mood.
-- **It decays — asymmetrically.** Good moods fade fast, bad ones linger; that
-  asymmetry is what makes a temperament rather than a mood ring.
-- **It's handed back as the agent's own feeling, never as a command.**
-  First-person identity-merge — not a `valence=-0.3` readout, not "respond in a
-  sad tone."
-- **It can dream** — a zero-LLM recombination that leaves a small, deliberately
-  *un-traceable* mood, so the agent can wake a little off with no cause it names.
-- **It's cache-safe**, so a persistent always-on companion isn't prohibitively
-  expensive to run.
+Its main design choices are:
 
-The honest pitch is not "novel mechanisms." It is "one clean, opinionated whole —
-measured, decaying, identity-merged, never commanding." See
-**[PHILOSOPHY.md](PHILOSOPHY.md)** for the reasoning behind each choice.
+1. **Memory has a lifecycle, not just a search index.** `Canon` stores compact
+   5W1H facts whose salience can decay, strengthen through repetition, and last
+   longer when recalled. Optional lifecycle tools add birth fingerprints,
+   fusion lineage, per-kind ageing clocks, pure death plans, tombstone-first
+   deletion, snapshot cleanup, and a hash-linked audit trail for detecting
+   unexplained mutation or disappearance.
+2. **Affect is estimated separately, not self-reported.** A configured
+   `AffectSource` produces the affect signal, so the reply model cannot freely
+   author its own persisted state.
+3. **State changes across several timescales.** Fast mood, slow temperament,
+   relationship, pressure, aftertaste, anticipation, and optional imprints are
+   integrated with configurable human-inspired asymmetric dynamics.
+4. **Capability is judged separately from mood.** An optional skill-memory
+   region uses human 1/2/3 ratings, promotion, retirement, and bounded
+   exploration rather than letting the reply model declare its own competence.
+5. **Proactive behaviour is gated, not merely scheduled.** The reference
+   scheduler combines idle time, presence, cooldowns, daily quotas, pending
+   topics, time windows, dreams, introspection, and diary behaviours through a
+   propose/dispatch/commit flow.
+6. **Persistent state is context, never a command.** The reply model receives a
+   compact first-person description rather than numeric controls or an
+   instruction such as “respond sadly.”
+7. **The injection path is cache-aware.** Static persona text can remain a stable
+   prefix while dynamic state rides on the latest user message.
+8. **Dreaming is an optional state experiment.** Zero-LLM recombination of
+   affect-tagged fragments can leave a temporary mood residue without supplying
+   the reply model with an explicit causal narrative.
+
+Its contribution is a concrete, inspectable, tested architecture with a specific
+ownership boundary between appraisal, persisted state, memory lifecycle, and
+reply generation — the parts most companions blur together are here kept
+deliberately, and visibly, apart.
+
+### A note on memory fingerprints
+
+The lifecycle package uses SHA-256 fingerprints and a hash-linked ledger for
+provenance and tamper evidence. This is **not encryption**, a digital signature,
+or protection against an attacker who can rewrite every file and recompute every
+hash. Its purpose is to make ordinary lineage, mutation, and deletion auditable
+when the ledger is kept as a trusted record.
 
 ---
 
@@ -72,7 +108,7 @@ print(eng.render())
 # pressure low, joy bright | building
 # ...
 
-# Feed it back to your reply model — cache-safely — as the agent's own sense:
+# Feed it back to your reply model — cache-safely — as first-person context:
 prompt = eng.inject("so what should we build next?")
 # -> your static system prompt stays untouched (and cached); the felt block
 #    rides along on the newest user message.
@@ -86,11 +122,76 @@ python examples/quickstart.py     # pure stdlib, no install needed
 
 ---
 
-## How it works
+## Memory beyond retrieval
+
+The default `Canon` is a flat-file, structured memory store rather than a vector
+database. Facts are represented as compact 5W1H records and can be reinforced,
+corrected, retracted, queried as-of a past time, recalled through a pluggable
+scorer, and expanded back to the transcript context that produced them.
+
+The optional `feltstate.memory.lifecycle` package models a longer path:
+
+```text
+source evidence → zero-LLM consistency gate → sealed distilled memory
+                → ageing / fusion / lineage → drill back to source context
+                → death plan → tombstone → managed-store deletion → audit chain
+```
+
+The collector refuses to delete records it cannot trace, living distilled
+memories can protect the facts they depend on, and the reaper can remove a dead
+record from the live store and explicitly supplied snapshots through a replayable
+pending transaction. Source-material rows outside those managed stores are only
+marked for deletion; the library does not claim cryptographic erasure.
+
+The new trace path is explicit rather than magical:
+
+- `check_consistency()` is a configurable lexical guardrail for a summary made
+  from source rows. It catches unsupported numbers, negation drift, actor drift,
+  spliced clauses, inflation, and hollow text without another model call. It is
+  **not** a semantic proof; non-space-delimited languages should provide their
+  own tokenizer and language tables.
+- `smelt()` combines that gate with born salience and a provenance fingerprint.
+  It rejects unsealed output by default; callers may explicitly opt into an
+  unsealed fallback.
+- `drill()` walks `src` and fusion `lineage` back through caller-owned memory
+  storage. `leaf_pointers()` keeps raw evidence even when only part of the
+  genealogy survives. `trace_contexts()` resolves each pointer's full `t0`–`t1`
+  range into transcript turns and can optionally verify exact source text.
+- `trace_memory()` joins the tree, leaf evidence, transcript ranges, affect trail,
+  lost-branch count, and optional source-hash verification into one report.
+- `verify_source_ptr()` checks exact source text against the pointer hash. It
+  does not restore deleted text, locate files automatically, or turn a hash into
+  encryption.
+
+```python
+from feltstate.memory.lifecycle import trace_memory
+
+report = trace_memory(
+    memory_fp,
+    fingerprint_store.get,
+    transcript_loader,
+    before=3,
+    after=3,
+    load_source_text=exact_source_text_loader,  # optional hash verification
+)
+```
+
+`Canon`, lifecycle fingerprints, and transcript storage remain composable
+pieces rather than a hidden automatic pipeline. A memory is only fully
+traceable when the application keeps its fingerprint, the referenced source
+archive, and a resolver/loader for those stores.
+
+```bash
+python examples/memory_lifecycle.py
+```
+
+---
+
+## How affect works
 
 ```
-            ┌─────────────┐   measures (ground truth, not self-report)
- messages → │ AffectSource │ ──────────────► AffectDelta (this turn's reading)
+            ┌─────────────┐   independently estimated (not self-report)
+ messages → │ AffectSource │ ──────────────► AffectDelta (this turn's estimate)
             └─────────────┘                        │
                                                     ▼
    ┌──────────────────── Engine.tick() integrates over time ───────────────────┐
@@ -108,20 +209,25 @@ python examples/quickstart.py     # pure stdlib, no install needed
  model      └─────────────┘  → first-person block, injected cache-safely
 ```
 
-The reply model reads the felt block and **decides for itself** how to act. The
-library never writes "be sad now" into the prompt — it only ever supplies state.
+The reply model uses the felt block as additional context when generating a
+reply. The library never writes "be sad now" into the prompt — it only supplies
+state.
 
 ### A fine-tuned source
 
-`KeywordSource` and `LLMSource` are the two example sources the core
-ships. A third lives in `feltstate.sources.vheart.VheartSource`: it
-loads a LoRA adapter from the Hub instead of writing rules or hitting an
-endpoint. Two illustrative adapters exist —
+`KeywordSource` and `LLMSource` are the two example sources shipped with the
+core. An optional third source, `feltstate.sources.vheart.VheartSource`, loads a
+LoRA adapter from the Hub. Two small experimental adapters are referenced:
 [`kaishuiji/vheart-affect-v8`](https://huggingface.co/kaishuiji/vheart-affect-v8)
-on a 1.5B base, and
+on a 1.5B base and
 [`kaishuiji/vheart-affect-v9`](https://huggingface.co/kaishuiji/vheart-affect-v9)
-on a 4B base. Training data is not released; the adapters are not
-benchmarked classifiers, just runnable examples of the interface.
+on a 4B base.
+
+Treat these adapters as interface demos — closer to research toys than
+production classifiers. Their training data is not released, there is no public
+reproducible benchmark in this repository, and no accuracy or suitability claim
+is made. They are useful for trying the integration path, not as a model
+recommendation.
 
 ```bash
 pip install "feltstate[vheart]"
@@ -143,9 +249,10 @@ neutral reading.
 
 *Off* this per-turn path, the agent **dreams**: `Engine.maybe_dream()` fires only
 when a single sleep-pressure accumulator (driven by arousal, not the clock) says
-it's tired enough — then recombines the agent's own charged material into a short,
-illogical dream that leaves a faint, **untraceable** mood it wakes with and can't
-trace back, which decays over the next hours like any feeling. See §5 of
+it's tired enough — then recombines stored, affect-tagged fragments into a short,
+illogical dream that leaves a faint mood residue whose causal thread is not
+surfaced to the reply model as an explicit cause, which decays over the next
+hours like any feeling. See §5 of
 [PHILOSOPHY.md](PHILOSOPHY.md).
 
 ---
@@ -156,32 +263,32 @@ trace back, which decays over the next hours like any feeling. See §5 of
 |---|---|
 | `feltstate/state.py` | The schemas: `AffectState`, `AffectDelta`, `Mood`, `Traits`, `Relationship`, `PressureState`. Plain dataclasses, JSON round-trip. |
 | `feltstate/config.py` | Every tunable in one place (EWMA rates, decay, pressure thresholds, label maps) + `PersonaDials`. |
-| `feltstate/sources/` | `AffectSource` interface + `KeywordSource` (rules, zero-dep) + `LLMSource` (any OpenAI-compatible endpoint). The pluggable "how does it feel?" seam. |
+| `feltstate/sources/` | `AffectSource` interface + `KeywordSource` (rules, zero-dep) + `LLMSource` (any OpenAI-compatible endpoint). The pluggable affect-estimation seam. |
 | `feltstate/affect/` | The dynamics: `pressure` (multi-bar release), `traits` (asymmetric adaptation), `imprint` (permanent marks), `relationship` (the bond evolving), `tide` (mood's rise & fall), `smooth` (label hysteresis). |
-| `feltstate/memory/` | `Canon` — a decaying 5W1H fact store (intensity fades, repetition reinforces, recall slows decay); `feeling` — optional evidence-weighted emotion per fact (a catch-phrase stays neutral, a felt thing accrues weight); `extract` — optional second-model fact extraction into it; `context` — expand a fact back to the surrounding transcript turns it came from; `skill` — an optional human-rated capability sub-region, walled off from affect. |
-| `feltstate/dream.py` | Off-path, zero-LLM: recombines the agent's charged material (`Fragment`s) into an *illogical* dream that leaves a faint, **untraceable** mood residue. Swap the `Phrasebook` for another language. |
+| `feltstate/memory/` | `Canon` — a decaying 5W1H fact store; `feeling` — optional evidence-weighted affect per fact; `recall` and bi-temporal history; `extract` and `context`; `skill` — a human-rated capability region; `lifecycle` — optional provenance fingerprints, lineage, ageing clocks, death planning, tombstone-first deletion, snapshot cleanup, and a hash-linked audit ledger. |
+| `feltstate/dream.py` | Off-path, zero-LLM: recombines the agent's charged material (`Fragment`s) into an *illogical* dream that leaves a faint mood residue not surfaced to the reply model as an explicit cause. Swap the `Phrasebook` for another language. |
 | `feltstate/sleep.py` | The single sleep-pressure accumulator (`Tiredness`) that decides *when* to dream: rises with arousal, gated by threshold + idle + a hard refractory floor, discharged by a dream. Homeostatic, not clock-driven. |
 | `feltstate/timeawareness/` | Fuzzy "how long since we last talked" + precise "now". |
 | `feltstate/render/` | `render_felt_block` (state → first-person block) + `build_injection` (cache-safe). |
 | `feltstate/engine.py` | `Engine` — the façade that ties it together: `tick()`, `render()`, `inject()`, `dream()`, `maybe_dream()`. |
-| `feltstate/companion/` | The orchestration + seams that make it a *runnable companion*: `LLMBackend` / `FrontendAdapter` / `VoiceAdapter` / `UserPresenceAdapter` adapters, `companion_turn` (one feel→reply→express→speak round), and `CompanionScheduler` (the proactive heartbeat: when to speak, introspect, dream, write a diary). `Companion` wires it all together. |
+| `feltstate/companion/` | A reference orchestration layer: `LLMBackend` / `FrontendAdapter` / `VoiceAdapter` / `UserPresenceAdapter` seams, `companion_turn` for one estimate→reply→express→speak round, and `CompanionScheduler` for optional proactive behaviours. |
 
 ---
 
 ## The companion loop
 
-The core engine gives an agent a felt inner life; `feltstate.companion` turns
-the parts into a *running companion*. Implement two adapters — a
-`FrontendAdapter` (your avatar/skin) and a `VoiceAdapter` (your TTS) — bring an
-`AffectSource`, a reply `LLMBackend`, and a persona, and `Companion` wires the
-rest: a foreground `say()` turn (feel → reply → express → speak) and a
-`CompanionScheduler` heartbeat that decides, on its own clock, when to speak
-unprompted, introspect, dream, or write a diary — all the timing and gating
-generalised from a real production companion, with the endpoints and prompts
-left to you.
+The core engine presents an agent with a persistent affective state in
+first-person form; `feltstate.companion` provides a *reference companion
+skeleton*. Implement two adapters — a `FrontendAdapter` (your avatar/skin) and
+a `VoiceAdapter` (your TTS) — bring an `AffectSource`, a reply `LLMBackend`,
+and a persona, and `Companion` wires the rest: a foreground `say()` turn (feel →
+reply → express → speak) and a `CompanionScheduler` heartbeat that checks configured timing and gates for
+optional proactive speech, introspection, dreams, or diary writes —
+all the timing and gating adapted from mechanisms used in a private companion
+prototype, with the endpoints and prompts left to you.
 
 ```bash
-python examples/companion.py   # a whole pet from four stub adapters — no deps, no network
+python examples/companion.py   # runnable stub companion — no deps, no network
 ```
 
 ---
@@ -191,15 +298,13 @@ python examples/companion.py   # a whole pet from four stub adapters — no deps
 - **Is:** a clean, runnable *reference implementation* of the ideas, dependency-
   free at the core. Bring your own `AffectSource`, persona text, and a place to
   store state.
-- **Isn't:** a finished product. There's no bundled personality, no trained
-  model, no conversational data, no avatar or TTS — those are yours. But it is
-  no longer just parts: the `feltstate.companion` layer is the whole
-  orchestration, so a runnable pet is *implement two adapters (a skin + a
-  voice) and bring a persona* away — see `examples/companion.py`. The system
-  this was extracted from was deeply tied to one character and user; that
-  coupling — and all private data — was deliberately left out.
-- The default `KeywordSource` is intentionally crude. The interesting affect
-  signal comes from `LLMSource` or a model you fine-tune for the job.
+- **Isn't:** a finished product. There is no bundled personality, validated
+  affect model, conversational data, avatar, or TTS. The
+  `feltstate.companion` package is a reference orchestration skeleton, not a
+  complete pet application. See `examples/companion.py` for a stubbed demo.
+- The default `KeywordSource` is intentionally crude. `LLMSource` is still an
+  estimate produced by another model call, and the optional Vheart adapters are
+  experimental demos rather than validated classifiers.
 
 ---
 

@@ -2,27 +2,29 @@
 
 :class:`Engine` is the one object an application talks to. It owns the persistent
 :class:`~feltstate.state.AffectState`, drives one full update per conversation
-turn, and renders the result back as a first-person felt block the agent reads as
-*its own* feeling. Everything underneath — the affect dynamics, the optional
+turn, and renders the result as a first-person context block for the reply
+model. Everything underneath — the affect dynamics, the optional
 permanent imprints, the time sense, the renderers — is wired together here so the
 caller never has to.
 
 The loop, in one sentence: a pluggable :class:`~feltstate.sources.base.AffectSource`
-*measures* how the agent feels this turn (ground truth, not self-report); the
-dynamics integrate that reading into slow traits, a fast mood, and a multi-bar
-pressure cooker (all of which decay back toward neutral when the conversation
-goes quiet); the result is rendered into discrete first-person phrasing and fed
-back **inside the latest user message** so the prompt cache stays warm.
+*estimates* a character reaction for this turn (appraised from the conversation,
+not self-reported by the reply model); the dynamics integrate that reading into slow
+traits, a fast mood, and a multi-bar pressure cooker (all of which decay back
+toward neutral when the conversation goes quiet); the result is rendered into
+discrete first-person phrasing and fed back **inside the latest user message**
+so the prompt cache stays warm.
 
 Three design rules carried through from the rest of the package:
 
-* **Ground truth, not self-report.** Affect comes from ``source.read(...)``, a
+* **Estimated, not self-reported.** Affect comes from ``source.read(...)``, a
   component separate from whatever model writes the agent's replies. The engine
-  never lets the reply model decide how it feels.
+  does not let the reply model directly author the stored state; the reading
+  remains an external estimate, not ground truth.
 * **Tool, not controller.** The engine produces *state* and renders it; it never
   injects an instruction ("be sad now"). :meth:`render` and :meth:`inject` hand
-  the agent its feeling and trust it to act as itself.
-* **Identity-merge.** :meth:`render` emits a first-person block (via
+  the reply model a descriptive state block without prescribing behaviour.
+* **First-person form.** :meth:`render` emits a first-person block (via
   :func:`~feltstate.render.felt.render_felt_block`), not a data dump.
 
 Quickstart::
@@ -37,14 +39,17 @@ Quickstart::
 
 from __future__ import annotations
 
-from datetime import datetime
+import logging
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .affect import (
     apply_trait_shift,
+    baseline_from_imprints,
     check_echo,
     compute_tide,
     decay_imprints,
+    echo_mood_nudge,
     ingest_milestones,
     smooth_labels,
     update_mood,
@@ -63,10 +68,54 @@ from .sources.base import AffectSource, latest_user_text
 from .state import AffectState
 from .timeawareness import now_phrase, time_since_phrase
 
+_log = logging.getLogger(__name__)
+
 __all__ = ["Engine"]
 
-# A dream is forgotten once its mood-nudge has decayed this close to baseline.
+# One "reference tick" of elapsed wall-clock time. Every per-tick decay rate in
+# the config (traits baseline pull, pressure idle_decay, relationship
+# tension_decay) is expressed *per reference tick*; the engine converts real
+# elapsed seconds into reference ticks so those decays become a function of
+# wall-clock time rather than of how often tick() is called. One minute is the
+# natural anchor — companion ticks are conversation turns minutes apart.
+_REFERENCE_TICK_SECONDS = 60.0
+
+# A dream's residue is forgotten once its tracked magnitude has decayed below
+# this — an explicit, decaying value, independent of the total mood (finding #16).
 _DREAM_FORGET_EPS = 0.04
+
+
+# A reading this unsure is not trusted as a usable signal — it is treated as
+# an idle tick (state decays on its own clocks, nothing is integrated from it).
+# Chief case: an estimation source that errored and returned a neutral,
+# low-confidence delta. Tune per source; sources that never emit low confidence
+# are unaffected.
+_CONFIDENCE_FLOOR = 0.2
+
+
+def _trusted_reading(delta):
+    """Gate a turn's reading by its ``confidence``.
+
+    ``confidence`` was a published field that nothing downstream consumed, so an
+    unsure or failed reading changed the agent exactly as much as a certain one.
+    Here a reading below :data:`_CONFIDENCE_FLOOR` has its *continuous* signal
+    neutralised: valence zeroed and discrete emotion labels dropped. The
+    integrators then treat the turn as idle for that channel — traits skip their
+    EWMA (no label), pressure cools, mood eases toward neutral — i.e. the state
+    decays on its own clocks instead of absorbing a signal it cannot trust. A
+    confident reading passes through untouched.
+
+    ``milestones`` are deliberately *kept*: a deep appraised event carries its
+    own severity and does not depend on the continuous reading being confident
+    (and a failed estimate returns no milestones anyway). This is a
+    trust *gate*, not a graded weight; graded confidence-scaling of each
+    integrator's learning rate is a larger, separable change.
+    """
+    if delta.confidence >= _CONFIDENCE_FLOOR:
+        return delta
+    from dataclasses import replace
+
+    return replace(delta, valence=0.0, labels=[])
 
 
 class Engine:
@@ -75,8 +124,8 @@ class Engine:
     Parameters
     ----------
     source
-        The :class:`~feltstate.sources.base.AffectSource` that *measures* each
-        turn's reading. This is the ground-truth seam — supply
+        The :class:`~feltstate.sources.base.AffectSource` that *estimates* each
+        turn's reading. This is the appraisal seam — supply
         :class:`~feltstate.sources.keyword.KeywordSource` for a zero-dependency
         baseline, :class:`~feltstate.sources.llm.LLMSource` for a model-backed
         reading, or your own subclass.
@@ -92,7 +141,7 @@ class Engine:
     persona
         Optional short, free-text description of who the character is. Passed
         straight through to ``source.read`` (plain sources ignore it; model-backed
-        ones fold it into their measurement prompt). Kept out of code on purpose
+        ones fold it into their estimation prompt). Kept out of code on purpose
         — it is the caller's to supply, and it never becomes an instruction.
     dials
         Optional :class:`~feltstate.config.PersonaDials` describing how this
@@ -143,20 +192,30 @@ class Engine:
         self._label_candidate: str | None = None
         self._label_streak: int = 0
         self._last_dream: str = ""  # most recent dream's text, for possible recall
+        # Explicit, decaying magnitude of the last dream's mood residue. Tracked
+        # (not inferred from the total mood) so an unrelated mood can neither keep
+        # a spent dream alive nor instantly cancel a fresh one (finding #16). It
+        # decays over elapsed time on the same fast-mood clock; when it falls below
+        # _DREAM_FORGET_EPS the dream text is forgotten. ``_dream_residue_ts``
+        # anchors that decay to when the dream applied (dreams can happen off the
+        # tick path), so it is a function of real elapsed time like every other
+        # decay — not of how many ticks happen to follow.
+        self._dream_residue: float = 0.0
+        self._dream_residue_ts: str | None = None
         self.tiredness: Tiredness = Tiredness()  # sleep-pressure accumulator (when to dream)
         self._load_meta()
 
     # ------------------------------------------------------------------ #
     # The per-turn update                                                #
     # ------------------------------------------------------------------ #
-    def tick(self, messages: list[dict]) -> AffectState:
+    def tick(self, messages: list[dict], *, now: datetime | None = None) -> AffectState:
         """Advance the felt state by one conversation turn and return it.
 
         ``messages`` is the recent conversation, oldest first, as
         ``[{"role": "user"|"assistant", "content": str}, ...]``. The steps, in
         order:
 
-        1. **Measure** this turn's reading with ``source.read`` (grounded in the
+        1. **Estimate** this turn's reading with ``source.read`` (grounded in the
            current state and persona).
         2. **Integrate** it: asymmetric-EWMA traits, then the trait-pulled felt
            mood.
@@ -170,8 +229,24 @@ class Engine:
            ``last_tick_ts``, and atomically save the state plus the engine
            sidecar.
 
-        The same wall clock (``datetime.now()``, naive local) drives every
-        time-based effect this turn, so the dynamics stay self-consistent.
+        The same wall clock drives every time-based effect this turn, so the
+        dynamics stay self-consistent. Pass ``now`` to drive an explicit clock
+        (a simulated or monotonic one); it defaults to
+        ``datetime.now(timezone.utc)`` (UTC-aware). If you supply a naive
+        ``now``, it is treated as UTC — a lossy assumption documented here so
+        it is not silent.
+
+        **Elapsed-time decay (frequency-invariance).** Every decay this turn —
+        the trait baseline pull, the pressure bar cooldown, the relationship
+        tension decay — is advanced by the *real elapsed time* since the previous
+        tick (converted to reference ticks of one minute), not by a flat one unit
+        per call. Ticking a quiet conversation every minute therefore decays the
+        state the same amount as ticking it every five minutes over the same span,
+        instead of five times as fast. Each tick is floored at a minimum of one
+        reference tick, so a burst of sub-minute ticks (and every caller that does
+        not care about wall-clock precision) still behaves exactly as one unit of
+        decay per call — the historical contract — while genuinely spaced-out ticks
+        decay by their real elapsed time.
 
         Calling this with an empty / neutral ``messages`` is the intended way to
         let the state *decay back toward neutral* between real turns: the source
@@ -179,15 +254,33 @@ class Engine:
         only their baseline pull, and the pressure bars cool — tick it on a timer
         and a quiet conversation eases home.
         """
-        now = datetime.now()
+        now = now or datetime.now(timezone.utc)
         ts = now.isoformat()
+        # Real elapsed time since the previous tick, in reference ticks (one
+        # minute each), floored at 1.0. The floor keeps sub-minute / rapid ticks
+        # at the historical "one unit of decay per call" while letting genuinely
+        # spaced ticks decay by their real elapsed span — the frequency-invariance
+        # seam threaded into every decay below.
+        elapsed_ticks = self._elapsed_ticks(self.state.last_tick_ts, now)
 
-        # (1) Measure the ground-truth reading for this turn.
+        # (1) Appraise this turn's reading via the source.
         delta = self.source.read(messages, baseline=self.state, persona=self.persona)
+        # A reading the source is too unsure of (chiefly: an estimate that
+        # errored and fell back to neutral) is not trusted as a usable signal —
+        # it is neutralised to a signal-less delta so this turn integrates as an
+        # idle tick (state decays on its own clocks) instead of absorbing an
+        # untrusted signal. Every integrator below sees this trust-gated reading;
+        # only the rolling history keeps the raw estimate for audit.
+        eff = _trusted_reading(delta)
 
-        # (2) Integrate into slow traits, then the trait-pulled fast mood.
-        traits = update_traits(self.state.traits, delta, self.config.traits)
-        mood = update_mood(self.state.mood, delta, traits, self.config.mood)
+        # (2) Integrate into slow traits, then the trait-pulled fast mood. The
+        #     trait baseline pull decays over the real elapsed span (finding #11);
+        #     the mood EWMA is a per-event smoothing of this turn's reading and is
+        #     left per-tick.
+        traits = update_traits(
+            self.state.traits, eff, self.config.traits, elapsed_ticks=elapsed_ticks
+        )
+        mood = update_mood(self.state.mood, eff, traits, self.config.mood)
         # Top-label hysteresis so a noisy source can't flip the shown label every
         # turn (keeps the rendered block cache-stable).
         mood.labels, self._label_candidate, self._label_streak = smooth_labels(
@@ -202,20 +295,46 @@ class Engine:
         # (3) Optional permanent imprints. Deep appraised events (the warmth /
         #     trauma families) leave a lasting mark; their one-time trait shift is
         #     applied *before* the pressure tick so power/floors see the updated
-        #     temperament this turn. Done on the imprint-adjusted `traits`.
-        traits = self._apply_imprints(delta, traits, messages, ts)
+        #     temperament this turn. Uses the raw delta: a milestone is a discrete
+        #     appraised event with its own severity, not gated by continuous
+        #     confidence (a failed reading returns no milestones anyway).
+        traits, fired_echoes = self._apply_imprints(delta, traits, messages, ts)
+        # An imprint the user just re-touched ("the deadline again", "that kind
+        # thing you said") gives the fast mood a small, *bounded* colouring in the
+        # imprint's own direction — an old hurt stings afresh, an old kindness warms
+        # afresh — proportional to how vivid the mark still is. It rides on top of
+        # the integrated mood, shows up in the rendered block / mood numbers, and
+        # then decays through the ordinary tick dynamics like any other feeling.
+        # Bounded by construction (a fraction of the gap to a sub-unit target), so
+        # repeated echoes cannot drive the mood to the extreme. State, not command.
+        mood = echo_mood_nudge(fired_echoes, mood)
 
         # (4) Evolve the bond with the user from this turn (its tension/safety
         #     feed the pressure tick), then run one full pressure-cooker tick.
-        relationship = update_relationship(self.state.relationship, delta, self.config.relationship)
+        relationship = update_relationship(self.state.relationship, eff, self.config.relationship)
+        # update_relationship applies exactly one reference tick of tension decay
+        # internally; make that decay elapsed-time-based too (finding #11) by
+        # draining the remaining (elapsed_ticks - 1) ticks here. Tension decay is
+        # subtractive with a floor at 0, which composes exactly, so one tick inside
+        # plus (k-1) here equals k ticks of decay — and at k == 1 nothing extra is
+        # drained (identical to the pre-change behaviour). Done in the engine
+        # because the relationship dynamics module owns only the single-tick step.
+        extra_ticks = max(0.0, elapsed_ticks - 1.0)
+        if extra_ticks > 0.0 and relationship.unresolved_tension > 0.0:
+            relationship.unresolved_tension = max(
+                0.0,
+                relationship.unresolved_tension
+                - self.config.relationship.tension_decay * extra_ticks,
+            )
         pressure = pressure_step(
             self.state.pressure,
-            delta=delta,
+            delta=eff,
             traits=traits,
             relationship=relationship,
             dials=self.dials,
             cfg=self.config.pressure,
             ts=ts,
+            elapsed_ticks=elapsed_ticks,
         )
 
         # Commit the integrated layers back onto the state.
@@ -247,10 +366,16 @@ class Engine:
 
         # (6) Sleep pressure: accrue tiredness for this tick's activity (it drives
         #     *when* the agent next dreams), and forget the last dream once its
-        #     residue has decayed back to baseline (text lifespan = mood lifespan).
+        #     tracked residue has decayed away (text lifespan = mood lifespan).
         self.tiredness.rise(self.state.mood.arousal, now, self.config.tiredness)
-        if self._last_dream and self._dream_residue_spent():
-            self._last_dream = ""
+        # Decay the explicit dream-residue magnitude over the elapsed span, on the
+        # same fast-mood clock the nudge itself rides (finding #16), then forget
+        # the dream text once it is spent. Tracking the residue explicitly means a
+        # later unrelated mood can neither prop up a spent dream nor cancel a fresh
+        # one — only real elapsed time forgets it. Anchored to its *own* timestamp
+        # (set when the dream applied), not to last_tick_ts, so a dream that
+        # happened off the tick path still decays by real elapsed time.
+        self._decay_dream_residue(now)
 
         self.save()
         return self.state
@@ -267,14 +392,19 @@ class Engine:
         New deep milestones become imprints (deduped by stable id); each fresh
         imprint's one-time trait shift is applied exactly once. Existing imprints
         age by elapsed time and may flare ("echo") when the user raises their
-        subject again. Returns the (possibly) shifted traits; the imprint list is
-        updated in place on ``self``.
+        subject again. Returns ``(traits, fired)`` — the (possibly) shifted traits
+        and the imprints that echoed this turn (empty when none did); the caller
+        turns ``fired`` into a bounded colouring of the felt mood. The imprint list
+        is updated in place on ``self``.
         """
         # Age the existing imprints to *now* first (cheap; tiny daily decay).
+        fired: list[Imprint] = []
         if self.imprints:
             decay_imprints(self.imprints, ts)
-            # An echo only re-vivifies intensity; it does not re-shift traits.
-            check_echo(self.imprints, latest_user_text(messages), ts)
+            # An echo re-vivifies intensity and (via the returned fired list, wired
+            # up in tick()) gives the touched memory a small bounded push on the
+            # felt mood — it does *not* re-shift the permanent traits.
+            fired = check_echo(self.imprints, latest_user_text(messages), ts)
 
         # Ingest any new deep events from this turn's milestones.
         new_imprints = ingest_milestones(getattr(delta, "milestones", None) or [], ts)
@@ -295,10 +425,19 @@ class Engine:
             self.imprints.sort(key=lambda i: (i.intensity, i.severity), reverse=True)
             del self.imprints[self.max_imprints :]
 
-        return traits
+        # Recompute the persistent trait resting point from the imprints we are
+        # *keeping* (after any trim above). This is what makes an imprint's lift
+        # durable — update_traits relaxes each trait toward this shifted point, so
+        # the mark survives arbitrarily many idle ticks instead of decaying back to
+        # neutral. Deriving it from the kept list (rather than mutating it as each
+        # imprint arrives) means a trimmed imprint's offset is dropped here too, so
+        # trimming can never leave an orphaned permanent effect.
+        traits.baseline = baseline_from_imprints(self.imprints)
+
+        return traits, fired
 
     # ------------------------------------------------------------------ #
-    # Rendering the felt state back to the agent                         #
+    # Rendering affective state for the reply model                         #
     # ------------------------------------------------------------------ #
     def render(self, *, header: str = "[how I feel right now]") -> str:
         """Render the current state as a first-person felt block.
@@ -317,7 +456,7 @@ class Engine:
         numbers drift only slightly render byte-identically — which is what keeps
         :meth:`inject` cheap to cache.
         """
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         since = time_since_phrase(self._last_user_ts, now, self.config.time)
         present = now_phrase(now)
 
@@ -349,7 +488,7 @@ class Engine:
     # ------------------------------------------------------------------ #
     # Dreaming (optional, off the per-turn path)                         #
     # ------------------------------------------------------------------ #
-    def dream(self, *, fragments: list | None = None, phrasebook=None, rng=None):
+    def dream(self, *, fragments: list | None = None, phrasebook=None, rng=None, now=None):
         """Produce one dream and apply its faint residue to the felt mood.
 
         Call this on a *sleep* cycle — between sessions, or on a long idle —
@@ -359,10 +498,13 @@ class Engine:
         recombines it illogically (see :mod:`feltstate.dream`), nudges the mood by
         the dream's small residue (which then decays through the ordinary tick
         dynamics), stashes the dream text for possible later recall, and returns
-        the :class:`~feltstate.dream.Dream`.
+        the :class:`~feltstate.dream.Dream`. ``now`` stamps the residue's decay
+        anchor (defaults to ``datetime.now(timezone.utc)``), so the tracked residue ages by
+        real elapsed time from when the dream happened.
 
-        The reply model is never told to feel anything — the agent simply wakes
-        slightly moved, with no cause it can trace.
+        The reply model is never told to feel anything — the residue shifts the
+        estimated mood with no explicit prompt attribution; the cause is not
+        surfaced to the model.
         """
         from .dream import DEFAULT_PHRASEBOOK, gather_fragments
         from .dream import dream as _dream
@@ -374,12 +516,20 @@ class Engine:
             cfg=self.config.dream,
             rng=rng,
         )
-        # Apply the residue as a small, untraceable nudge to the felt mood; it
+        # Apply the residue as a small, causally-opaque nudge to the felt mood; it
         # then carries and decays through the ordinary tick dynamics.
         m = self.state.mood
         m.valence = max(-1.0, min(1.0, m.valence + d.valence))
         m.arousal = max(0.0, min(1.0, m.arousal + d.arousal))
         self._last_dream = d.text
+        # Seed the explicit, decaying residue magnitude with the size of the nudge
+        # this dream just applied (finding #16), and anchor its decay clock to when
+        # the dream happened. Subsequent ticks decay it over elapsed time; the dream
+        # text is remembered exactly as long as the residue is, regardless of what
+        # other moods come and go. A null dream (no text / no nudge) seeds nothing
+        # and is not remembered.
+        self._dream_residue = abs(float(d.valence)) + abs(float(d.arousal))
+        self._dream_residue_ts = (now or datetime.now(timezone.utc)).isoformat()
         self.save()
         return d
 
@@ -406,21 +556,71 @@ class Engine:
         the agent is *not yet* tired enough, it simply isn't ready to sleep — in a
         fuller system that idle moment is where introspection would run instead.
         """
-        now = now or datetime.now()
+        now = now or datetime.now(timezone.utc)
         self.tiredness.rise(self.state.mood.arousal, now, self.config.tiredness)
         if not self.tiredness.ready(now, idle_minutes, self.config.tiredness):
             self.save()  # persist the risen pressure even when we don't dream
             return None
-        d = self.dream(fragments=fragments, phrasebook=phrasebook, rng=rng)
+        d = self.dream(fragments=fragments, phrasebook=phrasebook, rng=rng, now=now)
         self.tiredness.discharge(now)
         self.save()
         return d
 
-    def _dream_residue_spent(self) -> bool:
-        """True once a dream's faint mood-nudge has decayed back to baseline — at
-        which point the dream is forgotten (its stored text is dropped)."""
-        m = self.state.mood
-        return abs(m.valence) < _DREAM_FORGET_EPS and abs(m.arousal - 0.4) < _DREAM_FORGET_EPS
+    @staticmethod
+    def _elapsed_ticks(prev_ts: str | None, now: datetime) -> float:
+        """Real elapsed time since ``prev_ts`` in reference ticks, floored at 1.0.
+
+        A reference tick is :data:`_REFERENCE_TICK_SECONDS` (one minute). This is
+        the frequency-invariance seam: every decay in :meth:`tick` scales by this,
+        so the same real elapsed time decays the state the same amount however
+        often :meth:`tick` is called. The 1.0 floor keeps rapid / sub-minute ticks
+        (and any caller ignoring wall-clock precision) at the historical one-unit-
+        per-call behaviour; genuinely spaced ticks decay by their real span. A
+        missing or unparseable / non-monotonic previous timestamp yields the floor.
+
+        **Legacy naive timestamps.** State files written before the UTC migration
+        (``datetime.now()`` without ``timezone.utc``) may carry naive ISO strings.
+        When ``prev_ts`` has no tzinfo suffix it is assumed UTC here — a lossy
+        assumption if the saving process was in a non-UTC timezone, but the
+        alternative (a TypeError at subtraction time) is worse. New writes from
+        :meth:`tick` always produce UTC-aware ISO strings, so the issue heals
+        after the first tick on any migrated state file.
+        """
+        if not prev_ts:
+            return 1.0
+        try:
+            prev = datetime.fromisoformat(prev_ts.replace("Z", "+00:00"))
+            if prev.tzinfo is None:
+                prev = prev.replace(tzinfo=timezone.utc)
+        except (ValueError, TypeError):
+            return 1.0
+        # Normalize `now` to the same awareness so the subtraction never raises.
+        _now = now
+        if _now.tzinfo is None:
+            _now = _now.replace(tzinfo=timezone.utc)
+        elapsed_s = (_now - prev).total_seconds()
+        return max(1.0, elapsed_s / _REFERENCE_TICK_SECONDS)
+
+    def _decay_dream_residue(self, now: datetime) -> None:
+        """Age the tracked dream residue by real elapsed time; forget when spent.
+
+        The residue rides the same fast-mood clock the nudge itself decays on:
+        ``residue *= (1 - va_alpha) ** elapsed_ticks`` over the span since the
+        residue's own anchor (advanced to ``now`` each call). Because it is an
+        explicit tracked value — not a guess read off the total mood — an unrelated
+        later mood can neither keep a spent dream alive nor cancel a fresh one;
+        only elapsed time forgets it. Below :data:`_DREAM_FORGET_EPS` the residue
+        is zeroed and the dream text dropped. No-op once there is nothing to age.
+        """
+        if self._dream_residue <= 0.0:
+            return
+        ticks = self._elapsed_ticks(self._dream_residue_ts, now)
+        self._dream_residue *= (1.0 - self.config.mood.va_alpha) ** ticks
+        self._dream_residue_ts = now.isoformat()
+        if self._dream_residue < _DREAM_FORGET_EPS:
+            self._dream_residue = 0.0
+            self._dream_residue_ts = None
+            self._last_dream = ""
 
     # ------------------------------------------------------------------ #
     # Skill region (optional; needs a Canon). Thin pass-throughs.        #
@@ -478,29 +678,90 @@ class Engine:
     # Persistence                                                        #
     # ------------------------------------------------------------------ #
     def save(self) -> None:
-        """Persist the state and the engine sidecar (both atomic writes)."""
+        """Persist the state and the engine sidecar.
+
+        Each file is written atomically (write-to-tmp then rename), but the two
+        writes are **not** transactionally consistent as a pair — a crash between
+        them leaves the state file updated and the sidecar stale (or vice versa).
+        Acceptable for the current private-prototype phase; a caller that needs
+        cross-file consistency should wrap both writes in its own atomic boundary.
+        """
         self.state.save(self.state_path)
         self._save_meta()
 
     def _load_meta(self) -> None:
-        """Best-effort load of the engine sidecar (last-user ts + imprints)."""
+        """Best-effort load of the engine sidecar (last-user ts + imprints).
+
+        Invalid JSON *or schema shape* is quarantined instead of crashing boot or
+        being silently overwritten on the next save. Values are parsed into
+        locals first so a partially corrupt sidecar cannot half-mutate the engine.
+        """
         if not self._meta_path.is_file():
             return
         try:
             import json
 
             data = json.loads(self._meta_path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+            if not isinstance(data, dict):
+                raise ValueError("engine meta root must be a JSON object")
+
+            last_user_ts = data.get("last_user_ts") or None
+            raw_imprints = data.get("imprints") or []
+            if not isinstance(raw_imprints, list):
+                raise ValueError("engine meta imprints must be a JSON array")
+            imprints = [Imprint.from_dict(d) for d in raw_imprints if isinstance(d, dict)]
+
+            raw_labels = data.get("labels_committed") or []
+            if not isinstance(raw_labels, list):
+                raise ValueError("engine meta labels_committed must be a JSON array")
+            labels_committed = [str(label) for label in raw_labels]
+            label_candidate = data.get("label_candidate") or None
+            label_streak = int(data.get("label_streak") or 0)
+            last_dream = str(data.get("last_dream", "") or "")
+            dream_residue = float(data.get("dream_residue", 0.0) or 0.0)
+            dream_residue_ts = data.get("dream_residue_ts") or None
+            tiredness = Tiredness.from_dict(data.get("tiredness"))
+        except (OSError, ValueError, TypeError, AttributeError) as exc:
+            quarantined = self._quarantine_meta()
+            where = (
+                f"quarantined to {quarantined.name}"
+                if quarantined is not None
+                else "could not be quarantined (left in place)"
+            )
+            _log.warning(
+                "feltstate: engine meta file %s corrupt/unreadable (%s); %s; "
+                "continuing with default bookkeeping",
+                self._meta_path,
+                exc,
+                where,
+            )
             return
-        self._last_user_ts = data.get("last_user_ts") or None
-        self.imprints = [
-            Imprint.from_dict(d) for d in (data.get("imprints") or []) if isinstance(d, dict)
-        ]
-        self._labels_committed = list(data.get("labels_committed") or [])
-        self._label_candidate = data.get("label_candidate") or None
-        self._label_streak = int(data.get("label_streak") or 0)
-        self._last_dream = str(data.get("last_dream", "") or "")
-        self.tiredness = Tiredness.from_dict(data.get("tiredness"))
+
+        self._last_user_ts = last_user_ts
+        self.imprints = imprints
+        self._labels_committed = labels_committed
+        self._label_candidate = label_candidate
+        self._label_streak = label_streak
+        self._last_dream = last_dream
+        self._dream_residue = dream_residue
+        self._dream_residue_ts = dream_residue_ts
+        self.tiredness = tiredness
+
+    def _quarantine_meta(self) -> Path | None:
+        """Move a corrupt engine sidecar aside, preserving its original bytes."""
+        try:
+            import time
+
+            stamp = int(time.time())
+            dest = self._meta_path.with_name(f"{self._meta_path.name}.corrupt-{stamp}")
+            n = 1
+            while dest.exists():
+                dest = self._meta_path.with_name(f"{self._meta_path.name}.corrupt-{stamp}.{n}")
+                n += 1
+            self._meta_path.replace(dest)
+            return dest
+        except OSError:
+            return None
 
     def _save_meta(self) -> None:
         """Atomically write the engine sidecar beside the state file."""
@@ -513,6 +774,8 @@ class Engine:
             "label_candidate": self._label_candidate,
             "label_streak": int(self._label_streak),
             "last_dream": self._last_dream,
+            "dream_residue": round(float(self._dream_residue), 6),
+            "dream_residue_ts": self._dream_residue_ts,
             "tiredness": self.tiredness.to_dict(),
         }
         p = self._meta_path

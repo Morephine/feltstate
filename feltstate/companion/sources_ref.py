@@ -67,12 +67,18 @@ class PendingTopicsSource(BehaviorSource):
     def propose(self, state, now, presence, cfg):
         if not _ordinary_ok(state, now.timestamp(), presence, cfg):
             return None
+        # Read only — the topic is not marked consumed until commit(), so a
+        # failed delivery leaves it pending to be raised again next tick.
+        return self.topics.read_oldest_unconsumed()
+
+    def commit(self, state, now, cfg):
+        # Delivery confirmed: consume the same oldest-unconsumed topic we
+        # proposed (stable within a tick — no other writer this heartbeat).
         topic = self.topics.read_oldest_unconsumed()
         if topic is None:
-            return None
+            return
         self.topics.mark_consumed(topic)
         _mark_ordinary_fire(state, now.timestamp())
-        return topic
 
 
 class TimeWindowSource(BehaviorSource):
@@ -85,18 +91,30 @@ class TimeWindowSource(BehaviorSource):
         # windows: [(start_hour, end_hour, payload), ...]
         self.windows = list(windows)
 
+    def _eligible_window(self, state, now) -> int | None:
+        """Index of the first window open now that hasn't fired today, else None."""
+        today = now.strftime("%Y-%m-%d")
+        hour = now.hour
+        fired = state.get("time_window_fired", {})
+        for i, (start, end, _payload) in enumerate(self.windows):
+            if start <= hour < end and fired.get(str(i)) != today:
+                return i
+        return None
+
     def propose(self, state, now, presence, cfg):
         if not _ordinary_ok(state, now.timestamp(), presence, cfg):
             return None
-        today = now.strftime("%Y-%m-%d")
-        hour = now.hour
-        fired = state.setdefault("time_window_fired", {})
-        for i, (start, end, payload) in enumerate(self.windows):
-            if start <= hour < end and fired.get(str(i)) != today:
-                fired[str(i)] = today
-                _mark_ordinary_fire(state, now.timestamp())
-                return payload
-        return None
+        i = self._eligible_window(state, now)
+        if i is None:
+            return None
+        return self.windows[i][2]
+
+    def commit(self, state, now, cfg):
+        i = self._eligible_window(state, now)
+        if i is None:
+            return
+        state.setdefault("time_window_fired", {})[str(i)] = now.strftime("%Y-%m-%d")
+        _mark_ordinary_fire(state, now.timestamp())
 
 
 class FocusDurationSource(BehaviorSource):
@@ -122,6 +140,8 @@ class FocusDurationSource(BehaviorSource):
             app = self.app_detector()
         except Exception:
             app = None
+        # Focus-clock tracking is pure observation of the world — it advances
+        # regardless of whether this tick fires, so it stays out of commit().
         if not app:
             state["focus_app"] = ""
             return None
@@ -145,9 +165,15 @@ class FocusDurationSource(BehaviorSource):
             payload = None
         if not payload:
             return None
-        state["focus_fired_app"] = app
-        _mark_ordinary_fire(state, now_ts)
+        # The once-per-stretch flag and the quota are consumed only on delivery.
         return payload
+
+    def commit(self, state, now, cfg):
+        app = state.get("focus_app")
+        if not app:
+            return
+        state["focus_fired_app"] = app
+        _mark_ordinary_fire(state, now.timestamp())
 
 
 class RandomSource(BehaviorSource):
@@ -175,9 +201,11 @@ class RandomSource(BehaviorSource):
             return None
         if self.rng.random() >= self.probability:
             return None
-        payload = self.rng.choice(self.payloads)
+        # Roll the payload now; the quota slot is spent only on confirmed delivery.
+        return self.rng.choice(self.payloads)
+
+    def commit(self, state, now, cfg):
         _mark_ordinary_fire(state, now.timestamp())
-        return payload
 
 
 class BurstSource(RandomSource):
@@ -207,6 +235,18 @@ class IntrospectSource(BehaviorSource):
         self.payload = payload
         self.windows = windows
 
+    def _windows(self, cfg):
+        return self.windows if self.windows is not None else cfg.time_windows
+
+    def _eligible_window(self, state, now, cfg) -> int | None:
+        today = now.strftime("%Y-%m-%d")
+        hour = now.hour
+        fired = state.get("introspect_window_fired", {})
+        for i, (start, end) in enumerate(self._windows(cfg)):
+            if start <= hour < end and fired.get(str(i)) != today:
+                return i
+        return None
+
     def propose(self, state, now, presence, cfg):
         now_ts = now.timestamp()
         if not past_boot_grace(state, now_ts, cfg):
@@ -215,16 +255,18 @@ class IntrospectSource(BehaviorSource):
             return None
         if now_ts - float(state.get("introspect_last_ts", 0.0)) < cfg.introspect_gap_s:
             return None
-        windows = self.windows if self.windows is not None else cfg.time_windows
-        today = now.strftime("%Y-%m-%d")
-        hour = now.hour
-        fired = state.setdefault("introspect_window_fired", {})
-        for i, (start, end) in enumerate(windows):
-            if start <= hour < end and fired.get(str(i)) != today:
-                fired[str(i)] = today
-                state["introspect_last_ts"] = now_ts
-                return self.payload
-        return None
+        if self._eligible_window(state, now, cfg) is None:
+            return None
+        # Anti-spam markers (last-ts + window flag) are set on delivery, so a
+        # failed introspection this tick is retried rather than silently skipped.
+        return self.payload
+
+    def commit(self, state, now, cfg):
+        i = self._eligible_window(state, now, cfg)
+        if i is None:
+            return
+        state.setdefault("introspect_window_fired", {})[str(i)] = now.strftime("%Y-%m-%d")
+        state["introspect_last_ts"] = now.timestamp()
 
 
 class DreamSource(BehaviorSource):

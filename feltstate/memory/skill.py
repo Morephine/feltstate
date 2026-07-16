@@ -13,8 +13,8 @@ tell you and an emotion reading can't reliably tell you either (both were tried
 and rejected). A rating is given per *task* and shared across the skills that task
 used, so a noisy per-task score becomes a clean per-skill signal over volume.
 
-Lifecycle (all the agent's own tools + the human's ratings; no daemon, no
-behind-the-back pass):
+Lifecycle (explicit tools plus human ratings; no hidden daemon or background
+rewrite pass):
 
 * Every skill is born **grey** (provisional, low-confidence — :func:`add_skill`).
   The grey zone decays *slowly* (a long lease to be tried and rated).
@@ -25,14 +25,13 @@ behind-the-back pass):
 * :func:`record_rating` / :func:`record_task_rating` fold a human rating in.
   Three "3" ratings with no "1" → **auto-promote** to the confirmed store; enough
   "1"s → **retire**; a mixed record stays grey, flagged unstable.
-* :func:`review_skills` lets the agent see its whole library during introspection
-  to tidy it (merge, retire via ``Canon.retract``, ratify via :func:`ratify_skill`).
+* :func:`review_skills` exposes the skill library for an explicit review step
+  (merge, retire via ``Canon.retract``, ratify via :func:`ratify_skill`).
 * :class:`RatingGate` rate-limits the ask so consecutive tasks never nag the human.
 
-Hard lines (PHILOSOPHY.md): tool-not-controller (everything produces state the
-agent reads), ground-truth-not-self-report (the rating is the *human's*, never the
-reply model's), identity-merge / no attention skew (skills are retrieve-on-demand,
-never in view()/render(), never permanent).
+Hard lines (PHILOSOPHY.md): tool-not-controller, human ratings rather than
+reply-model self-ratings, and retrieve-on-demand skills that are never placed
+permanently in ``view()`` or ``render()``.
 """
 
 from __future__ import annotations
@@ -74,7 +73,7 @@ SKILL_ACTION = "procedure"
 
 # Who may move a skill's rating. The reply model is NOT here: it cannot grade its
 # own work (a self-reported "that went well" is a structural no-op). "human" is the
-# real-use verdict (the gold signal); the others are objective ground-truth that
+# real-use verdict (the gold signal); the others are externally observed signals that
 # can only ever lower a skill (a tool error / a user correction is a "1").
 OBSERVED_SOURCES = frozenset({"human", "user_correction", "tool_exit", "verifier", "harness"})
 
@@ -228,7 +227,7 @@ def record_rating(
         raise ValueError("rating must be 1, 2 or 3")
     rating = int(rating)
     if source not in OBSERVED_SOURCES:
-        return {}  # ground-truth gate: a self-reported source moves nothing
+        return {}  # independently-observed gate: a self-reported source moves nothing
 
     now_dt = now or datetime.now(timezone.utc)
     now_iso = now_dt.isoformat()
@@ -290,7 +289,10 @@ def record_task_rating(
     cfg = cfg or canon.cfg
     now = now or datetime.now(timezone.utc)
     out = []
-    for sid in skill_ids or []:
+    # One task is one observation per skill: dedup the ids (order-preserving) so a
+    # task that happens to list the same skill twice can't inflate it into several
+    # ratings — n3 would run away and a skill could be "proven" by one task.
+    for sid in dict.fromkeys(skill_ids or []):
         r = record_rating(canon, sid, rating, source=source, cfg=cfg, now=now)
         if r:
             out.append(r)
@@ -396,11 +398,10 @@ def review_skills(canon, *, limit: int = 50, include_gray: bool = True, cfg=None
     """Read-only overview of the whole skill library, for introspection.
 
     Lists confirmed (and grey) skills sorted by utility then recency — does NOT bump
-    recalls (reviewing is reflection, not use). This is what the agent reads when it
-    tidies its own skills during introspection: merge duplicates (``add_skill`` a
-    clean one + ``Canon.retract`` the messy), retire dead ones, ratify the
-    ``unstable`` greys it has decided to trust. The *when* and the *judgement* are
-    the agent's; this only hands it the list.
+    recalls (reviewing is reflection, not use). The returned list can be used by
+    an explicit review step to merge duplicates, retire obsolete skills, or
+    ratify ``unstable`` entries. This function only returns data; it does not make
+    those decisions.
     """
     cfg = cfg or canon.cfg
     now = datetime.now(timezone.utc)

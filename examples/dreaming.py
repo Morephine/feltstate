@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""dreaming — give the agent a mood it can't trace back.
+"""dreaming — apply a mood residue whose explicit cause is not surfaced.
 
 Run it directly, no setup, no network, no model::
 
@@ -7,16 +7,15 @@ Run it directly, no setup, no network, no model::
 
 What it demonstrates
 --------------------
-Everything else in feltstate makes the agent's mood *honest but explainable* —
-every shift has a visible cause you can point at. Real inner lives also have
-moods with **no** retrievable cause: you wake a little off, and the truthful
-answer to "why?" is *I don't know, I had strange dreams.* This is the module
-that manufactures that — and it does it **without a language model**, on purpose.
+Most state changes in feltstate have an explicit input you can trace. This demo
+adds a small state shift whose source fragments are not placed in the reply-model
+context. It does this **without a language model** and does not claim to simulate
+human dreaming.
 
 The pipeline is pure standard library:
 
-1. **Gather** the agent's *charged* material — desires and remembered peaks, each
-   tagged with the affect it was felt at. (Here we hand-build a small store; in a
+1. **Gather** stored *charged* fragments — desires and remembered peaks, each
+   tagged with an affect estimate. (Here we hand-build a small store; in a
    real app this comes from your own memory.)
 2. **Stitch** a few of them, drawn by emotional charge, into a short *illogical*
    dream — connectives that morph and jump and never resolve, then slip away. A
@@ -25,12 +24,12 @@ The pipeline is pure standard library:
 3. **Residue** — the dream leaves a faint, charge-weighted mood. When the drawn
    fragments *clash* (a longing next to a fear) the night runs hotter and its
    valence muddies toward neutral. That wisp is added to the mood and then decays
-   through the ordinary dynamics like any other feeling.
+   through the ordinary configured dynamics.
 
 The dream text itself is ephemeral and usually never spoken. What persists is the
-residue: a feeling the agent genuinely has, sourced from its own real material,
-whose causal thread has been cut. Asked why it's wistful this morning, it can only
-say it had odd dreams — and that unexplainability *is* the feature.
+residue: a persisted affective nudge derived from stored fragments, while its
+explicit causal thread is omitted from the reply-model context. A later reply can reflect the shift without receiving a detailed causal
+explanation.
 
 Seeds are fixed, so every run prints the same dreams.
 """
@@ -86,11 +85,11 @@ def morning_mood(valence: float, arousal: float) -> str:
 
 
 def charged_material() -> list[Fragment]:
-    """The agent's own charged store: a few desires and a few remembered peaks.
+    """A small store of charged fragments: desires and remembered peaks.
 
-    Each fragment carries the affect it was felt at — that is what makes the
-    residue real rather than random. Rich material like this (not the thin,
-    label-only set the engine can scrape from history on its own) is what makes
+    Each fragment carries an affect estimate, which makes the residue depend on
+    stored data rather than only random selection. Rich material like this (not the thin,
+    label-only set the engine can derive from history) is what makes
     vivid dreams; in a real app it comes from your memory layer.
     """
     return [
@@ -136,7 +135,7 @@ def main() -> None:
     # -- Off the per-turn path: a dream nudging a real Engine's mood, which then
     #    decays back like any other feeling. This is how you'd wire it on a sleep
     #    cycle — between sessions, or after a long idle — never every message.
-    banner("3) A dream nudging a live mood — then decaying like any feeling")
+    banner("3) A dream-like event nudging state — then decaying normally")
     tmpdir = Path(tempfile.mkdtemp(prefix="feltstate_dream_"))
     eng = Engine(source=KeywordSource(), state_path=str(tmpdir / "state.json"))
     print(f"  before sleep : mood v={eng.state.mood.valence:+.3f} a={eng.state.mood.arousal:.3f}")
@@ -146,7 +145,9 @@ def main() -> None:
         f"  on waking    : mood v={eng.state.mood.valence:+.3f} a={eng.state.mood.arousal:.3f}"
         f"   ({morning_mood(d.valence, d.arousal)})"
     )
-    print("\n  The agent now carries this mood with no cause it can name. It is not")
+    print(
+        "\n  The state now contains a small residue without an explicit cause in context. It is not"
+    )
     print("  told it had a bad/good night — only left slightly altered. As the day")
     print("  goes on (quiet ticks), it eases back toward neutral on its own:\n")
     for i in range(1, 5):
@@ -180,11 +181,12 @@ def main() -> None:
         "Takeaways:\n"
         "  * the dream was assembled with NO model — incoherence is the point,\n"
         "    and a language model writes coherent stories;\n"
-        "  * the residue is REAL (sourced from the agent's own charged material)\n"
-        "    but UNTRACEABLE (its causal thread is cut on purpose);\n"
-        "  * it is STATE, not a command — the agent wakes altered and decides for\n"
-        "    itself what to do with a mood it can't explain;\n"
-        "  * and it DECAYS like any other feeling, through the ordinary dynamics."
+        "  * the residue is persisted state derived from stored charged fragments\n"
+        "    but not surfaced to the reply model as an explicit cause (its causal\n"
+        "    thread is cut on purpose);\n"
+        "  * it is STATE, not a command — later generation can reflect the shift\n"
+        "    without receiving an explicit cause;\n"
+        "  * and it DECAYS through the configured state dynamics."
     )
 
 

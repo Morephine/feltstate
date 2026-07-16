@@ -36,8 +36,10 @@ try:
     from .imprint import (
         Imprint,
         apply_trait_shift,
+        baseline_from_imprints,
         check_echo,
         decay_imprints,
+        echo_mood_nudge,
         ingest_milestones,
     )
 except Exception:  # pragma: no cover - module may not be present yet
@@ -47,8 +49,10 @@ else:
         "Imprint",
         "ingest_milestones",
         "apply_trait_shift",
+        "baseline_from_imprints",
         "decay_imprints",
         "check_echo",
+        "echo_mood_nudge",
     ]
 
 # --- tide (rising/falling shape of mood) ---

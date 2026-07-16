@@ -1,12 +1,12 @@
-"""feltstate.memory — a decaying 5W1H fact store the agent reads and writes itself.
+"""feltstate.memory — a decaying 5W1H fact store with explicit recall and write tools.
 
-*Memory is a tool, not a controller.* The agent decides when to recall or record
-a fact; the library only handles decay, dedup, and visibility. Nothing here is
-auto-injected into a prompt.
+*Memory is a tool, not a controller.* Callers decide when to recall or record a
+fact; the library handles decay, deduplication, and visibility. Nothing here is
+automatically injected into a prompt.
 """
 
 from .canon import Canon
-from .context import get_turn_context, load_turns
+from .context import get_turn_context, get_turn_range_context, load_turns
 from .extract import FactExtractor, LLMFactExtractor, commit_to_canon
 from .skill import (
     RatingGate,
@@ -23,6 +23,7 @@ from .skill import (
 __all__ = [
     "Canon",
     "get_turn_context",
+    "get_turn_range_context",
     "load_turns",
     "FactExtractor",
     "LLMFactExtractor",

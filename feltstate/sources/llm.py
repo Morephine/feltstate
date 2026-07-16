@@ -1,19 +1,18 @@
-"""feltstate.sources.llm — measure affect with an OpenAI-compatible endpoint.
+"""feltstate.sources.llm — estimate affect with an OpenAI-compatible endpoint.
 
-This source asks a chat model to *measure* how the character feels in reaction
+This source asks a chat model to *estimate* a character reaction
 to the latest user input, and returns the result as an
 :class:`~feltstate.state.AffectDelta`. It talks to any endpoint that speaks the
 OpenAI ``POST {base_url}/chat/completions`` shape — a local server (Ollama,
 llama.cpp, vLLM, LM Studio, ...) or a hosted one. No API key is required for
 local endpoints.
 
-*Ground truth, not self-report.* The point of this module is that measuring
-affect is a **separate step from generating the reply**. The model invoked here
-is a *judge*, not the character: it observes the conversation from the outside
-and reports a reading. Whatever model later writes the character's reply never
-gets to declare how it feels — it only reads this measured state back (see
-:mod:`feltstate.render`). Using the same underlying model for both jobs is fine;
-the discipline is in keeping the two *calls* distinct, each with its own prompt.
+*External estimate, not reply-model self-report.* This source keeps affect
+estimation as a **separate step from reply generation**. The invoked model
+observes the conversation and returns a structured estimate. That estimate is
+not ground truth, a psychological measurement, or evidence of genuine feeling.
+Using the same underlying model for both jobs is possible; the separation is in
+the calls and prompts, not in a claim of objectivity.
 
 Two robustness rules, both so the affect loop never takes down the agent:
 
@@ -32,6 +31,7 @@ import urllib.error
 import urllib.request
 from collections.abc import Sequence
 
+from .._net import require_http_url
 from ..config import DEFAULT_LABELS
 from ..state import AffectDelta, AffectState
 from .base import AffectSource, latest_user_text
@@ -39,12 +39,12 @@ from .base import AffectSource, latest_user_text
 # Valid label vocabulary, looked up case-insensitively when sanitising output.
 _VALID_LABELS = {lbl.lower(): lbl for lbl in DEFAULT_LABELS}
 
-# The judge's standing instruction. It frames the call as *measurement* and
+# The estimator's standing instruction. It frames the call as an affect estimate and
 # guards against the two classic failure modes (see base.py): self-report (the
 # model narrating itself) and mirroring (echoing the user's mood back as the
 # character's own). Output is constrained to a single JSON object.
 _SYSTEM_PROMPT = (
-    "You MEASURE the affect of a character (persona below) reacting to the "
+    "You ESTIMATE the affective reaction of a character (persona below) to the "
     "latest user input. Output ONLY JSON "
     "{valence,arousal,labels,confidence,monologue}. "
     "The character reacts from its own baseline; do NOT mirror/paraphrase the "
@@ -66,14 +66,16 @@ _SYSTEM_PROMPT = (
 
 
 class LLMSource(AffectSource):
-    """Measure affect via an OpenAI-compatible ``/chat/completions`` endpoint.
+    """Estimate affect via an OpenAI-compatible ``/chat/completions`` endpoint.
 
     Parameters
     ----------
     base_url
         Endpoint root, e.g. ``"http://localhost:11434/v1"`` or
         ``"https://api.openai.com/v1"``. A trailing slash is fine; the path
-        ``/chat/completions`` is appended.
+        ``/chat/completions`` is appended. Must be an ``http``/``https`` URL with
+        a host; any other scheme (``file://``, ``ftp://``, ...) is rejected at
+        construction with :class:`ValueError`.
     model
         Model name to request, e.g. ``"gpt-4o-mini"`` or a local model tag.
     api_key
@@ -97,7 +99,7 @@ class LLMSource(AffectSource):
         api_key: str | None = None,
         timeout: float = 20,
     ) -> None:
-        self.url = base_url.rstrip("/") + "/chat/completions"
+        self.url = require_http_url(base_url).rstrip("/") + "/chat/completions"
         self.model = model
         self.api_key = api_key
         self.timeout = timeout
@@ -112,9 +114,9 @@ class LLMSource(AffectSource):
         baseline: AffectState,
         persona: str = "",
     ) -> AffectDelta:
-        """Measure the character's reaction to the latest user message.
+        """Estimate the character's reaction to the latest user message.
 
-        Builds a measurement prompt from the persona, a short numeric summary
+        Builds an estimation prompt from the persona, a short numeric summary
         of the standing baseline, and the recent conversation, then asks the
         endpoint for a JSON :class:`AffectDelta`. Any error path returns a
         near-neutral, low-confidence delta — this method never raises.
@@ -140,13 +142,13 @@ class LLMSource(AffectSource):
 
         if not isinstance(parsed, dict):
             return _neutral_delta()
-        return _delta_from_measurement(parsed)
+        return _delta_from_estimate(parsed)
 
     # ------------------------------------------------------------------ #
     # Prompt construction                                                #
     # ------------------------------------------------------------------ #
     def _system_prompt(self, persona: str, baseline: AffectState) -> str:
-        """System message: measurement instruction + persona + baseline summary."""
+        """System message: estimation instruction + persona + baseline summary."""
         parts = [_SYSTEM_PROMPT]
         persona = (persona or "").strip()
         if persona:
@@ -166,8 +168,7 @@ class LLMSource(AffectSource):
         if transcript:
             out.append("Recent conversation (oldest first):\n" + transcript)
         out.append(
-            "\nMeasure how the character feels in reaction to the latest user "
-            "message:\n" + user_text.strip()
+            "\nEstimate the character reaction to the latest user message:\n" + user_text.strip()
         )
         return "\n".join(out)
 
@@ -183,7 +184,7 @@ class LLMSource(AffectSource):
         body = {
             "model": self.model,
             "messages": chat,
-            "temperature": 0.0,  # measurement should be repeatable
+            "temperature": 0.0,  # estimation should be repeatable
             "max_tokens": 256,
             # Honoured by OpenAI and most compatible servers; harmlessly
             # ignored by those that don't implement it.
@@ -254,7 +255,7 @@ def _format_transcript(messages: Sequence[dict], max_turns: int = 8) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# Parsing & sanitising the measurement                                        #
+# Parsing & sanitising the estimate                                        #
 # --------------------------------------------------------------------------- #
 def _parse_json_object(text: str) -> dict | None:
     """Best-effort extraction of a single JSON object from model output.
@@ -288,7 +289,7 @@ def _clamp(x: float, lo: float, hi: float) -> float:
 
 
 def _coerce_float(value, default: float) -> float:
-    """Tolerantly turn a measurement field into a float, or fall back."""
+    """Tolerantly turn an estimate field into a float, or fall back."""
     if isinstance(value, bool):
         return default
     if isinstance(value, (int, float)):
@@ -325,8 +326,8 @@ def _clean_labels(value) -> list[str]:
     return out
 
 
-def _delta_from_measurement(d: dict) -> AffectDelta:
-    """Turn a parsed measurement dict into a schema-clamped :class:`AffectDelta`.
+def _delta_from_estimate(d: dict) -> AffectDelta:
+    """Turn a parsed estimate dict into a schema-clamped :class:`AffectDelta`.
 
     Coerces and range-clamps every field so a sloppy or partial response still
     yields a valid delta. Unknown labels are discarded; missing fields take

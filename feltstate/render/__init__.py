@@ -2,8 +2,7 @@
 back cache-safely.
 
 * :func:`render_felt_block` renders an :class:`~feltstate.state.AffectState` as
-  a first-person, discrete-phrase block the agent reads as *its own* feeling
-  (identity-merge), stable across small tick-to-tick drift to keep the prompt
+  a first-person, discrete-phrase block the reply model receives in first-person form, stable across small tick-to-tick drift to keep the prompt
   cache warm.
 * :func:`render_agent_feeling` is the agent-scale counterpart: a single
   emotion-words-only line banded to the agent stuck grades (use with

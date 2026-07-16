@@ -1,19 +1,22 @@
-"""feltstate — give an LLM agent a felt inner life it experiences as its own.
+"""feltstate — persistent affect and provenance-aware memory for LLM agents.
 
-Three ideas, one loop:
+Four boundaries, one reference architecture:
 
-* **Ground truth, not self-report.** Affect is *measured* each turn by a
+* **Independently appraised, not self-reported.** Affect is *estimated* each turn by a
   component separate from the reply model (an :class:`AffectSource`), so the
-  agent can't just claim to feel something — it has a state it can't fake.
+  reply model cannot directly author the stored state.
+* **Memory has a lifecycle.** :class:`Canon` stores structured facts that can
+  decay, strengthen, be corrected, and retain history; optional lifecycle tools
+  add provenance fingerprints, lineage, ageing, deletion plans, and audit logs.
 * **Tool, not controller.** feltstate produces *state*; it never injects
-  commands ("be sad now") into the prompt. The agent reads its own felt state
-  and decides for itself how to act.
-* **Identity-merge.** The state is rendered into a first-person block the agent
-  reads as *its own* feelings, never as external data to recite.
+  commands ("be sad now") into the prompt. The reply model receives state as
+  context and uses it when generating a response.
+* **First-person context.** Affect is rendered into a compact first-person block
+  for the reply model — a prompt/interface design choice, not a claim about
+  consciousness or subjective experience.
 
-Plus the two things the public ecosystem was missing: emotion that **decays
-back to neutral** over time (most memory layers decay facts, not feelings), and
-a **cache-safe** way to feed it back (so a persistent companion stays cheap).
+The core is standard-library only and includes configurable affect dynamics,
+cache-safe injection, structured memory, and optional companion orchestration.
 
 Quickstart::
 
@@ -62,7 +65,7 @@ from .state import (
 )
 from .timeawareness import time_since_phrase
 
-__version__ = "0.1.0"
+__version__ = "0.2.0a1"
 
 __all__ = [
     "Engine",

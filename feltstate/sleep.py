@@ -37,18 +37,37 @@ class Tiredness:
     ``last_dream_ts`` stamps the last discharge (drives the refractory floor).
     ``last_update_ts`` lets :meth:`rise` integrate real elapsed time whether it is
     called on an active turn or on an idle check, without double-counting.
+    ``last_arousal`` remembers the arousal that governed the interval now ending,
+    so an elapsed span is integrated at the arousal it was actually lived at (the
+    *prior* interval's arousal), not at whatever arousal the current call reports.
     """
 
     level: float = 0.0
     last_dream_ts: str | None = None
     last_update_ts: str | None = None
+    last_arousal: float | None = None
 
     def rise(self, arousal: float, now: datetime, cfg: TirednessConfig) -> None:
-        """Accrue sleep pressure for the time elapsed since the last update.
+        """Accrue sleep pressure for the interval since the last update.
 
-        Rate is ``rise_k · arousal`` per hour, optionally self-accelerating by
-        ``self_accel_alpha · level`` ("the tireder you are, the faster you fade").
-        The first call just stamps the clock (no elapsed time to integrate yet).
+        The interval ``[last_update, now]`` is integrated at the arousal that was
+        in effect *during* it — the arousal reported at the previous update
+        (:attr:`last_arousal`) — not at the arousal passed on *this* call (finding
+        #14). Otherwise ten calm hours followed by a single high-arousal message
+        would retroactively integrate all ten hours at the high arousal, as if the
+        agent had been activated the whole time. ``arousal`` here governs the
+        *next* interval; it is stored for the following :meth:`rise`.
+
+        Base rate is ``rise_k · arousal`` per hour. With ``self_accel_alpha > 0``
+        the rate self-accelerates ("the tireder you are, the faster you fade"):
+        ``dL/dt = c · (1 + α·L)``. That is integrated over the elapsed span in
+        **closed form** — ``L <- ((1 + α·L)·exp(α·c·dt) - 1) / α`` — rather than by
+        a per-call Euler step, so the result depends only on how long and how hard
+        the agent was awake, not on how often :meth:`rise` was called (finding
+        #15). With ``α == 0`` this reduces exactly to the plain ``L <- L + c·dt``.
+        Both forms are frequency-invariant: integrating a span in one step or many
+        yields the same level. The first call just stamps the clock (no elapsed
+        time to integrate yet).
         """
         if self.last_update_ts is not None:
             try:
@@ -56,9 +75,23 @@ class Tiredness:
                 dt_h = max(0.0, (now - prev).total_seconds() / 3600.0)
             except (ValueError, TypeError):
                 dt_h = 0.0
-            rate = cfg.rise_k * max(0.0, arousal) * (1.0 + cfg.self_accel_alpha * self.level)
-            self.level = min(cfg.level_cap, self.level + rate * dt_h)
+            # Integrate the elapsed interval at the arousal it was lived at. On a
+            # freshly loaded state with no recorded prior (last_arousal is None),
+            # fall back to this call's arousal for that one interval.
+            prior_arousal = self.last_arousal if self.last_arousal is not None else arousal
+            c = cfg.rise_k * max(0.0, prior_arousal)
+            alpha = cfg.self_accel_alpha
+            if alpha > 0.0 and dt_h > 0.0:
+                # Exact solution of dL/dt = c·(1 + α·L) over dt_h (composes).
+                import math
+
+                grown = (1.0 + alpha * self.level) * math.exp(alpha * c * dt_h)
+                new_level = (grown - 1.0) / alpha
+            else:
+                new_level = self.level + c * dt_h
+            self.level = min(cfg.level_cap, new_level)
         self.last_update_ts = now.isoformat()
+        self.last_arousal = max(0.0, float(arousal))
 
     def hours_since_dream(self, now: datetime) -> float:
         """Hours since the last dream; ``inf`` if it has never dreamed."""
@@ -83,19 +116,25 @@ class Tiredness:
         self.level = 0.0
         self.last_dream_ts = now.isoformat()
         self.last_update_ts = now.isoformat()
+        # The arousal that governed the pre-dream interval no longer applies; the
+        # post-dream interval starts unmeasured until the next rise() reports one.
+        self.last_arousal = None
 
     def to_dict(self) -> dict:
         return {
             "level": round(self.level, 4),
             "last_dream_ts": self.last_dream_ts,
             "last_update_ts": self.last_update_ts,
+            "last_arousal": self.last_arousal,
         }
 
     @classmethod
     def from_dict(cls, d: dict | None) -> Tiredness:
         d = d or {}
+        raw_arousal = d.get("last_arousal")
         return cls(
             level=float(d.get("level", 0.0)),
             last_dream_ts=d.get("last_dream_ts"),
             last_update_ts=d.get("last_update_ts"),
+            last_arousal=None if raw_arousal is None else float(raw_arousal),
         )

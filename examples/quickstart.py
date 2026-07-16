@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-"""quickstart — watch a felt inner state build, spill over, and decay.
+"""quickstart — watch persistent affective state build, spill over, and decay.
 
 Run it directly, no setup, no network, no dependencies beyond the standard
 library and feltstate itself::
@@ -10,30 +9,20 @@ What it demonstrates
 --------------------
 The three ideas the package is built on, made concrete in one short script:
 
-* **Ground truth, not self-report.** Affect is *measured* every turn by a
-  separate component — here the zero-dependency
-  :class:`~feltstate.sources.keyword.KeywordSource` — not asked of a reply
-  model. We feed in plain user messages and the agent gets a reaction it did
-  not choose.
-* **Tool, not controller.** The engine only produces *state* and renders it
-  into a first-person block; it never emits an instruction like "be sad now".
-  We print that block so you can see it is a feeling, not a command.
-* **Identity-merge.** :meth:`Engine.render` returns the state as the agent's
-  *own* felt experience, in plain English, and :meth:`Engine.inject` shows
-  how that block rides on the front of the latest user turn (cache-safe — it
-  stays out of the static system prompt).
+* **Independently estimated, not self-reported.** A separate component — here the
+  zero-dependency :class:`~feltstate.sources.keyword.KeywordSource` — produces a
+  reaction estimate. The reply model does not directly set that state.
+* **Tool, not controller.** The engine produces state and renders it into a
+  first-person block; it never emits an instruction such as "be sad now".
+* **First-person context.** :meth:`Engine.render` returns a compact plain-English
+  state summary, and :meth:`Engine.inject` attaches it to the newest user turn
+  without changing the static system prompt.
 
-It also shows the two things most memory layers miss:
+The script also demonstrates accumulation and decay: repeated inputs can fill a
+pressure bar until it releases, while quiet ticks move configured state back
+toward neutral.
 
-* **Emotion accumulates** — a run of supportive messages fills the joy bar
-  until it spills over into a visible release; a run of harsh ones fills a
-  negative bar instead.
-* **Emotion decays back toward neutral** — once the conversation goes quiet,
-  ticking with an empty turn lets traits, mood, and the pressure bars ease
-  home on their own. (Most stores decay *facts*; feltstate decays *feelings*.)
-
-The script uses a brand-new temporary state file each run, so repeated runs
-start from the same neutral baseline and stay reproducible.
+A new temporary state file is used on every run.
 """
 
 from __future__ import annotations
@@ -66,7 +55,7 @@ def show_numbers(state) -> None:
 
     We print raw numbers here only so you, the reader, can watch the dynamics
     move. The agent itself is handed the worded block from ``render()`` below,
-    never these figures (that is the identity-merge discipline at work).
+    never these figures (which keeps numeric state out of the prompt).
     """
     m, t, _rel, p = state.mood, state.traits, state.relationship, state.pressure
     bars = p.bars
@@ -85,8 +74,8 @@ def show_numbers(state) -> None:
 
 
 def show_felt(eng: Engine) -> None:
-    """Print the first-person felt block — exactly what the agent reads back."""
-    print("  --- render() : the agent's own felt state ---")
+    """Print the first-person state block supplied to the reply model."""
+    print("  --- render() : first-person affective state ---")
     for ln in eng.render().splitlines():
         print("  | " + ln)
 
@@ -95,7 +84,7 @@ def turn(eng: Engine, user_text: str, *, history: list[dict]) -> None:
     """Run one real conversation turn and report the resulting state.
 
     Appends the user message to the running transcript, advances the engine one
-    tick (which *measures*, integrates, and persists), then prints both the
+    tick (which *estimates*, integrates, and persists), then prints both the
     behind-the-scenes numbers and the worded felt block.
     """
     history.append({"role": "user", "content": user_text})
@@ -114,8 +103,8 @@ def drive_to_release(eng: Engine, user_text: str, *, max_turns: int = 80) -> int
     tight loop, printing a compact per-turn line, and stop the moment the phase
     becomes ``releasing``. Returns the number of turns it took (0 if none).
 
-    This is a real threshold crossing, not a staged one: the bar genuinely fills
-    from the measured readings. We use it to surface the release-texture line,
+    This threshold crossing is produced by the configured integration rules rather
+    than being hard-coded for the demo. We use it to surface the release-texture line,
     which the gentler main walkthrough doesn't run long enough to trigger.
     """
     convo: list[dict] = []
@@ -160,15 +149,15 @@ def main() -> None:
     # releases lean toward showing feeling rather than holding it in. The
     # persona string is free text the caller owns; KeywordSource ignores it,
     # but a model-backed source (see with_llm.py) would fold it into its
-    # measurement prompt. We keep it generic and character-agnostic here.
+    # estimation prompt. We keep it generic and character-agnostic here.
     dials = PersonaDials(warmth=0.75, vulnerability=0.65, emotional_explicitness=0.7)
     persona = (
         "A steady, attentive companion who works alongside the user. "
-        "Reacts from its own feelings rather than mirroring the user's."
+        "Maintains a consistent character perspective rather than mirroring the user's."
     )
 
     eng = Engine(
-        source=KeywordSource(),  # ground-truth seam: rule-based, zero deps
+        source=KeywordSource(),  # independently appraised affect: rule-based, zero deps
         state_path=str(state_path),
         persona=persona,
         dials=dials,
@@ -236,7 +225,7 @@ def main() -> None:
         turn(eng, msg, history=convo)
 
     # -- Phase 5: things settle and a repair happens. A warm, reconciling
-    #    message after friction is read as genuinely *mixed* (a little sting, a
+    #    message after friction is estimated as *mixed* (a little sting, a
     #    little reassurance), and the slow layers integrate it. ----------------
     banner("5) Repair — a warm message after the rough patch")
     turn(eng, "sorry for the stress earlier. thank you for sticking with me", history=convo)
@@ -266,7 +255,7 @@ def main() -> None:
         print(
             "\n  Note the 'right now:' line — that is the release *texture*, a felt\n"
             "  description of what's spilling over. It is still a feeling, never an\n"
-            "  instruction: the agent reads it and decides for itself what to do."
+            "  instruction: the reply model receives it as context rather than an instruction."
         )
     else:
         print("  (no release within the turn budget — try raising max_turns)")
@@ -276,7 +265,7 @@ def main() -> None:
     print("Re-run any time — each run starts from a fresh neutral baseline.")
     print(
         "\nTakeaways:\n"
-        "  * affect was MEASURED each turn (KeywordSource), never self-reported;\n"
+        "  * affect was ESTIMATED each turn (KeywordSource), never self-declared;\n"
         "  * it ACCUMULATED across a stretch, then DECAYED back toward neutral\n"
         "    once the conversation went quiet;\n"
         "  * a sustained feeling eventually SPILLED OVER into a release (phase 6);\n"

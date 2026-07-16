@@ -19,6 +19,7 @@ from pathlib import Path
 
 
 def _ts_of(turn: dict) -> str:
+    """Return a turn's ``timestamp`` as a string, or ``""`` if absent/falsy."""
     return str(turn.get("timestamp", "") or "")
 
 
@@ -91,6 +92,65 @@ def get_turn_context(
         "n_total": len(turns),
         "after_available": len(turns) - 1 - idx,
         "approx": approx,
+    }
+
+
+def get_turn_range_context(
+    turns: list[dict],
+    start: str,
+    end: str,
+    *,
+    before: int = 2,
+    after: int = 2,
+) -> dict:
+    """Return the transcript window around an inclusive ``start``–``end`` range.
+
+    This is the range-aware companion to :func:`get_turn_context` and is useful
+    for provenance pointers whose source covers more than one turn. Timestamps
+    are compared as strings, matching the existing source-agnostic contract; use
+    consistently formatted, sortable timestamps (normally ISO-8601).
+
+    When one or more turns fall inside the range, the result includes the whole
+    source span plus ``before`` / ``after`` surrounding turns and reports
+    ``source_start_index`` / ``source_end_index``. If the range contains no turn,
+    the function falls back to :func:`get_turn_context` at ``start`` and marks the
+    result ``approx=True``.
+    """
+    if not turns:
+        return {"ok": False, "reason": "no turns"}
+
+    t0 = str(start or "").split("chat:", 1)[-1].strip()
+    t1 = str(end or "").split("chat:", 1)[-1].strip()
+    if not t0 or not t1:
+        return {"ok": False, "reason": "empty range boundary"}
+    if t1 < t0:
+        return {"ok": False, "reason": "range end precedes start"}
+
+    matched = [i for i, turn in enumerate(turns) if t0 <= _ts_of(turn) <= t1]
+    if not matched:
+        fallback = get_turn_context(turns, t0, before=before, after=after)
+        if fallback.get("ok"):
+            fallback = dict(fallback)
+            fallback["approx"] = True
+            fallback["range_fallback"] = True
+            fallback["source_start_index"] = fallback["match_index"]
+            fallback["source_end_index"] = fallback["match_index"]
+        return fallback
+
+    first, last = matched[0], matched[-1]
+    before_n, after_n = max(0, int(before)), max(0, int(after))
+    lo, hi = max(0, first - before_n), min(len(turns), last + after_n + 1)
+    return {
+        "ok": True,
+        "turns": turns[lo:hi],
+        "match_index": first,
+        "source_start_index": first,
+        "source_end_index": last,
+        "source_turns": turns[first : last + 1],
+        "n_total": len(turns),
+        "after_available": len(turns) - 1 - last,
+        "approx": False,
+        "range_fallback": False,
     }
 
 

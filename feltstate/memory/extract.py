@@ -7,7 +7,7 @@ the one that generates the agent's replies, that reads a slice of conversation
 and proposes structured 5W1H facts. You then choose what to commit to a
 :class:`~feltstate.memory.canon.Canon`.
 
-This mirrors the affect side of feltstate. Just as affect is *measured* by a
+This mirrors the affect side of feltstate. Just as affect is *estimated* by a
 separate :class:`~feltstate.sources.base.AffectSource` rather than self-reported
 by the reply model, facts are *extracted* by a separate pass rather than the
 reply model deciding mid-sentence what to remember. Keeping the two jobs in
@@ -30,6 +30,7 @@ import urllib.request
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 
+from .._net import require_http_url
 from .canon import Canon
 
 
@@ -102,7 +103,7 @@ class LLMFactExtractor(FactExtractor):
         timeout: float = 20,
         max_facts: int = 8,
     ) -> None:
-        self.url = base_url.rstrip("/") + "/chat/completions"
+        self.url = require_http_url(base_url).rstrip("/") + "/chat/completions"
         self.model = model
         self.api_key = api_key
         self.timeout = timeout
@@ -183,6 +184,12 @@ def commit_to_canon(
 # Helpers (parse / sanitise) — shared shape with sources.llm                  #
 # --------------------------------------------------------------------------- #
 def _format_transcript(messages: Sequence[dict], max_turns: int = 20) -> str:
+    """Flatten the last ``max_turns`` messages into a plain-text transcript.
+
+    Each turn becomes ``{role}: {content}``. Messages with empty content are
+    skipped. Long content is truncated at 800 characters so the context sent to
+    the extraction call stays within a sensible token budget.
+    """
     lines = []
     for m in list(messages)[-max_turns:]:
         role = (m.get("role") or "").strip() or "user"
@@ -196,6 +203,11 @@ def _format_transcript(messages: Sequence[dict], max_turns: int = 20) -> str:
 
 
 def _extract_content(raw: dict) -> str:
+    """Pull the text of the first choice's message from an OpenAI-style response.
+
+    Returns an empty string if the response is malformed (no ``choices``, no
+    ``message``, no ``content``). Never raises.
+    """
     choices = raw.get("choices") or []
     if not choices:
         return ""

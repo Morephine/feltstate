@@ -1,35 +1,33 @@
-"""feltstate.dream — give the agent dreams it can't explain.
+"""feltstate.dream — inject a mood residue whose origin is not surfaced to the reply model.
 
-This is the deliberately-illogical sibling of memory consolidation. It does *not*
-mine experience into rational beliefs (that would be the agent's own job — it can
-read its memory and reason). Instead it takes the agent's charged material —
+This is the deliberately illogical sibling of memory consolidation. It does
+*not* mine experience into rational beliefs. Instead it takes stored,
+affect-tagged material —
 desires, recent facts, emotional peaks — and **recombines it associatively,
 without logic**, into a short, discontinuous dream. The dream itself is
 ephemeral; what matters is the faint **affect residue** it leaves: the agent
 wakes a little warm, or unsettled, or wistful, *with no cause it can point to*.
 
-Why that is the point. Current AI affect is always *traceable* — you can explain
-why the agent is "happy" (you just said something kind). Real inner lives have
-moods with no traceable source (a bad night, a strange dream, nothing). An agent
-that is occasionally, inexplicably, a little off — and, asked why, can only say
-"I don't know, I had odd dreams" — reads as a separate mind in a way a pure
-state machine never does. The dream is the mechanism that produces that
-*authentic-but-unexplainable* mood: it is sourced from the agent's own real
-material, just recombined so the causal thread is severed.
+Design motivation. Most AI affect signals have an explicit cause visible to the
+reply model (e.g. the user said something kind, so the score went up). This
+module produces a residue that is *not surfaced to the reply model as an explicit
+cause*: it is sourced from stored, affect-tagged material but recombined so the
+causal thread is severed before it reaches the prompt. Whether that produces
+anything like genuine unexplainability in a subjective sense is outside the scope
+of this library — the mechanism is prompt/interface design.
 
 Design notes:
 
 * **No LLM required.** Dreams are *meant* to be incoherent, and incoherence is
   exactly what a language model is bad at faking (it writes coherent stories).
-  Pure template recombination of real, affect-tagged fragments is structurally a
-  dream. The whole pipeline — gather, stitch, residue — is standard library.
+  Pure template recombination of stored, affect-tagged fragments provides a
+  lightweight dream-like event. The whole pipeline — gather, stitch, residue — is standard library.
 * **The LLM is optional and lazy.** If, and only if, the agent ever puts a dream
   into words ("I had a strange dream about…"), a model can polish the crude
   stitch on demand (see :func:`polish_hook` usage). Most dreams are never spoken,
   so most cost nothing.
 * **Tool, not controller.** A dream produces *state* (a text fragment and a small
-  felt residue), never an instruction. What the agent does with a vague mood is
-  its own.
+  felt residue), never an instruction. The reply model may use the resulting state as context.
 * **Locale.** The default :data:`DEFAULT_PHRASEBOOK` is English. Dream grammar is
   language-specific, so supply your own :class:`Phrasebook` for another language.
 """
@@ -60,7 +58,7 @@ __all__ = [
 @dataclass
 class Fragment:
     """One piece of dream material: a short image/phrase plus the affect it
-    carries (measured when it was first stored) and a salience weight.
+    carries (estimated when it was first stored) and a salience weight.
 
     Supply rich fragments for vivid dreams (a desire, a remembered scene, an
     emotional peak — each with the valence/arousal it was felt at). The bundled
@@ -158,7 +156,7 @@ def stitch(fragments: list[Fragment], phrasebook: Phrasebook, rng: random.Random
 
 
 # --------------------------------------------------------------------------- #
-# Residue — the faint, untraceable mood the dream leaves                      #
+# Residue — the faint mood the dream leaves (not surfaced to the reply model as an explicit cause) #
 # --------------------------------------------------------------------------- #
 def residue(
     fragments: list[Fragment], cfg: DreamConfig | None = None

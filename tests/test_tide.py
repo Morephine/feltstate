@@ -61,3 +61,98 @@ def test_no_tide_or_mixed_renders_clean_mood_line():
     out = render_felt_block(AffectState())
     assert "tinged with" not in out
     assert " · lifting" not in out and " · sinking" not in out
+
+
+# --- edge-case / invariant tests ------------------------------------------
+
+
+def test_exactly_three_readings_is_enough():
+    # The minimum valid history is 3 items; 2 returns None.
+    assert compute_tide(_hist([0.0, 0.0, 0.0]), CFG) is None  # flat+neutral, still None
+    t = compute_tide(_hist([0.0, 0.0, 0.6]), CFG)
+    assert t is not None and t["stage"] == "rising"
+
+
+def test_intensity_is_clamped_at_one_for_large_swings():
+    # A swing far beyond _FULL_SWING (0.5) must saturate at 1.0, never exceed it.
+    t = compute_tide(_hist([-0.9, -0.9, -0.9, 0.9]), CFG)
+    assert t is not None
+    assert t["intensity"] <= 1.0
+    assert t["stage"] == "rising"
+
+
+def test_intensity_is_always_positive():
+    # Intensity must be in [0, 1] for all valid (non-None) return values.
+    cases = [
+        _hist([0.6, 0.6, 0.6, 0.6]),  # peak
+        _hist([-0.6, -0.6, -0.6, -0.6]),  # valley
+        _hist([0.0, 0.0, 0.0, 0.4]),  # rising
+        _hist([0.4, 0.4, 0.4, 0.0]),  # falling
+    ]
+    for h in cases:
+        t = compute_tide(h, CFG)
+        if t is not None:
+            assert 0.0 <= t["intensity"] <= 1.0, f"intensity out of range: {t}"
+
+
+def test_rising_takes_precedence_over_peak():
+    # A valence climbing *through* extreme territory is "rising", not "peak".
+    # recent = 0.8 (>> _EXTREME=0.35), but swing is also large positive.
+    t = compute_tide(_hist([0.0, 0.1, 0.2, 0.8]), CFG)
+    assert t is not None and t["stage"] == "rising"
+
+
+def test_falling_takes_precedence_over_valley():
+    # A valence sliding *through* deeply negative territory is "falling", not "valley".
+    t = compute_tide(_hist([0.0, -0.1, -0.2, -0.8]), CFG)
+    assert t is not None and t["stage"] == "falling"
+
+
+def test_non_dict_entries_in_history_are_skipped():
+    # Corrupted / heterogeneous history (with None or non-dicts) must not crash.
+    mixed = [None, "garbage", {"valence": 0.0}, {"valence": 0.0}, {"valence": 0.5}]
+    t = compute_tide(mixed, CFG)
+    # Only the three dicts survive; recent=0.5, earlier mean=0.0 -> rising.
+    assert t is not None and t["stage"] == "rising"
+
+
+def test_empty_history_is_none():
+    assert compute_tide([], CFG) is None
+
+
+def test_single_reading_is_none():
+    assert compute_tide(_hist([0.9]), CFG) is None
+
+
+def test_result_stage_is_always_a_known_value():
+    # Every non-None result must carry one of the four known stage strings.
+    valid_stages = {"rising", "falling", "peak", "valley"}
+    histories = [
+        _hist([0.0, 0.1, 0.4]),
+        _hist([0.4, 0.1, -0.1]),
+        _hist([0.5, 0.5, 0.5]),
+        _hist([-0.5, -0.5, -0.5]),
+    ]
+    for h in histories:
+        t = compute_tide(h, CFG)
+        if t is not None:
+            assert t["stage"] in valid_stages, f"unexpected stage: {t['stage']}"
+
+
+def test_intensity_rounded_to_three_decimal_places():
+    # The contract says intensity is rounded to 3 dp — check it never has more.
+    t = compute_tide(_hist([0.0, 0.0, 0.0, 0.4]), CFG)
+    assert t is not None
+    assert t["intensity"] == round(t["intensity"], 3)
+
+
+def test_window_truncation_uses_only_last_n_readings():
+    # tide_window=5 by default. Older readings beyond the window are ignored.
+    # If they were included the mean would be pulled positive, changing the stage.
+    # We use -0.5 (< -_EXTREME=0.35) so the 5-reading window returns "valley".
+    old_noise = [{"valence": 0.9}] * 20
+    recent = _hist([-0.5, -0.5, -0.5, -0.5, -0.5])
+    h = old_noise + recent
+    t = compute_tide(h, CFG)
+    # All 5 in-window readings are flat at -0.5, swing=0 but recent <= -_EXTREME -> valley.
+    assert t is not None and t["stage"] == "valley"

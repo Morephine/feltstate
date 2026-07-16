@@ -1,16 +1,14 @@
-"""feltstate.render.felt — turn an :class:`AffectState` into a first-person block.
+"""feltstate.render.felt — turn an :class:`AffectState` into first-person context.
 
-This is the *identity-merge* seam. The output is not a data dump for the agent
-to recite ("my closeness value is 0.72"); it is written as the agent's own
-felt experience, in plain first-person English, so the agent reads it back as
-*how it feels* and acts accordingly. The agent is never told what to do — it is
-only handed the feeling and trusted to respond as itself.
+This module translates numeric state into a compact first-person block. It
+avoids raw-number narration and never adds behavioural commands. The reply model
+may use the block as additional context when generating a response.
 
 Two disciplines shape every line here:
 
 1. **Words, not numbers.** Each continuous dimension is snapped to a small set
-   of discrete phrase bands ("close", "warming", "distant", ...). The reader
-   gets a feeling, not a dashboard.
+   of discrete phrase bands ("close", "warming", "distant", ...). The reply model receives
+   a phrase-level state summary rather than a dashboard.
 
 2. **Cache-stability.** The dynamic felt block is injected into the prompt every
    turn (see :mod:`feltstate.render.inject`). If the *string* changed on every
@@ -23,7 +21,7 @@ Two disciplines shape every line here:
 
 The block is intentionally character-agnostic. :class:`PersonaDials` only tilt
 the closing *tone* line (a guarded character phrases the same feeling more
-tightly than an open one); they never change which feeling is reported.
+tightly than an open one); they never change which state phrase is rendered.
 """
 
 from __future__ import annotations
@@ -351,7 +349,7 @@ def render_felt_block(
     The block has one line per dimension — relationship, mood, pressure, an
     optional release-texture line, an optional aftertaste line, traits, and an
     optional tone line — each a discrete phrase band rather than a number. The
-    agent reads this as *its own* feeling and decides for itself how to act
+    reply model receives this in first-person form and may use it as context
     (feltstate never injects a command).
 
     Parameters

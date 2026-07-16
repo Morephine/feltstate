@@ -19,6 +19,7 @@ trick used.
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 
 from feltstate import Canon
@@ -35,6 +36,11 @@ def _age_entries_on_disk(path, days: float) -> None:
         rec["ts"] = old_ts
         out.append(json.dumps(rec, ensure_ascii=False))
     path.write_text("\n".join(out) + ("\n" if out else ""), encoding="utf-8")
+
+
+def _read_jsonl(path) -> list[dict]:
+    """Read a jsonl file into a list of dicts (test helper)."""
+    return [json.loads(ln) for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
 
 
 def _canon(tmp_path) -> Canon:
@@ -231,3 +237,170 @@ def test_compact_moves_archived_drops_forgotten_keeps_visible(tmp_path):
     # Compaction is idempotent.
     c.compact()
     assert "vivid memory" in [e["object"] for e in c.view()]
+
+
+# --------------------------------------------------------------------------- #
+# compact — bitemporal audit trail / idempotence / archive reachability (regression)
+# --------------------------------------------------------------------------- #
+def test_compact_preserves_history_of_corrected_fact(tmp_path):
+    """#17: compact must not destroy the audit trail history()/as_of() depend on.
+
+    A correction supersedes the old version (kept, hidden). Before this fix,
+    compact() pruned superseded/retracted records, so after a compact history()
+    could no longer answer "what did I used to believe?".
+    """
+    c = _canon(tmp_path)
+    c.add("user", "lives in the old city", why="they said so")
+    when_old = c.view()[0]["ts"]
+    c.correct("old city", object="lives by the coast", why="they moved")
+
+    before = {(h["object"], h["status"]) for h in c.history("lives")}
+    assert ("lives in the old city", "superseded") in before
+    assert ("lives by the coast", "active") in before
+
+    c.compact()
+
+    after = {(h["object"], h["status"]) for h in c.history("lives")}
+    # The pre-correction version survives the compaction, still marked superseded.
+    assert ("lives in the old city", "superseded") in after
+    assert ("lives by the coast", "active") in after
+
+    # as_of at the old belief's timestamp still surfaces the old belief.
+    past = c.as_of("lives", when_old)
+    assert any(e["object"] == "lives in the old city" for e in past)
+
+
+def test_compact_preserves_retracted_record_for_audit(tmp_path):
+    """#17: a retracted fact is kept (hidden) so history() still shows it after compact."""
+    c = _canon(tmp_path)
+    c.add("user", "said something regrettable", why="heat of the moment")
+    c.retract("regrettable")
+    c.compact()
+    hist = c.history("regrettable")
+    assert any(h["status"] == "retracted" for h in hist)
+    # Still on disk, still marked, still hidden from live views.
+    assert "_retracted" in c.path.read_text(encoding="utf-8")
+    assert c.view() == []
+
+
+def test_compact_is_intensity_idempotent_for_reinforced_fact(tmp_path):
+    """#20: compact may compress storage but must not change what a record's
+    intensity/salience will compute to. Reinforce fields (``_reinforce_count`` …)
+    must survive, or a reinforced fact's decay curve silently resets."""
+    c = _canon(tmp_path)
+    c.add("user", "reinforced fact", intensity=0.5)
+    c.add("user", "reinforced fact", intensity=0.5)  # reinforce
+    c.add("user", "reinforced fact", intensity=0.5)  # reinforce again
+
+    before = c.view()[0]
+    c.compact()
+    after = c.view()[0]
+
+    assert after["intensity"] == before["intensity"]  # salience unchanged
+    assert after["reinforced"] == before["reinforced"]  # the bookkeeping survived
+    # And the underscore field is physically retained on disk.
+    assert "_reinforce_count" in c.path.read_text(encoding="utf-8")
+
+
+def test_archived_records_are_reachable_after_compact(tmp_path):
+    """#18: once compact() moves a dim fact into the archived sidecar, it must
+    still be reachable through the documented read paths (view include_archived,
+    search, recall, history, as_of) — the sidecar is queryable cold storage."""
+    c = _canon(tmp_path)
+    c.add("user", "an archived fact", why="it happened", intensity=0.5)
+    _age_entries_on_disk(c.path, days=22)  # -> archived tier (0.10 <= 0.256 < 0.30)
+
+    c.compact()
+    # The main store no longer holds it; the archive does.
+    assert "an archived fact" not in c.path.read_text(encoding="utf-8")
+    assert "an archived fact" in c.archived_path.read_text(encoding="utf-8")
+
+    # Every documented read path still reaches it.
+    assert any(e["object"] == "an archived fact" for e in c.view(include_archived=True))
+    assert any(e["object"] == "an archived fact" for e in c.search("archived"))
+    assert any(e["object"] == "an archived fact" for e in c.recall("archived"))
+    assert any(e["object"] == "an archived fact" for e in c.history("archived"))
+    now_iso = datetime.now(timezone.utc).isoformat()
+    assert any(e["object"] == "an archived fact" for e in c.as_of("archived", now_iso))
+
+    # A recall of an archived fact still "sticks" — the bump is persisted to the
+    # archive file, not silently dropped.
+    assert "_last_recalled" in c.archived_path.read_text(encoding="utf-8")
+
+    # include_archived=False must NOT surface the archived-tier fact.
+    assert all(e["object"] != "an archived fact" for e in c.view())
+
+
+def test_archive_is_bounded_keeps_most_salient(tmp_path):
+    """#19: the archived sidecar is bounded cold storage — compaction keeps at most
+    ``archive_max`` of the most-salient archived records and drops the faintest, so
+    it cannot grow without limit."""
+    c = _canon(tmp_path)
+    # A tiny cap via an attribute compact() reads with getattr (config is frozen).
+    object.__setattr__(c.cfg, "archive_max", 3)
+
+    # Ten archived-tier facts of increasing base intensity (all within the archive
+    # band once lightly aged, none permanent, none visible).
+    for i in range(10):
+        c.add("user", f"fact {i:02d}", intensity=0.20 + i * 0.01)
+    _age_entries_on_disk(c.path, days=1)
+
+    c.compact()
+    kept = {e["what"]["object"] for e in _read_jsonl(c.archived_path)}
+    assert len(kept) == 3  # bounded
+    # The survivors are the most-salient (highest base intensity).
+    assert kept == {"fact 07", "fact 08", "fact 09"}
+
+    # Re-running compaction keeps it bounded (idempotent under the cap).
+    c.compact()
+    assert len({e["what"]["object"] for e in _read_jsonl(c.archived_path)}) == 3
+
+
+# --------------------------------------------------------------------------- #
+# confirm — dedup (regression)                                                #
+# --------------------------------------------------------------------------- #
+def test_confirm_twice_yields_single_record(tmp_path):
+    """#24: confirming an already-present fact must reinforce the existing record,
+    not append a second row with the same id (which makes later search / correct /
+    retract ambiguous)."""
+    c = _canon(tmp_path)
+    c.ask("user", "likes tea", why="unsure")
+    c.confirm("tea")
+    # The fact is already in the confirmed store; ask + confirm the same fact again.
+    c.ask("user", "likes tea", why="mentioned again")
+    c.confirm("tea")
+
+    confirmed = _read_jsonl(c.path)
+    assert len(confirmed) == 1  # deduped, not duplicated
+    # The second confirm reinforced the surviving record rather than duplicating it.
+    assert confirmed[0].get("_reinforce_count", 0) >= 1
+
+    # search sees exactly one, and it is unambiguous.
+    hits = c.search("tea")
+    assert len(hits) == 1
+
+
+def test_corrupt_and_non_object_jsonl_rows_are_quarantined_once(tmp_path, caplog):
+    path = tmp_path / "canon.jsonl"
+    good = {
+        "who": {"actor": "user"},
+        "what": {"action": "likes", "object": "tea"},
+        "intensity": 0.5,
+        "confidence": 0.9,
+        "ts": datetime.now(timezone.utc).isoformat(),
+    }
+    path.write_text(
+        json.dumps(good) + "\n" + "{bad json}\n" + "[]\n",
+        encoding="utf-8",
+    )
+    c = Canon(path)
+
+    with caplog.at_level(logging.WARNING):
+        assert [x["object"] for x in c.view()] == ["tea"]
+        assert [x["object"] for x in c.view()] == ["tea"]
+
+    quarantine = path.with_name(path.name + ".corrupt")
+    records = [json.loads(line) for line in quarantine.read_text(encoding="utf-8").splitlines()]
+    assert len(records) == 2  # repeated loads do not duplicate evidence
+    assert {r["reason"] for r in records} == {"invalid-json", "non-object-root"}
+    assert all(r["raw"] for r in records)

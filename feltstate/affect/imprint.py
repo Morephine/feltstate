@@ -51,7 +51,7 @@ import hashlib
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from ..state import Traits
+from ..state import Mood, Traits
 
 # --------------------------------------------------------------------------- #
 # Tunables (intentionally local — these are imprint dynamics, not global cfg). #
@@ -60,6 +60,14 @@ DEFAULT_DECAY_PER_DAY = 0.001  # ~years to fade from 1.0 toward the floor
 DEFAULT_MIN_FLOOR = 0.15  # an imprint can scar over but never disappear
 DEFAULT_ECHO_THROTTLE_H = 4.0  # surface a given imprint at most this often
 ECHO_INTENSITY_BUMP = 0.05  # a touched subject flares back to vividness
+# How hard a fired echo colours the *current felt mood* (see ``echo_mood_nudge``).
+# The valence push is a fraction of the remaining headroom toward a signed target,
+# so it is proportional to the imprint's intensity yet asymptotes — many repeated
+# echoes converge, they never blow the mood past the cap. Small on purpose: an old
+# feeling stirring is a colouring, not a takeover.
+ECHO_MOOD_GAIN = 0.25  # fraction of the headroom-to-target closed per fired echo
+ECHO_MOOD_TARGET = 0.85  # |valence| an echo pulls toward at full intensity (< 1)
+ECHO_AROUSAL_GAIN = 0.06  # a stirred memory lifts arousal slightly, per echo
 # Trait clamp — kept loose so one imprint never pins a trait to the extreme;
 # many small shifts can stack, but a single signal always leaves headroom.
 _TRAIT_CLAMP_LO = 0.05
@@ -149,8 +157,15 @@ def _days_between(earlier: datetime | None, later: datetime | None) -> float:
     return max(0.0, (later - earlier).total_seconds() / 86400.0)
 
 
-def _hash_id(kind: str, label: str, ts: str) -> str:
-    h = hashlib.sha1(f"{kind}|{label}|{ts}".encode()).hexdigest()[:8]
+def _hash_id(kind: str, label: str) -> str:
+    # 128-bit id (was 32-bit [:8], collision-prone at scale). The id is keyed on
+    # ``(kind, label)`` ONLY — deliberately not on the timestamp — so the *same*
+    # semantic milestone emitted on a later tick produces the *same* id and the
+    # engine's id-based dedup recognises it as already imprinted (it does not
+    # stack a second shift). Two genuinely distinct events must therefore differ
+    # in kind or label; a source that wants every occurrence to imprint should
+    # vary the label (e.g. include the date).
+    h = hashlib.sha256(f"{kind}|{label}".encode()).hexdigest()[:32]
     return f"imprint_{h}"
 
 
@@ -168,8 +183,9 @@ class Imprint:
     Attributes
     ----------
     id
-        Stable identifier derived from ``(kind, label, ts)``; used to dedup so
-        the same event ingested twice does not stack.
+        Stable identifier derived from ``(kind, label)`` — timestamp-independent
+        on purpose, so the same semantic milestone recurring on a later tick gets
+        the same id and dedups instead of stacking a second shift.
     ts
         ISO-8601 timestamp of the event. Anchors decay.
     kind
@@ -288,7 +304,8 @@ def ingest_milestones(milestones: list[dict], ts: str) -> list[Imprint]:
         yet applied; the caller applies them once via :func:`apply_trait_shift`.
         De-duplication against an existing imprint list is the caller's job — it
         can compare on :attr:`Imprint.id`, which is stable for a given
-        ``(kind, label, ts)``.
+        ``(kind, label)`` regardless of tick, so a milestone that recurs across
+        ticks dedups instead of stacking.
     """
     out: list[Imprint] = []
     for ms in milestones or []:
@@ -305,7 +322,7 @@ def ingest_milestones(milestones: list[dict], ts: str) -> list[Imprint]:
         shifts = {k: round(v * severity, 4) for k, v in base_shifts.items()}
         out.append(
             Imprint(
-                id=_hash_id(kind, label, ts),
+                id=_hash_id(kind, label),
                 ts=ts,
                 kind=kind,
                 valence_sign=sign,
@@ -329,21 +346,30 @@ def ingest_milestones(milestones: list[dict], ts: str) -> list[Imprint]:
 # Apply the one-time permanent trait shift                                    #
 # --------------------------------------------------------------------------- #
 def apply_trait_shift(traits: Traits, imp: Imprint) -> Traits:
-    """Apply an imprint's one-time, permanent nudge to long-term traits.
+    """Apply an imprint's one-time nudge to the *current* trait values.
 
-    Returns a **new** :class:`Traits` with the imprint's ``trait_shifts`` added,
-    each result clamped to ``[0.05, 0.95]`` so a single imprint can never pin a
-    trait to its extreme (room is always left for later signals, including
-    opposite-signed ones — that headroom is what lets warmth offset trauma over
-    time).
+    Returns a **new** :class:`Traits` with the imprint's ``trait_shifts`` added
+    to the current values, each result clamped to ``[0.05, 0.95]`` so a single
+    imprint can never pin a trait to its extreme (room is always left for later
+    signals, including opposite-signed ones — that headroom is what lets warmth
+    offset trauma over time).
+
+    This moves where the trait *is right now*. On its own that nudge would decay:
+    :func:`~feltstate.affect.traits.update_traits` relaxes each trait toward its
+    resting point every tick. **Durability comes from the resting point moving
+    too** — see :func:`baseline_from_imprints`, which the engine folds into
+    ``traits.baseline`` so idle ticks relax toward the shifted point, not back to
+    neutral. This function supplies the immediate felt jump; the baseline supplies
+    the lasting mark. Keeping them separate is what lets trimming an imprint undo
+    its lasting effect (recompute the baseline from what's kept) without having to
+    unwind an already-applied jump.
 
     Idempotent guard: if ``imp.shifts_applied`` is already true, the traits are
     returned unchanged. On a fresh apply the flag is set on ``imp`` so a tick
     loop can call this for every imprint without double-counting.
 
-    Unlike mood or pressure, this shift does **not** decay — it permanently
-    moves the resting baseline the rest of the system relaxes toward. That is
-    what makes the event leave a lasting mark on temperament.
+    The persistent ``baseline`` map on ``traits`` is carried through unchanged
+    (this function only touches the current values).
     """
     if imp.shifts_applied or not imp.trait_shifts:
         return traits
@@ -355,6 +381,44 @@ def apply_trait_shift(traits: Traits, imp: Imprint) -> Traits:
         setattr(updated, name, _clamp(cur + float(amount), _TRAIT_CLAMP_LO, _TRAIT_CLAMP_HI))
     imp.shifts_applied = True
     return updated
+
+
+def baseline_from_imprints(imprints: list[Imprint]) -> dict[str, float]:
+    """Derive the persistent per-trait resting point from the kept imprints.
+
+    Each imprint permanently displaces the resting point of the traits it
+    touches. This sums every imprint's ``trait_shifts`` onto the neutral 0.5 and
+    clamps to ``[0.05, 0.95]``, returning ``{trait: resting_point}`` for exactly
+    the traits some imprint has moved (a trait no imprint touches is omitted, and
+    :func:`~feltstate.affect.traits.update_traits` treats it as resting at the
+    configured neutral baseline).
+
+    Deriving the baseline from the *current* imprint list — rather than mutating
+    it incrementally as imprints arrive — is what makes the layer self-correct:
+
+    * **Trimming is safe** (finding #10). When :attr:`Engine.max_imprints` drops
+      the least-vivid marks, recomputing from what remains automatically removes
+      the trimmed imprints' contribution, so no orphaned permanent offset is left
+      behind.
+    * **Stacking is bounded** (finding #9). With timestamp-independent ids a
+      recurring milestone dedups to one imprint, so it contributes once; and the
+      per-trait clamp caps how far even many same-signed imprints can push the
+      resting point, always leaving headroom for the opposite sign.
+
+    Positive and negative imprints net against each other here (the symmetry
+    rule): a lifetime of warmth genuinely offsets old wounds in the resting point,
+    not just momentarily.
+    """
+    offset: dict[str, float] = {}
+    for imp in imprints or []:
+        for name, amount in (imp.trait_shifts or {}).items():
+            if name not in _TRAIT_NAMES:
+                continue
+            offset[name] = offset.get(name, 0.0) + float(amount)
+    return {
+        name: round(_clamp(0.5 + amt, _TRAIT_CLAMP_LO, _TRAIT_CLAMP_HI), 4)
+        for name, amt in offset.items()
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -450,3 +514,52 @@ def check_echo(
         imp.echo_count = int(imp.echo_count) + 1
         fired.append(imp)
     return fired
+
+
+# --------------------------------------------------------------------------- #
+# Echo -> mood: apply a bounded effect from a fired imprint                    #
+# --------------------------------------------------------------------------- #
+def echo_mood_nudge(fired: list[Imprint], mood: Mood) -> Mood:
+    """Colour the current felt ``mood`` with any imprints that echoed this turn.
+
+    :func:`check_echo` only re-vivifies an imprint's *intensity*. This function
+    converts a fired echo into a small, **bounded** adjustment of the fast mood,
+    which is then visible in the rendered block and decays through the normal
+    tick dynamics.
+
+    For each fired imprint the felt valence is pulled a fraction
+    (:data:`ECHO_MOOD_GAIN`, scaled by the imprint's current ``intensity``) of the
+    way toward a signed target ``valence_sign * ECHO_MOOD_TARGET``, and arousal is
+    lifted slightly (a stirred memory is activating). Because each step closes a
+    fraction of the *remaining* distance to a target strictly inside ``[-1, 1]``,
+    the effect is proportional to intensity yet **asymptotic**: repeated echoes
+    (even many in one turn, or turn after turn) converge toward the target and can
+    never drive the mood past it, so the state cannot blow up. Opposite-signed
+    echoes simply pull the other way — a warm memory can temper a sore one.
+
+    This is a *state* colouring, never an instruction. Returns a new
+    :class:`Mood`; the input is not mutated. With nothing fired it is a no-op
+    (the same mood object is returned unchanged).
+    """
+    if not fired:
+        return mood
+
+    v = float(mood.valence)
+    a = float(mood.arousal)
+    for imp in fired:
+        sign = 1.0 if int(imp.valence_sign) >= 0 else -1.0
+        # Intensity scales *how much* of the step is taken this echo, so a faded
+        # scar stirs less than a vivid one; clamp to [0,1] defensively.
+        strength = _clamp(float(imp.intensity), 0.0, 1.0)
+        target = sign * ECHO_MOOD_TARGET
+        v += (target - v) * ECHO_MOOD_GAIN * strength  # close a fraction of the gap
+        a += ECHO_AROUSAL_GAIN * strength
+
+    # Reuse the mood's other fields verbatim; only the felt point moved.
+    from dataclasses import replace
+
+    return replace(
+        mood,
+        valence=_clamp(round(v, 4), -1.0, 1.0),
+        arousal=_clamp(round(a, 4), 0.0, 1.0),
+    )

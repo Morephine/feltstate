@@ -1,8 +1,9 @@
 """feltstate.companion — assemble feltstate's parts into a runnable desktop pet.
 
-The core ``feltstate`` package gives you the *parts* of a felt inner life
-(measured affect, decaying mood, dreams, time sense). This subpackage is the
-**orchestration + the seams** that turn those parts into a companion: a reply
+The core ``feltstate`` package gives you the *parts* of a persistent affective state
+(estimated affect, decaying mood, dreams, time sense) presented to the reply model
+in first-person form. This subpackage is the
+**orchestration + the seams** that turn those parts into a companion skeleton: a reply
 backend, an avatar/skin adapter, a voice adapter, a presence probe, and a
 proactive heartbeat that decides — on its own clock — when to speak, introspect,
 dream, or write a diary.

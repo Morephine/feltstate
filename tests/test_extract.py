@@ -2,7 +2,15 @@
 plus committing them to a Canon. Mirrors the affect-source contract: separate
 pass, never raises."""
 
+import pytest
+
 from feltstate.memory import Canon, LLMFactExtractor, commit_to_canon
+from feltstate.memory.extract import (
+    _clean_facts,
+    _extract_content,
+    _format_transcript,
+    _parse_fact_array,
+)
 
 
 def _ext(**kw):
@@ -83,3 +91,148 @@ def test_commit_to_canon_direct(tmp_path):
     canon = Canon(tmp_path / "canon.jsonl")
     commit_to_canon([{"object": "a core fact", "intensity": 0.9}], canon, grey_zone=False)
     assert any(e["object"] == "a core fact" for e in canon.view())
+
+
+# --------------------------------------------------------------------------- #
+# _format_transcript — truncation and windowing invariants                    #
+# --------------------------------------------------------------------------- #
+def test_format_transcript_truncates_long_content():
+    """Messages longer than 800 chars are trimmed with ' ...' so the extraction
+    call doesn't blow the token budget."""
+    long_msg = "x" * 900
+    result = _format_transcript([{"role": "user", "content": long_msg}])
+    assert len(result) < 820  # truncated
+    assert result.endswith(" ...")
+
+
+def test_format_transcript_keeps_only_last_max_turns():
+    """Only the last ``max_turns`` messages are included — the window is bounded."""
+    msgs = [{"role": "user", "content": f"msg{i}"} for i in range(30)]
+    result = _format_transcript(msgs, max_turns=5)
+    assert "msg29" in result  # last message included
+    assert "msg25" in result  # 5th-from-last included (indices 25-29)
+    assert "msg24" not in result  # older than window dropped
+
+
+def test_format_transcript_skips_empty_content():
+    """Turns with blank or missing content are silently dropped."""
+    msgs = [
+        {"role": "user", "content": ""},
+        {"role": "user", "content": "  "},
+        {"role": "assistant", "content": "hello"},
+    ]
+    result = _format_transcript(msgs)
+    lines = [ln for ln in result.splitlines() if ln.strip()]
+    assert len(lines) == 1 and "hello" in lines[0]
+
+
+def test_format_transcript_empty_list_is_empty_string():
+    assert _format_transcript([]) == ""
+
+
+# --------------------------------------------------------------------------- #
+# _extract_content — response-shape invariants                                #
+# --------------------------------------------------------------------------- #
+def test_extract_content_happy_path():
+    raw = {"choices": [{"message": {"content": "hello"}}]}
+    assert _extract_content(raw) == "hello"
+
+
+def test_extract_content_no_choices_returns_empty():
+    assert _extract_content({}) == ""
+    assert _extract_content({"choices": []}) == ""
+
+
+def test_extract_content_missing_message_returns_empty():
+    assert _extract_content({"choices": [{}]}) == ""
+
+
+# --------------------------------------------------------------------------- #
+# _parse_fact_array — edge-case JSON extraction                               #
+# --------------------------------------------------------------------------- #
+def test_parse_fact_array_empty_input():
+    assert _parse_fact_array("") == []
+    assert _parse_fact_array("   ") == []
+
+
+def test_parse_fact_array_direct_array():
+    assert _parse_fact_array('[{"object":"x"}]') == [{"object": "x"}]
+
+
+def test_parse_fact_array_empty_brackets():
+    assert _parse_fact_array("[]") == []
+
+
+def test_parse_fact_array_non_array_json_returns_empty():
+    # A model that returned a dict instead of a list
+    assert _parse_fact_array('{"object":"x"}') == []
+
+
+def test_parse_fact_array_extracts_from_prose_with_fences():
+    text = '```json\n[{"object":"y"}]\n```'
+    result = _parse_fact_array(text)
+    assert result == [{"object": "y"}]
+
+
+def test_parse_fact_array_no_brackets_returns_empty():
+    assert _parse_fact_array("just some prose without brackets") == []
+
+
+# --------------------------------------------------------------------------- #
+# _clean_facts — filtering and default-filling invariants                     #
+# --------------------------------------------------------------------------- #
+def test_clean_facts_skips_non_dict_items():
+    facts = [None, "a string", {"object": "valid"}]
+    out = _clean_facts(facts, "user", 10)
+    assert len(out) == 1 and out[0]["object"] == "valid"
+
+
+def test_clean_facts_skips_missing_object():
+    facts = [{"actor": "x", "why": "because"}, {"object": "real fact"}]
+    out = _clean_facts(facts, "user", 10)
+    assert len(out) == 1 and out[0]["object"] == "real fact"
+
+
+def test_clean_facts_fills_default_actor():
+    facts = [{"object": "something happened"}]
+    out = _clean_facts(facts, "alice", 10)
+    assert out[0]["actor"] == "alice"
+
+
+def test_clean_facts_clamps_intensity_to_unit():
+    facts = [{"object": "x", "intensity": -5}, {"object": "y", "intensity": 99}]
+    out = _clean_facts(facts, "user", 10)
+    assert out[0]["intensity"] == 0.0
+    assert out[1]["intensity"] == 1.0
+
+
+def test_clean_facts_missing_intensity_defaults_to_half():
+    facts = [{"object": "no intensity here"}]
+    out = _clean_facts(facts, "user", 10)
+    assert out[0]["intensity"] == 0.5
+
+
+# --------------------------------------------------------------------------- #
+# commit_to_canon — edge cases                                                #
+# --------------------------------------------------------------------------- #
+def test_commit_to_canon_skips_fact_without_object(tmp_path):
+    """A proposed fact with no ``object`` field must be silently dropped."""
+    canon = Canon(tmp_path / "canon.jsonl")
+    facts = [{"actor": "user", "why": "no object here"}]
+    stored = commit_to_canon(facts, canon, grey_zone=False)
+    assert stored == []
+    assert canon.view() == []
+
+
+def test_commit_to_canon_empty_list(tmp_path):
+    canon = Canon(tmp_path / "canon.jsonl")
+    assert commit_to_canon([], canon) == []
+    assert commit_to_canon(None, canon) == []
+
+
+def test_commit_to_canon_default_intensity_used_when_missing(tmp_path):
+    """A fact without an ``intensity`` field gets the ``default_intensity`` kwarg."""
+    canon = Canon(tmp_path / "canon.jsonl")
+    stored = commit_to_canon([{"object": "a fact"}], canon, grey_zone=False, default_intensity=0.7)
+    assert len(stored) == 1
+    assert stored[0]["base_intensity"] == pytest.approx(0.7, abs=1e-3)

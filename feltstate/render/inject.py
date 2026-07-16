@@ -1,6 +1,6 @@
 """feltstate.render.inject — feed the felt block back without busting the cache.
 
-The whole point of feltstate is to hand the agent its own felt state each turn.
+The whole point of feltstate is to provide the reply model with rendered affective state each turn.
 The naive way — splice it into the system prompt — quietly defeats prompt
 caching and makes a persistent companion expensive. This module implements the
 *cache-safe* alternative.
@@ -30,9 +30,9 @@ The discipline
    the tail is usually byte-identical between adjacent ticks, extending cache
    reuse further.
 
-Put together: a static, cached persona at the top; the agent's freshly felt
-state riding in on the back of its newest user message. The agent reads the
-block as its own feeling (identity-merge) and the cache stays warm.
+Put together: a static, cached persona at the top and a freshly rendered state
+block attached to the newest user message. The reply model receives the block as
+first-person context while the static prefix remains cacheable.
 
 Concretely: the felt block is attached as a *dynamic prefix to the turn's
 instruction*, never folded into the static system prompt that the cache pins.
@@ -47,7 +47,7 @@ def build_injection(felt_block: str, user_message: str) -> str:
     The returned string is meant to be used as the **content of the current
     user turn** — i.e. it goes after the static, cached system/persona prefix,
     not inside it. The felt block is placed first (as a dynamic prefix to the
-    turn) followed by the user's actual words, so the agent reads its own felt
+    turn) followed by the user's actual words, so the reply model receives the rendered
     state immediately before responding to what was said.
 
     Parameters

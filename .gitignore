@@ -14,8 +14,17 @@ venv/
 *.state.json
 state.json
 *.meta.json
+scheduler_state.json
+*_state.json
+*.scheduler.json
+*.corrupt
+*.corrupt-*
+*.lock
+*.tmp
 *.canon.jsonl
 canon*.jsonl
 *.affect.jsonl
 .feltstate/
 runtime/
+.mypy_cache/
+.ruff_cache/

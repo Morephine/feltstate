@@ -1,15 +1,15 @@
 """feltstate.affect.traits — slow temperament and the felt mood it pulls.
 
 Two integrators live here, both fed by the per-turn :class:`AffectDelta` that an
-:class:`~feltstate.sources.base.AffectSource` measures:
+:class:`~feltstate.sources.base.AffectSource` estimates:
 
 * :func:`update_traits` integrates discrete emotion labels into the four slow
   personality dimensions (:class:`~feltstate.state.Traits`) with an **asymmetric**
   EWMA: every trait *rises* at the same speed when fed, but positive traits
   (optimism, curiosity) *relax* back to the 0.5 baseline several times faster than
   the negative ones (depression, anxiety). That asymmetry is the whole model of
-  "good moods fade fast, bad moods linger" — hedonic adaptation on the upside,
-  rumination on the downside.
+  "good moods fade fast, bad moods linger" — a human-inspired asymmetric dynamic,
+  not a claim that this EWMA reproduces any specific human psychological mechanism.
 
 * :func:`update_mood` integrates the continuous valence/arousal reading into the
   fast :class:`~feltstate.state.Mood`, then lets ``traits`` exert *gravity*: the
@@ -25,6 +25,21 @@ zero-signal they would drag every trait down at the same rate and erase the
 positive/negative asymmetry entirely — so idle ticks must be pull-only. This is
 also what lets the whole system *decay back to neutral* when the conversation goes
 quiet: keep ticking with empty deltas and traits and mood both ease home.
+
+**Elapsed-time baseline pull (frequency-invariance).** The baseline pull is a
+*decay* — how much a trait relaxes back toward its resting point when nothing
+feeds it — so it must be a function of real elapsed time, not of how often
+:func:`update_traits` happens to be called. A companion ticked every minute must
+not relax five times faster than one ticked every five minutes. :func:`update_traits`
+therefore takes an optional ``elapsed_ticks`` (elapsed wall-clock time expressed in
+*reference ticks*, one tick = one minute — the engine computes it from its own
+clock and threads it in). The relaxation is applied as a continuous exponential in
+that elapsed span, ``(1 - bp) ** elapsed_ticks``, which composes exactly
+(``(1-bp)^a · (1-bp)^b = (1-bp)^(a+b)``): the same real elapsed time yields the same
+relaxation however it is subdivided. ``elapsed_ticks=None`` means *exactly one
+reference tick* — the historical per-call behaviour — so a caller that does not
+thread a clock is unchanged. The signal EWMA is per-event (it integrates *this*
+turn's reading) and is deliberately not elapsed-scaled.
 
 Every constant comes from :class:`~feltstate.config.TraitConfig` /
 :class:`~feltstate.config.MoodConfig`; nothing is hard-coded or character-specific.
@@ -61,7 +76,13 @@ def _label_signals(labels: list[str]) -> dict[str, float]:
     return signals
 
 
-def update_traits(traits: Traits, delta: AffectDelta, cfg: TraitConfig) -> Traits:
+def update_traits(
+    traits: Traits,
+    delta: AffectDelta,
+    cfg: TraitConfig,
+    *,
+    elapsed_ticks: float | None = None,
+) -> Traits:
     """Integrate one turn's labels into the slow personality dimensions.
 
     The update for each trait is, in order:
@@ -72,41 +93,69 @@ def update_traits(traits: Traits, delta: AffectDelta, cfg: TraitConfig) -> Trait
            t <- t * (1 - alpha) + s * alpha
 
        On an idle tick (``s == 0``) this step is skipped entirely — see the
-       module docstring for why that skip *is* the asymmetry.
-    2. **Asymmetric baseline pull** back toward ``cfg.baseline`` (0.5), every
-       tick, signal or not::
+       module docstring for why that skip *is* the asymmetry. The signal is a
+       *per-event* reading of this turn, so it is not scaled by elapsed time.
+    2. **Asymmetric baseline pull** back toward the trait's *resting point*, as a
+       function of **elapsed time** (not per call)::
 
-           t <- t * (1 - bp) + baseline * bp
+           t <- rest + (t - rest) * (1 - bp) ** elapsed_ticks
 
        ``bp`` comes from ``cfg.baseline_pull`` per trait: small for depression /
        anxiety (they linger), several times larger for optimism / curiosity
        (they fade). A trait with no entry falls back to the smallest configured
        pull, so an unknown dimension errs on the side of stickiness rather than
        evaporating.
+
+       ``elapsed_ticks`` is the wall-clock time since the previous update in
+       *reference ticks* (one tick = one minute; the engine threads it in from
+       its own clock). ``None`` means exactly one reference tick — identical to
+       the historical per-call relaxation ``t <- t*(1-bp) + rest*bp`` — so a
+       caller that does not track a clock is unchanged. Because the relaxation is
+       an exponential in the elapsed span it **composes**: relaxing over ``a`` then
+       ``b`` ticks equals relaxing over ``a+b`` at once, so the same real elapsed
+       time decays a trait the same amount however finely it is ticked.
+
+       ``rest`` is the neutral ``cfg.baseline`` (0.5) unless a permanent imprint
+       has shifted this trait's resting point (``traits.baseline[name]``). An
+       imprint's shift is therefore *durable*: idle ticks relax the trait toward
+       the shifted resting point, not back to neutral, so a warmth/trauma lift
+       survives an arbitrarily long quiet stretch instead of evaporating.
     3. **Hard clamp** to ``[cfg.clamp_lo, cfg.clamp_hi]`` (never the full 0/1), so
        a single counter-signal can always move the needle even after a long
        saturated streak.
 
-    Returns a new :class:`Traits`; the input is not mutated.
+    The persistent ``baseline`` map is carried through unchanged onto the
+    returned traits (this integrator never edits it — the imprint layer derives it
+    via :func:`~feltstate.affect.imprint.baseline_from_imprints`). Returns a new
+    :class:`Traits`; the input is not mutated.
     """
     signals = _label_signals(delta.labels)
     alpha = cfg.ewma_alpha
     # If a trait is absent from the pull map, fall back to the *slowest* pull so
     # an unconfigured dimension lingers rather than evaporating.
     default_pull = min(cfg.baseline_pull.values()) if cfg.baseline_pull else 0.0
+    rest = traits.baseline or {}
+    # Elapsed span in reference ticks; None -> exactly one tick (legacy per-call).
+    ticks = 1.0 if elapsed_ticks is None else max(0.0, float(elapsed_ticks))
 
-    out = Traits()
+    out = Traits(baseline=dict(rest))
     for name in _TRAIT_NAMES:
         val = getattr(traits, name)
         signal = signals.get(name, 0.0)
 
         # 1. EWMA — only when the turn actually carries this trait's signal.
+        #    (Per-event: this turn's reading, so never scaled by elapsed time.)
         if signal > 0.0:
             val = val * (1.0 - alpha) + signal * alpha
 
-        # 2. Asymmetric relaxation toward baseline (runs every tick).
+        # 2. Asymmetric relaxation toward the (possibly imprint-shifted) resting
+        #    point, as an exponential in the elapsed span so it is
+        #    frequency-invariant (and composes). A permanent imprint moves this
+        #    point and it stays moved.
         bp = cfg.baseline_pull.get(name, default_pull)
-        val = val * (1.0 - bp) + cfg.baseline * bp
+        resting = _clamp(float(rest.get(name, cfg.baseline)), cfg.clamp_lo, cfg.clamp_hi)
+        keep = (1.0 - bp) ** ticks  # fraction of the gap to `resting` retained
+        val = resting + (val - resting) * keep
 
         # 3. Clamp away from the hard edges.
         setattr(out, name, _clamp(val, cfg.clamp_lo, cfg.clamp_hi))

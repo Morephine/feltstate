@@ -102,7 +102,7 @@ def test_utility_is_a_shrunk_mean_of_ratings():
 
 
 # --------------------------------------------------------------------------- #
-# record_rating: counts, ground-truth gate, create-on-miss                    #
+# record_rating: counts, observed-source gate, create-on-miss                    #
 # --------------------------------------------------------------------------- #
 def test_rating_updates_counts_and_utility(tmp_path):
     c = _canon(tmp_path)

@@ -1,6 +1,6 @@
 """Dream — illogical recombination of charged material into a short, discontinuous
-dream, leaving only a faint *untraceable* affect residue. Pure-program: no model,
-fully deterministic under a seeded rng."""
+dream, leaving only a faint affect residue not surfaced to the reply model as an explicit cause.
+Pure-program: no model, fully deterministic under a seeded rng."""
 
 import random
 
@@ -41,7 +41,7 @@ def test_stitch_empty_is_empty():
     assert stitch([], DEFAULT_PHRASEBOOK, random.Random(0)) == ""
 
 
-# --- residue (the faint, untraceable mood) -------------------------------- #
+# --- residue (the faint mood; not surfaced to the reply model as an explicit cause) -- #
 def test_residue_is_a_wisp_in_the_charge_direction():
     cfg = DreamConfig()
     v, a, d = residue(

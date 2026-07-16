@@ -1,7 +1,7 @@
 """feltstate.companion.backend — the reply-model seam.
 
 Analogous to :class:`~feltstate.sources.base.AffectSource`, but for *generation*
-rather than *measurement*. feltstate never owns the system prompt or the model
+rather than *estimation*. feltstate never owns the system prompt or the model
 choice: a backend is handed an already-assembled ``messages`` array (the static
 system prompt first, the feltstate-injected user turn last) and returns reply
 text. Implementors wire it to an OpenAI-compatible HTTP endpoint, a Claude

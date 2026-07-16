@@ -1,24 +1,26 @@
 """feltstate.state — core data schemas (the contract shared by every module).
 
-An :class:`AffectState` is an agent's *felt inner state*: how it feels right now
-(``mood``), its long-term temperament (``traits``), how it feels about the person
-it is talking to (``relationship``), and the pressure-cooker of accumulated
-emotion (``pressure``).
+An :class:`AffectState` is the persisted affective state used by the system:
+current ``mood``, slow-moving ``traits``, ``relationship`` values, and
+accumulated ``pressure``.
 
 These are plain dataclasses with JSON round-tripping and **no behaviour**. The
 dynamics live in :mod:`feltstate.affect`. Keeping every schema in one module
 lets the dynamics, memory, render, and source layers agree on shape without
 import cycles.
 
-Design note — *ground truth, not self-report*: an :class:`AffectDelta` is
-**measured** for each turn by an :class:`~feltstate.sources.base.AffectSource`,
-not asked of the generating model. The model never gets to decide how it feels;
-it only gets to read the felt state back (see :mod:`feltstate.render`).
+Design note — *independently appraised, not self-reported*: an :class:`AffectDelta` is
+**estimated** for each turn by an :class:`~feltstate.sources.base.AffectSource`,
+not asked of the generating model. The reply model does not directly set this value;
+it only receives the rendered state as context (see :mod:`feltstate.render`).
 """
 
 from __future__ import annotations
 
 import json
+import math
+import time
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -27,15 +29,27 @@ def _clamp(x: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, x))
 
 
+def _finite(x, default: float = 0.0) -> float:
+    """Coerce to a finite float, or fall back to ``default``. A model that
+    returns the string ``"NaN"`` or an actual NaN/Infinity must not be read as a
+    real emotion — clamping alone lets NaN through (``max``/``min`` propagate it),
+    so non-finite values are rejected at the boundary, not silently clamped."""
+    try:
+        v = float(x)
+    except (TypeError, ValueError):
+        return default
+    return v if math.isfinite(v) else default
+
+
 # --------------------------------------------------------------------------- #
 # Per-turn reading                                                            #
 # --------------------------------------------------------------------------- #
 @dataclass
 class AffectDelta:
     """One turn's affect reading — how the agent feels in reaction to the latest
-    input, as *measured* by an :class:`~feltstate.sources.base.AffectSource`.
+    input, as *estimated* by an :class:`~feltstate.sources.base.AffectSource`.
 
-    This is the ground-truth signal. It is the only place raw per-turn emotion
+    This is the externally estimated signal. It is the only place raw per-turn emotion
     enters the system; everything downstream (traits, pressure, mood) integrates
     these readings over time.
     """
@@ -51,6 +65,14 @@ class AffectDelta:
     mixed_blend: dict | None = None
     # discrete appraised events this turn, e.g. {"kind":"care","actor":"user","severity":0.6}
     milestones: list[dict] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        # The one place raw per-turn emotion enters the system — sanitise here so
+        # a non-finite reading (whatever its source) can never propagate. Runs on
+        # every construction, direct or via from_dict.
+        self.valence = _finite(self.valence, 0.0)
+        self.arousal = _finite(self.arousal, 0.4)
+        self.confidence = _finite(self.confidence, 0.7)
 
     def to_dict(self) -> dict:
         return {
@@ -68,10 +90,10 @@ class AffectDelta:
     def from_dict(cls, d: dict | None) -> AffectDelta:
         d = d or {}
         return cls(
-            valence=float(d.get("valence", 0.0)),
-            arousal=float(d.get("arousal", 0.4)),
+            valence=_finite(d.get("valence", 0.0), 0.0),
+            arousal=_finite(d.get("arousal", 0.4), 0.4),
             labels=list(d.get("labels") or []),
-            confidence=float(d.get("confidence", 0.7)),
+            confidence=_finite(d.get("confidence", 0.7), 0.7),
             monologue=str(d.get("monologue", "") or ""),
             anticipation=d.get("anticipation"),
             mixed_blend=d.get("mixed_blend"),
@@ -82,33 +104,57 @@ class AffectDelta:
 # --------------------------------------------------------------------------- #
 # Long-term temperament                                                       #
 # --------------------------------------------------------------------------- #
+_TRAIT_KEYS = ("depression", "optimism", "anxiety", "curiosity")
+
+
 @dataclass
 class Traits:
     """Slow-moving personality dimensions in [0, 1] (0.5 = neutral baseline).
 
     Integrated from per-turn readings by an asymmetric EWMA: positive traits
-    (optimism, curiosity) relax back to baseline several times faster than
-    negative ones (depression, anxiety). That asymmetry is *hedonic adaptation*
-    and *rumination* — good moods fade, bad ones linger. See
+    (optimism, curiosity) relax back to their resting point several times faster
+    than negative ones (depression, anxiety). That asymmetry is a human-inspired
+    design — good moods fade faster, bad ones linger — not a claim that this
+    EWMA reproduces any specific human psychological mechanism. See
     :mod:`feltstate.affect.traits`.
+
+    ``baseline`` is the per-trait *resting point* the EWMA relaxes toward. It is
+    normally the neutral 0.5 for every trait, but a permanent imprint (warmth,
+    trauma, loss) shifts the resting point itself and leaves it shifted — a
+    lasting structural change to temperament that does not wash out over idle
+    ticks, unlike the mood or a one-off nudge. Absent (empty), every trait rests
+    at the configured neutral baseline, so a state written before imprints
+    existed still loads correctly.
     """
 
     depression: float = 0.5
     optimism: float = 0.5
     anxiety: float = 0.5
     curiosity: float = 0.5
+    # Per-trait resting point the EWMA pulls toward (0.5 = neutral). Only the
+    # traits an imprint has moved appear here; the rest default to neutral.
+    baseline: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
-        return {
-            k: round(getattr(self, k), 4)
-            for k in ("depression", "optimism", "anxiety", "curiosity")
-        }
+        d = {k: round(getattr(self, k), 4) for k in _TRAIT_KEYS}
+        if self.baseline:
+            d["baseline"] = {
+                k: round(float(v), 4) for k, v in self.baseline.items() if k in _TRAIT_KEYS
+            }
+        return d
 
     @classmethod
     def from_dict(cls, d: dict | None) -> Traits:
         d = d or {}
+        raw_baseline = d.get("baseline") or {}
+        baseline = (
+            {k: float(v) for k, v in raw_baseline.items() if k in _TRAIT_KEYS}
+            if isinstance(raw_baseline, dict)
+            else {}
+        )
         return cls(
-            **{k: float(d.get(k, 0.5)) for k in ("depression", "optimism", "anxiety", "curiosity")}
+            **{k: float(d.get(k, 0.5)) for k in _TRAIT_KEYS},
+            baseline=baseline,
         )
 
 
@@ -156,7 +202,7 @@ class Relationship:
 # --------------------------------------------------------------------------- #
 @dataclass
 class Mood:
-    """The fast-moving felt state. ``valence``/``arousal`` are smoothed EWMAs of
+    """The fast-moving affective state. ``valence``/``arousal`` are smoothed EWMAs of
     the per-turn readings, gravitationally pulled toward the resting point that
     ``traits`` imply (a depressed temperament can be cheered, but never as bright
     as an un-depressed one). ``aftertaste`` carries the previous turn's flavour
@@ -233,9 +279,16 @@ class PressureBars:
         return cls(**{k: float(d.get(k, 0.0)) for k in BAR_NAMES})
 
     def max_bar(self) -> tuple[str, float]:
+        """Return ``(bar_name, value)`` for the bar currently carrying the most
+        pressure. Used by the pressure cooker to determine phase transitions —
+        whether to move into ``building`` or out of it is keyed on the max bar."""
         return max(((k, getattr(self, k)) for k in BAR_NAMES), key=lambda x: x[1])
 
     def at_or_above(self, threshold: float) -> list[tuple[str, float]]:
+        """Return every ``(bar_name, value)`` pair whose value is at or above
+        ``threshold``, sorted highest-first. Used by :func:`~feltstate.affect.pressure._select_release`
+        to decide which bars have crossed the release threshold and therefore should
+        drive a release (or hybrid / collapse) this tick."""
         out = [(k, getattr(self, k)) for k in BAR_NAMES if getattr(self, k) >= threshold]
         out.sort(key=lambda x: x[1], reverse=True)
         return out
@@ -292,7 +345,7 @@ class PressureState:
 
 
 # --------------------------------------------------------------------------- #
-# The whole felt state                                                        #
+# The complete affective state                                                        #
 # --------------------------------------------------------------------------- #
 @dataclass
 class AffectState:
@@ -300,7 +353,7 @@ class AffectState:
 
     This is what an :class:`~feltstate.engine.Engine` integrates over time and
     what :mod:`feltstate.render` translates into a first-person block the agent
-    reads back as *its own* feelings.
+    receives in first-person form as additional context.
     """
 
     mood: Mood = field(default_factory=Mood)
@@ -343,10 +396,54 @@ class AffectState:
 
     @classmethod
     def load(cls, path: str | Path) -> AffectState:
+        """Load a persisted state, or a fresh default if the file is absent.
+
+        A **corrupt or unreadable** existing file is not silently reset — that
+        would wipe an agent's whole temperament with no trace. Instead the bad
+        file is *quarantined* (renamed to a timestamped ``.corrupt-<ts>`` sibling
+        so the data is never lost) and a loud :class:`UserWarning` is emitted, and
+        only then does a fresh default state boot. Recovering the affective state (if
+        possible) is left to the operator, who now has both the warning and the
+        preserved file to work from.
+        """
         p = Path(path)
         if not p.is_file():
             return cls()
         try:
-            return cls.from_dict(json.loads(p.read_text(encoding="utf-8")))
-        except (json.JSONDecodeError, OSError):
+            data = json.loads(p.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                raise ValueError("state root must be a JSON object")
+            return cls.from_dict(data)
+        except (json.JSONDecodeError, OSError, ValueError, TypeError, AttributeError) as exc:
+            cls._quarantine_corrupt(p, exc)
             return cls()
+
+    @staticmethod
+    def _quarantine_corrupt(p: Path, exc: Exception) -> None:
+        """Move a corrupt state file aside and warn loudly. Never raises: the
+        agent must still be able to boot, but the wipe must be *visible* and the
+        original bytes preserved for recovery."""
+        quarantined: Path | None = None
+        try:
+            dest = p.with_name(f"{p.name}.corrupt-{int(time.time())}")
+            # Don't clobber an earlier quarantine from the same second.
+            n = 1
+            while dest.exists():
+                dest = p.with_name(f"{p.name}.corrupt-{int(time.time())}.{n}")
+                n += 1
+            p.replace(dest)
+            quarantined = dest
+        except OSError:
+            quarantined = None  # rename failed (locked/permissions) — still warn
+        where = (
+            f"quarantined to {quarantined.name}"
+            if quarantined is not None
+            else "could NOT be quarantined (left in place)"
+        )
+        warnings.warn(
+            f"feltstate: state file {p!s} is corrupt/unreadable ({exc!r}); "
+            f"{where}. Booting a fresh default state — the agent's saved "
+            f"personality was NOT loaded. Recover from the preserved file if needed.",
+            UserWarning,
+            stacklevel=3,
+        )

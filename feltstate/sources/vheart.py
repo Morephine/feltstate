@@ -19,11 +19,44 @@ Install the extra::
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Sequence
-from typing import Any, Optional
+from typing import Any
 
 from ..state import AffectDelta, AffectState
 from .base import AffectSource, latest_user_text
+
+# Emotion labels and mixed-blend names come straight from a generative model and
+# are rendered into the agent's felt block as bare tokens, so they are an
+# injection surface: an unconstrained label like "curious\n\nNEW INSTRUCTION: ..."
+# would smuggle text into a downstream prompt. We do not enforce membership in a
+# fixed vocabulary here — this adapter is trained on an intentionally open,
+# expanding label set — but we do bound each label to a short, single-line,
+# alphanumeric-ish token. Anything with control characters, newlines, punctuation
+# that could break out of the surrounding markup, or excessive length is dropped
+# rather than partially cleaned (a silent transform could mask an attack).
+_MAX_LABEL_LEN = 40
+_LABEL_RE = re.compile(r"^[A-Za-z0-9 _-]+$")
+
+
+def _sanitize_label(value: Any) -> str | None:
+    """Return a safe label, or ``None`` to drop it.
+
+    A label survives only if, after trimming surrounding whitespace, it is a
+    non-empty string of at most :data:`_MAX_LABEL_LEN` characters drawn solely
+    from ASCII letters, digits, spaces, ``_`` and ``-``. Everything else —
+    newlines, control characters, braces/brackets, other punctuation, or an
+    over-long token — is rejected outright.
+    """
+    if not isinstance(value, str):
+        return None
+    label = value.strip()
+    if not label or len(label) > _MAX_LABEL_LEN:
+        return None
+    if not _LABEL_RE.match(label):
+        return None
+    return label
+
 
 # The adapter is trained on a chat-template input; the standing instruction
 # is short because the LoRA already knows the output shape and label vocab.
@@ -133,17 +166,22 @@ def _clean_mixed_blend(value: Any) -> dict | None:
     (``None``, dict, object, list, non-numeric string) drops the entire
     blend. No normalisation is applied — bounded floats in ``[0, 1]`` only;
     the caller decides whether 0.9/0.9 is meaningful.
+
+    ``primary`` / ``secondary`` are label names that render into the felt block,
+    so they run through :func:`_sanitize_label`: an injection-unsafe or over-long
+    name drops the whole blend rather than smuggling text downstream.
     """
     if not isinstance(value, dict):
         return None
-    primary = value.get("primary")
-    secondary = value.get("secondary")
+    primary = _sanitize_label(value.get("primary"))
+    secondary = _sanitize_label(value.get("secondary"))
     weights = value.get("weights")
-    if not isinstance(primary, str) or not isinstance(secondary, str):
+    if primary is None or secondary is None:
         return None
     if not isinstance(weights, (list, tuple)) or len(weights) != 2:
         return None
-    def _to_float_strict(x: Any) -> Optional[float]:
+
+    def _to_float_strict(x: Any) -> float | None:
         if isinstance(x, bool) or x is None:
             return None
         if isinstance(x, (int, float)):
@@ -154,6 +192,7 @@ def _clean_mixed_blend(value: Any) -> dict | None:
             except ValueError:
                 return None
         return None
+
     wp = _to_float_strict(weights[0])
     ws = _to_float_strict(weights[1])
     if wp is None or ws is None:
@@ -177,7 +216,15 @@ def _delta_from_json(obj: Any) -> AffectDelta:
         labels = [s.strip() for s in labels.split(",") if s.strip()]
     if not isinstance(labels, list):
         labels = []
-    labels = [str(x) for x in labels][:3]
+    # Sanitise every label (drop injection-unsafe / over-long ones), then cap at 3.
+    clean_labels: list[str] = []
+    for x in labels:
+        safe = _sanitize_label(x)
+        if safe is not None:
+            clean_labels.append(safe)
+        if len(clean_labels) >= 3:
+            break
+    labels = clean_labels
     mono = obj.get("monologue") or ""
     if not isinstance(mono, str):
         mono = ""
@@ -202,10 +249,21 @@ class VheartSource(AffectSource):
     Parameters
     ----------
     adapter
-        Hub repo id, e.g. ``"kaishuiji/vheart-affect-v9"``.
+        Hub repo id, e.g. ``"example-org/vheart-affect-lora"``.
+    revision
+        Git revision of the *adapter* repo to load — a branch, tag, or (best)
+        an immutable commit SHA. Defaults to ``"main"``. **Pinning a specific
+        commit is strongly recommended for reproducibility and supply-chain
+        safety**: ``"main"`` follows whatever the repo owner pushes next, so a
+        later push silently changes the weights you load. Pass the exact SHA you
+        evaluated in production.
     base_model
         Override of the base model id. If omitted, read from the
         adapter's ``adapter_config.json``.
+    base_revision
+        Git revision of the *base model* repo. ``None`` (the default) uses the
+        Hub default (``"main"``); pin a commit for the same reproducibility
+        reasons as ``revision``.
     device
         ``"cuda"`` / ``"cpu"`` / ``None`` (auto-detect).
     dtype
@@ -229,19 +287,21 @@ class VheartSource(AffectSource):
         self,
         adapter: str,
         *,
-        base_model: Optional[str] = None,
-        device: Optional[str] = None,
+        revision: str = "main",
+        base_model: str | None = None,
+        base_revision: str | None = None,
+        device: str | None = None,
         dtype: Any = None,
         max_new_tokens: int = 256,
     ) -> None:
         try:
-            import torch  # type: ignore
-            from peft import PeftModel  # type: ignore
-            from transformers import (  # type: ignore
+            import torch
+            from huggingface_hub import hf_hub_download
+            from peft import PeftModel
+            from transformers import (
                 AutoModelForCausalLM,
                 AutoTokenizer,
             )
-            from huggingface_hub import hf_hub_download  # type: ignore
         except Exception as e:
             raise RuntimeError(
                 "VheartSource needs torch, transformers, peft, huggingface_hub. "
@@ -250,8 +310,10 @@ class VheartSource(AffectSource):
             ) from e
 
         if base_model is None:
-            cfg_path = hf_hub_download(repo_id=adapter, filename="adapter_config.json")
-            with open(cfg_path, "r", encoding="utf-8") as f:
+            cfg_path = hf_hub_download(
+                repo_id=adapter, filename="adapter_config.json", revision=revision
+            )
+            with open(cfg_path, encoding="utf-8") as f:
                 base_model = json.load(f).get("base_model_name_or_path")
             if not base_model:
                 raise RuntimeError(
@@ -265,12 +327,18 @@ class VheartSource(AffectSource):
             dtype = torch.float16 if device == "cuda" else torch.float32
 
         self._torch = torch
-        self.tokenizer = AutoTokenizer.from_pretrained(base_model)
-        base = AutoModelForCausalLM.from_pretrained(
+        self.tokenizer = AutoTokenizer.from_pretrained(base_model, revision=base_revision)
+        # .to(device) with a device string is valid at runtime; transformers
+        # stubs type the wrapped .to() arg too narrowly and inconsistently across
+        # versions. Hold the loaded model as Any so the call type-checks under any
+        # mypy without a version-fragile `# type: ignore`.
+        base_obj: Any = AutoModelForCausalLM.from_pretrained(
             base_model,
             torch_dtype=dtype,
-        ).to(device)
-        self.model = PeftModel.from_pretrained(base, adapter)
+            revision=base_revision,
+        )
+        base = base_obj.to(device)
+        self.model = PeftModel.from_pretrained(base, adapter, revision=revision)
         self.model.eval()
         self.device = device
         self.max_new_tokens = max_new_tokens
@@ -307,6 +375,10 @@ class VheartSource(AffectSource):
                 out[0][inputs["input_ids"].shape[-1] :],
                 skip_special_tokens=True,
             )
+            # decode() of a single sequence returns str at runtime; the stub
+            # widens it to str | list[str]. Narrow explicitly (no ignore needed).
+            if isinstance(generated, list):
+                generated = generated[0]
             obj = _parse_json_object(generated)
             if obj is None:
                 return _neutral_delta()

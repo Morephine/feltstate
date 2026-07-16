@@ -13,7 +13,7 @@ have fought and come back before, so a rough patch is survivable."
 not declared in one. The function is pure — it returns a new object and never
 mutates its input.
 
-Like the rest of feltstate, this reacts to *measured* signal — the turn's valence
+Like the rest of feltstate, this reacts to *estimated* signal — the turn's valence
 and its appraised ``milestones`` — not to anything the reply model asserts about
 the relationship.
 """

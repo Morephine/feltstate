@@ -13,6 +13,7 @@ import json
 import urllib.error
 import urllib.request
 
+from .._net import require_http_url
 from .backend import LLMBackend
 
 
@@ -29,7 +30,7 @@ class OpenAICompatBackend(LLMBackend):
         max_tokens: int = 300,
         timeout: float = 60.0,
     ) -> None:
-        self.base_url = base_url
+        self.base_url = require_http_url(base_url)
         self.model = model
         self.api_key = api_key
         self.temperature = temperature

@@ -1,4 +1,4 @@
-"""Affect sources — the pluggable "how does it feel?" measurement layer."""
+"""Affect sources — the pluggable affect-estimation layer."""
 
 from .base import AffectSource, latest_user_text
 from .keyword import KeywordSource

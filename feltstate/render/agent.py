@@ -63,8 +63,8 @@ def render_agent_feeling(
     highest pressure bar — at agent scale that bar is the validated
     accumulating "how long has this felt off" signal.
 
-    State description only, never an instruction: the agent reads it as its
-    own feeling and decides for itself whether to say or change anything.
+    State description only, never an instruction: the reply model receives it in
+    first-person form and may use it when generating a response.
     """
     bars = state.pressure.bars.to_dict()
     mid = max(bars.values()) if bars else 0.0

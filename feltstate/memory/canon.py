@@ -38,26 +38,48 @@ store will not print and will not phone home.
 Storage is line-delimited JSON (one record per line). Given a base ``path`` of
 ``canon.jsonl``, two sibling files hold the other tiers:
 
-* ``canon.jsonl``          — confirmed facts (the main store)
+* ``canon.jsonl``          — confirmed facts (the main store), plus the
+  superseded/retracted audit trail that :meth:`history` / :meth:`as_of` read
 * ``canon.pending.jsonl``  — the grey zone (undecided / unconfirmed)
-* ``canon.archived.jsonl`` — facts compacted out of the main store
+* ``canon.archived.jsonl`` — dim (archived-tier) facts compacted out of the main
+  store. Still queryable: the read paths (:meth:`view` with
+  ``include_archived=True``, :meth:`search`, :meth:`recall`, :meth:`history`,
+  :meth:`as_of`) read this sidecar as well, so compaction changes *where* a dim
+  memory lives but not whether it can be recalled. It is **bounded**: compaction
+  keeps only the most-salient records, up to a cap (``cfg.archive_max`` if the
+  config defines it, else :data:`ARCHIVE_MAX_DEFAULT`), and drops the faintest,
+  so the archive cannot grow without limit.
 
-All writes are atomic (write-temp-then-replace), so a crash mid-write cannot
-corrupt the store.
+Full-file rewrites use write-temp-then-replace. Append writes are serialised by
+a per-path lock; if a crash still leaves a partial JSONL tail, the next read
+quarantines that row instead of silently discarding it.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import math
+import threading
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
 from ..config import MemoryConfig
 from .feeling import blend, derive, neutral_profile, observe
 
+_log = logging.getLogger(__name__)
+
 __all__ = ["Canon"]
+
+# The archived sidecar is *bounded cold storage*: compaction keeps at most this
+# many of the most-salient archived-tier records and drops the faintest, so the
+# file cannot grow without limit (the library's "bounded memory" claim). A
+# ``MemoryConfig`` may override this with an ``archive_max`` attribute; absent
+# that, this default applies. It is read via ``getattr`` so the store works
+# against any config shape without a hard field dependency.
+ARCHIVE_MAX_DEFAULT = 2000
 
 
 # --------------------------------------------------------------------------- #
@@ -96,7 +118,10 @@ def _entry_id(entry: dict) -> str:
     region = entry.get("region") or "fact"
     prefix = f"{region}|" if region != "fact" else ""
     key = f"{prefix}{actor}|{obj}".strip().lower()
-    return hashlib.sha1(key.encode("utf-8")).hexdigest()[:8]
+    # 128-bit content id. An 8-hex (32-bit) id reaches ~1% birthday-collision near
+    # 10k records and ~50% near 77k — enough to cross-reinforce or cross-retract
+    # unrelated facts in a long-lived store. 32 hex removes that at no cost.
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()[:32]
 
 
 def _entry_text(entry: dict) -> str:
@@ -129,35 +154,159 @@ def _lexical_score(query: str, text: str) -> float:
 
 
 def _load_jsonl(path: Path) -> list[dict]:
-    """Read a line-delimited JSON file into a list, skipping blank/garbage lines."""
+    """Read a line-delimited JSON file into a list of records.
+
+    A blank line is skipped silently. Invalid JSON *and* valid JSON whose root is
+    not an object are quarantined as structured records in ``<name>.corrupt`` and
+    logged, so a later compaction cannot make an unreadable row disappear without
+    a trace. Re-reading the same damaged store does not duplicate quarantine
+    records. The store still loads from the readable object rows.
+    """
     if not path.exists():
         return []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError) as exc:
+        _log.warning("canon: could not read %s: %s", path, exc)
+        return []
+
     out: list[dict] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
+    bad: list[dict] = []
+    for line_no, raw_line in enumerate(lines, start=1):
+        line = raw_line.strip()
         if not line:
             continue
         try:
-            out.append(json.loads(line))
+            obj = json.loads(line)
         except json.JSONDecodeError:
+            bad.append(_bad_jsonl_record(path, line_no, raw_line, "invalid-json"))
             continue
+        if not isinstance(obj, dict):
+            bad.append(_bad_jsonl_record(path, line_no, raw_line, "non-object-root"))
+            continue
+        out.append(obj)
+    if bad:
+        quarantine = path.with_name(path.name + ".corrupt")
+        added = _write_quarantine_records(quarantine, bad)
+        where = (
+            f"{added} new record(s) quarantined to {quarantine.name}"
+            if added >= 0
+            else "could not be quarantined (left only in the log)"
+        )
+        log = _log.warning if added != 0 else _log.debug
+        log(
+            "canon: %d corrupt line(s) in %s skipped (%s); "
+            "store loaded from the readable records",
+            len(bad),
+            path,
+            where,
+        )
     return out
+
+
+# A foreground turn and a background heartbeat can both write the same store at
+# once; an append racing a full rewrite loses records. Every write goes through
+# one lock per path so the store has a single writer at a time. The lock is
+# two-layer to match production's guarantee under either concurrency model: an
+# in-process threading lock (the common case — foreground vs. heartbeat thread,
+# cross-platform) with a best-effort advisory file lock underneath (covers a
+# second *process* touching the same store, where available).
+_WRITE_LOCKS: dict[str, threading.Lock] = {}
+_WRITE_LOCKS_GUARD = threading.Lock()
+
+
+def _path_lock(path: Path) -> threading.Lock:
+    key = str(path.resolve())
+    with _WRITE_LOCKS_GUARD:
+        lk = _WRITE_LOCKS.get(key)
+        if lk is None:
+            lk = _WRITE_LOCKS[key] = threading.Lock()
+        return lk
+
+
+@contextmanager
+def _write_lock(path: Path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with _path_lock(path):
+        fh = None
+        try:
+            import fcntl
+
+            fh = (path.parent / (path.name + ".lock")).open("w")
+            fcntl.flock(fh, fcntl.LOCK_EX)
+        except Exception:
+            fh = None
+        try:
+            yield
+        finally:
+            if fh is not None:
+                try:
+                    import fcntl
+
+                    fcntl.flock(fh, fcntl.LOCK_UN)
+                    fh.close()
+                except Exception:
+                    pass
+
+
+def _bad_jsonl_record(path: Path, line_no: int, raw: str, reason: str) -> dict:
+    """Structured, stable evidence for one rejected JSONL row."""
+    return {
+        "source": path.name,
+        "line": line_no,
+        "reason": reason,
+        "sha256": hashlib.sha256(raw.encode("utf-8")).hexdigest(),
+        "raw": raw,
+    }
+
+
+def _write_quarantine_records(path: Path, records: list[dict]) -> int:
+    """Append only quarantine records not already present; ``-1`` on failure."""
+    try:
+        with _write_lock(path):
+            existing: set[tuple[str, int, str]] = set()
+            if path.exists():
+                for line in path.read_text(encoding="utf-8").splitlines():
+                    try:
+                        rec = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if isinstance(rec, dict):
+                        existing.add(
+                            (
+                                str(rec.get("source", "")),
+                                int(rec.get("line", 0)),
+                                str(rec.get("sha256", "")),
+                            )
+                        )
+            fresh = [
+                rec
+                for rec in records
+                if (str(rec["source"]), int(rec["line"]), str(rec["sha256"])) not in existing
+            ]
+            if fresh:
+                with path.open("a", encoding="utf-8") as fh:
+                    for rec in fresh:
+                        fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+            return len(fresh)
+    except (OSError, UnicodeDecodeError, ValueError, TypeError):
+        return -1
 
 
 def _append_jsonl(path: Path, entry: dict) -> None:
     """Append one record as a JSON line, creating parent dirs as needed."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    with _write_lock(path):
+        with path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
 def _rewrite_jsonl(path: Path, entries: list[dict]) -> None:
     """Atomically replace a file with ``entries`` (write temp, then ``replace``)."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    body = "\n".join(json.dumps(e, ensure_ascii=False) for e in entries)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(body + "\n" if entries else "", encoding="utf-8")
-    tmp.replace(path)
+    with _write_lock(path):
+        body = "\n".join(json.dumps(e, ensure_ascii=False) for e in entries)
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_text(body + "\n" if entries else "", encoding="utf-8")
+        tmp.replace(path)
 
 
 # --------------------------------------------------------------------------- #
@@ -405,6 +554,42 @@ class Canon:
                 return entries, i
         return entries, -1
 
+    def _load_confirmed(self) -> list[dict]:
+        """All confirmed records — main store **and** the archived sidecar.
+
+        Compaction moves dim (archived-tier) facts into ``archived_path`` but they
+        stay part of what's remembered, so every read path unions the two files.
+        Records are deduped by id with the main store winning (it holds the freshest
+        write / reinforce for a fact that was recalled back out of the archive).
+        """
+        main = _load_jsonl(self.path)
+        archived = _load_jsonl(self.archived_path)
+        if not archived:
+            return main
+        seen = {_entry_id(e) for e in main}
+        return main + [e for e in archived if _entry_id(e) not in seen]
+
+    def _bump_recalls(self, hit_ids: set[str], now: datetime) -> list[dict]:
+        """Increment ``recalls`` on the hit records wherever they live, persist, and
+        return the freshly-loaded, still-active hit records.
+
+        A hit may sit in the main store or in the archived sidecar (dim memory the
+        agent looked up anyway). We bump and rewrite each file that actually held a
+        hit, so "used memory sticks" applies to archived facts too and the returned
+        salience reflects the boost.
+        """
+        for path in (self.path, self.archived_path):
+            entries = _load_jsonl(path)
+            touched = False
+            for e in entries:
+                if _entry_id(e) in hit_ids and self._is_active(e):
+                    e["recalls"] = int(e.get("recalls", 0)) + 1
+                    e["_last_recalled"] = _now_iso()
+                    touched = True
+            if touched:
+                _rewrite_jsonl(path, entries)
+        return [e for e in self._load_confirmed() if _entry_id(e) in hit_ids and self._is_active(e)]
+
     # ------------------------------------------------------------------ #
     # Public API — write                                                 #
     # ------------------------------------------------------------------ #
@@ -479,8 +664,13 @@ class Canon:
         """Promote matching grey-zone fact(s) into the confirmed store.
 
         Matches by exact id or keyword (a keyword may match several). Each match is
-        moved out of the pending file and appended to the confirmed file. Returns
-        the rendered list of promoted entries (empty if nothing matched).
+        moved out of the pending file. If the confirmed store has **no** active
+        record with that fact's id, the pending record is appended; if it already
+        holds one (confirming an already-known fact), that record is *reinforced*
+        instead — bumping its ``_reinforce_count`` and refreshing its timestamp —
+        so confirming twice never leaves two rows sharing an id (which would make
+        later search / correct / retract ambiguous). Returns the rendered list of
+        promoted-or-reinforced entries (empty if nothing matched).
         """
         target = str(id_or_keyword).lower()
         pending = _load_jsonl(self.pending_path)
@@ -493,12 +683,37 @@ class Canon:
         if not matched:
             return []
         now = datetime.now(timezone.utc)
-        out = []
+        # Index existing active confirmed records by id so a repeat confirm
+        # reinforces rather than duplicating. The main store is authoritative;
+        # a match in the archived sidecar is reinforced there, in place.
+        confirmed = _load_jsonl(self.path)
+        archived = _load_jsonl(self.archived_path)
+        active_main = {_entry_id(e): e for e in confirmed if self._is_active(e)}
+        active_arch = {_entry_id(e): e for e in archived if self._is_active(e)}
+        out, appended = [], []
+        main_touched = arch_touched = False
         for e in matched:
-            e["_promoted_from_pending"] = True
-            e["_promoted_at"] = _now_iso()
-            _append_jsonl(self.path, e)
-            out.append(self._render(e, now))
+            eid = _entry_id(e)
+            target_e = active_main.get(eid) or active_arch.get(eid)
+            if target_e is not None:
+                target_e["_reinforce_count"] = int(target_e.get("_reinforce_count", 0)) + 1
+                target_e["_last_reinforced"] = _now_iso()
+                target_e["ts"] = _now_iso()
+                if eid in active_main:
+                    main_touched = True
+                else:
+                    arch_touched = True
+                out.append(self._render(target_e, now))
+            else:
+                e["_promoted_from_pending"] = True
+                e["_promoted_at"] = _now_iso()
+                appended.append(e)
+                active_main[eid] = e  # a later match in the same call dedups too
+                out.append(self._render(e, now))
+        if appended or main_touched:
+            _rewrite_jsonl(self.path, confirmed + appended)
+        if arch_touched:
+            _rewrite_jsonl(self.archived_path, archived)
         _rewrite_jsonl(self.pending_path, remaining)
         return out
 
@@ -601,7 +816,7 @@ class Canon:
         target = str(id_or_keyword).lower()
         now = datetime.now(timezone.utc)
         out = []
-        for e in _load_jsonl(self.path):
+        for e in self._load_confirmed():
             if _entry_id(e) == target or target in _entry_text(e):
                 r = self._render(e, now)
                 if e.get("_retracted"):
@@ -627,7 +842,7 @@ class Canon:
         w = _parse_ts(when)
         now = datetime.now(timezone.utc)
         out = []
-        for e in _load_jsonl(self.path):
+        for e in self._load_confirmed():
             if target not in _entry_text(e):
                 continue
             va = _parse_ts(e.get("valid_at") or e.get("ts", ""))
@@ -656,7 +871,7 @@ class Canon:
         kw = str(keyword).lower()
         actor_l = actor.lower() if actor else None
         now = datetime.now(timezone.utc)
-        confirmed = _load_jsonl(self.path)
+        confirmed = self._load_confirmed()
 
         def matches(e: dict) -> bool:
             if not self._is_active(e):
@@ -678,16 +893,9 @@ class Canon:
             if matches(e) and self._tier(self._current_intensity(e, now)) != "forgotten"
         ]
 
-        # Recall feedback: bump recalls on confirmed hits and persist.
+        # Recall feedback: bump recalls on hits (main store or archive) and persist.
         if hits:
-            hit_ids = {_entry_id(e) for e in hits}
-            for e in confirmed:
-                if _entry_id(e) in hit_ids and self._is_active(e):
-                    e["recalls"] = int(e.get("recalls", 0)) + 1
-                    e["_last_recalled"] = _now_iso()
-            _rewrite_jsonl(self.path, confirmed)
-            # Re-derive salience after the boost so the returned view is accurate.
-            hits = [e for e in confirmed if _entry_id(e) in hit_ids and self._is_active(e)]
+            hits = self._bump_recalls({_entry_id(e) for e in hits}, now)
 
         rendered = [self._render(e, now) for e in hits]
         # Most salient first; ties broken by recency (newer ts first).
@@ -726,7 +934,7 @@ class Canon:
         kw = str(query).lower()
         ot = str(object_type).lower() if object_type else None
         now = datetime.now(timezone.utc)
-        confirmed = _load_jsonl(self.path)
+        confirmed = self._load_confirmed()
 
         # Stage 1 — metadata prefilter (cheap; keep the candidate set small).
         candidates = []
@@ -768,17 +976,9 @@ class Canon:
         order = {eid: i for i, eid in enumerate(ranked_ids)}
         top_ids = set(ranked_ids)
 
-        # Recall feedback: bump recalls on returned facts and persist.
-        for e in confirmed:
-            if _entry_id(e) in top_ids and self._is_active(e):
-                e["recalls"] = int(e.get("recalls", 0)) + 1
-                e["_last_recalled"] = _now_iso()
-        _rewrite_jsonl(self.path, confirmed)
-        out = [
-            self._render(e, now)
-            for e in confirmed
-            if _entry_id(e) in top_ids and self._is_active(e)
-        ]
+        # Recall feedback: bump recalls on returned facts (main store or archive).
+        hits = self._bump_recalls(top_ids, now)
+        out = [self._render(e, now) for e in hits]
         out.sort(key=lambda r: order.get(r["id"], 999))  # preserve the scored ranking
         return out
 
@@ -787,14 +987,18 @@ class Canon:
 
         By default only **visible** facts (salience >= ``visible_threshold``) are
         returned; pass ``include_archived=True`` to also include the dimmer
-        archived tier. Forgotten and retracted/superseded facts are never shown.
-        Sorted by salience (most vivid first), ties broken by recency. Returns
-        rendered view dicts ready to hand to a renderer.
+        archived tier — including facts compaction moved into the archived sidecar
+        file, which are read back in for this. Forgotten and retracted/superseded
+        facts are never shown. Sorted by salience (most vivid first), ties broken
+        by recency. Returns rendered view dicts ready to hand to a renderer.
         """
         now = datetime.now(timezone.utc)
         wanted = {"visible", "archived"} if include_archived else {"visible"}
+        # Union main + archive so include_archived actually reaches compacted-out
+        # dim facts; tier filtering below still excludes them unless requested.
+        source = self._load_confirmed() if include_archived else _load_jsonl(self.path)
         out = []
-        for e in _load_jsonl(self.path):
+        for e in source:
             if not self._is_active(e):
                 continue
             if (e.get("region") or "fact") != (region or "fact"):
@@ -812,36 +1016,71 @@ class Canon:
     def compact(self) -> None:
         """Garbage-collect the store in place (safe to run periodically).
 
-        Recomputes every confirmed fact's salience and rewrites the files:
-        visible facts stay, archived facts are moved to the archived sibling file,
-        and forgotten facts are dropped. Retracted/superseded entries are pruned.
-        Internal bookkeeping fields are stripped on the way out so the on-disk
-        files stay lean; recompaction is idempotent.
+        Recomputes every *active* confirmed fact's salience and rewrites the files:
+        visible facts stay in the main store, archived-tier facts are moved to the
+        archived sibling file (still queryable — see the read paths), and forgotten
+        active facts are dropped.
+
+        The **bi-temporal audit trail is preserved**: superseded and retracted
+        records are *not* deleted — they stay in the main file so :meth:`history`
+        and :meth:`as_of` can still answer "what did I used to believe?" after a
+        compaction (a correction followed by a compact keeps the prior version).
+
+        Compaction is *semantically idempotent*: it may compress *where* a record
+        lives but must not change what its intensity/salience will compute to, so
+        internal bookkeeping fields (``_reinforce_count``, ``_last_recalled``, …)
+        are **kept**, not stripped — stripping them would silently reset a
+        reinforced fact's decay curve.
+
+        The archived sidecar is **bounded**: after merging in the newly-archived
+        records it keeps at most ``archive_max`` (``cfg.archive_max`` if defined,
+        else :data:`ARCHIVE_MAX_DEFAULT`) of the most-salient archived-tier records
+        and drops the faintest, so cold storage cannot grow without limit.
         """
         now = datetime.now(timezone.utc)
-
-        def clean(e: dict) -> dict:
-            return {k: v for k, v in e.items() if not k.startswith("_")}
 
         kept, to_archive = [], []
         for e in _load_jsonl(self.path):
             if not self._is_active(e):
+                # Superseded / retracted: the audit trail history()/as_of() read.
+                # Keep it in the main file, verbatim, so those methods still work.
+                kept.append(e)
                 continue
             tier = self._tier(self._current_intensity(e, now))
             if tier == "visible":
-                kept.append(clean(e))
+                kept.append(e)
             elif tier == "archived":
-                to_archive.append(clean(e))
-            # forgotten -> dropped
+                to_archive.append(e)
+            # forgotten (and active) -> dropped
         _rewrite_jsonl(self.path, kept)
         if to_archive:
-            existing_archive = _load_jsonl(self.archived_path)
-            _rewrite_jsonl(self.archived_path, existing_archive + to_archive)
+            merged = self._dedup_archive(_load_jsonl(self.archived_path) + to_archive)
+            # Bound cold storage: keep the most-salient up to the cap, drop the rest.
+            cap = int(getattr(self.cfg, "archive_max", ARCHIVE_MAX_DEFAULT))
+            if cap >= 0 and len(merged) > cap:
+                merged.sort(key=lambda e: self._current_intensity(e, now), reverse=True)
+                merged = merged[:cap]
+            _rewrite_jsonl(self.archived_path, merged)
 
-        # Prune the grey zone the same way (no archival tier for pending).
-        pending_kept = [
-            clean(e)
-            for e in _load_jsonl(self.pending_path)
-            if self._is_active(e) and self._tier(self._current_intensity(e, now)) != "forgotten"
-        ]
+        # Prune the grey zone the same way (no archival tier for pending), but keep
+        # its audit trail too for symmetry with the main store.
+        pending_kept = []
+        for e in _load_jsonl(self.pending_path):
+            if not self._is_active(e):
+                pending_kept.append(e)
+            elif self._tier(self._current_intensity(e, now)) != "forgotten":
+                pending_kept.append(e)
         _rewrite_jsonl(self.pending_path, pending_kept)
+
+    @staticmethod
+    def _dedup_archive(entries: list[dict]) -> list[dict]:
+        """Collapse archive records sharing an id, keeping the last (freshest) one.
+
+        Re-archiving a record already in the sidecar (e.g. it was recalled back into
+        the main store and then faded again) would otherwise leave two rows with the
+        same id. Keep the last occurrence so the newest bookkeeping wins.
+        """
+        by_id: dict[str, dict] = {}
+        for e in entries:
+            by_id[_entry_id(e)] = e
+        return list(by_id.values())

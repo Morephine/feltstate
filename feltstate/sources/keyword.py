@@ -578,7 +578,7 @@ class KeywordSource(AffectSource):
         baseline: AffectState,
         persona: str = "",
     ) -> AffectDelta:
-        """Measure the character's reaction to the latest user turn.
+        """Estimate the character's reaction to the latest user turn.
 
         ``baseline`` and ``persona`` are accepted for interface parity but
         unused here: a keyword scanner has no way to ground its reading in the

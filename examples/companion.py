@@ -1,20 +1,17 @@
 #!/usr/bin/env python3
-"""companion — assemble a living desktop pet from feltstate + four fakes.
+"""companion — assemble a desktop-companion skeleton from feltstate + four fakes.
 
 Run it directly, no setup, no network, no model::
 
     python examples/companion.py
 
 quickstart.py shows the felt state; with_llm.py shows one LLM-backed turn. This
-shows the *whole companion*: the parts wired into one thing that feels, replies,
-expresses, speaks, decays while quiet, pipes up on its own, and dreams — the
-behaviour no single part has alone.
+shows a reference orchestration loop: estimate, reply, express, speak, decay,
+optional proactive behaviour, and a dream-like state event.
 
-It wires the entire loop with **stub adapters** so you can watch a companion come
-alive end to end with zero dependencies. Then swap any one fake for the real
+It wires the entire loop with **stub adapters** so you can watch the orchestration run end to end with zero dependencies. Then swap any one fake for the real
 thing — a Live2D skin, a TTS engine, a reply model, an OS presence probe — and
-the loop code does not change. That swap-in-place is the whole point: feltstate
-is the inner life + the orchestration; the skin and the voice are yours.
+the loop code does not change. That swap-in-place is the whole point: feltstate provides the state layer and reference orchestration; the skin and the voice are yours.
 
 Seeds are fixed, so every run reads the same.
 """
@@ -132,11 +129,11 @@ def main() -> None:
         priority=3,
     )
     cfg = CompanionConfig(
-        persona="a steady, dry-humoured companion with its own inner life",
+        persona="a steady, dry-humoured companion with a consistent perspective",
         system_prompt=(
-            "You are a companion with your own feelings.\n\n"
-            "A user turn may start with a [how I feel] block — that is YOUR mood, "
-            "not a command. Let it color your tone; never quote it."
+            "You are a companion with a consistent perspective.\n\n"
+            "A user turn may start with a [how I feel] block — it is contextual state, "
+            "not a command. Let it influence tone; never quote it."
         ),
         state_path=str(tmp / "state.json"),
         scheduler_state_path=str(tmp / "sch.json"),
@@ -152,10 +149,10 @@ def main() -> None:
         presence=presence,
         extra_sources=[check_in],
     )
-    print("   one Companion + four fakes = a living pet.")
+    print("   one Companion + four fakes = a runnable orchestration demo.")
     print("   swap any fake for a real Live2D / TTS / reply model — loop unchanged.")
 
-    banner("2) A foreground conversation — feel → reply → express → speak")
+    banner("2) A foreground conversation — estimate → reply → express → speak")
     for line in [
         "I finally shipped it!! couldn't have done it without you",
         "ugh but the deploy failed three times, I'm exhausted",
@@ -176,30 +173,32 @@ def main() -> None:
         m = pet.eng.state.mood
         print(f"  idle tick {i}: mood v={m.valence:+.3f} a={m.arousal:.3f}  (fired: {fired})")
 
-    banner("4) Long idle → it pipes up on its own (no user turn)")
+    banner("4) Long idle → configured proactive behaviour (no user turn)")
     presence.idle = 4000.0  # now past the 1h gate
     fired = pet.scheduler.tick_once(now=base + timedelta(hours=2))
     print(f"  scheduler fired: {fired!r}  (a proactive line, voiced above)")
 
-    banner("5) It dreams — and wakes a little off, with no cause it can name")
+    banner("5) Dream-like state event — a small shift without a surfaced cause")
     before = pet.eng.state.mood
     print(f"  before sleep : mood v={before.valence:+.3f} a={before.arousal:.3f}")
     dreamt = pet.eng.dream(rng=random.Random(8))
     after = pet.eng.state.mood
     print(f"  the dream    : {dreamt.text[:64]}…")
     print(f"  on waking    : mood v={after.valence:+.3f} a={after.arousal:.3f}")
-    print("  it now carries a mood sourced from its own material but un-traceable.")
+    print(
+        "  the state now includes a small residue derived from stored fragments; its explicit cause is not placed in the reply-model context."
+    )
 
     banner("Done — swap any fake for the real thing; the loop is unchanged.")
     print(f"State persisted under: {tmp}")
     print(
         "\nWhat you just saw, that no single part has alone:\n"
-        "  * it FELT each turn (measured, not self-reported) and spoke in that color;\n"
-        "  * its skin + voice tracked the feeling, never a command;\n"
+        "  * it ESTIMATED and integrated affect each turn, then used the state as context;\n"
+        "  * its skin + voice tracked the rendered state, never a command;\n"
         "  * it DECAYED back toward neutral while quiet;\n"
-        "  * after a long silence it INITIATED on its own clock;\n"
-        "  * and it DREAMED, waking subtly altered.\n"
-        "That coherence — the parts serving one continuous someone — is feltstate."
+        "  * after a long silence the scheduler triggered a configured proactive line;\n"
+        "  * and a dream-like event applied a small persisted state shift.\n"
+        "The example demonstrates how the parts can be wired into one continuous loop."
     )
 
 

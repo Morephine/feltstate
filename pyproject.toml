@@ -4,14 +4,17 @@ build-backend = "hatchling.build"
 
 [project]
 name = "feltstate"
-version = "0.1.0"
-description = "Give an LLM agent a felt inner life it experiences as its own: ground-truth affect state, decaying memory, and cache-safe identity-merge injection."
+# Experimental pre-release. The API and the affect/memory dynamics may still
+# change between alphas; pin an exact version if you depend on current behaviour.
+version = "0.2.0a1"
+description = "Persistent affect and provenance-aware memory for LLM agents, with external appraisal, cache-safe context, and an auditable forgetting lifecycle. Experimental reference design; not a claim about consciousness or human-like emotion."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
-keywords = ["llm", "agent", "affective-computing", "emotion", "memory", "ai-companion", "appraisal"]
+keywords = ["llm", "agent", "affective-computing", "memory", "provenance", "selective-forgetting", "ai-companion", "appraisal"]
 authors = [{ name = "Larry Wang", email = "kaishuiji@gmail.com" }]
 classifiers = [
+    "Development Status :: 3 - Alpha",
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
@@ -40,6 +43,9 @@ Source = "https://github.com/Morephine/feltstate"
 [tool.hatch.build.targets.wheel]
 packages = ["feltstate"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"THIRD_PARTY_NOTICES.md" = "THIRD_PARTY_NOTICES.md"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
@@ -66,3 +72,8 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 no_implicit_optional = true
 files = ["feltstate"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
