@@ -8,6 +8,7 @@ scheduler depends only on the :class:`PendingTopicsStore` interface;
 
 from __future__ import annotations
 
+import fcntl
 import json
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -36,12 +37,21 @@ class JsonlTopicsStore(PendingTopicsStore):
     """JSONL reference impl — one ``{"text", "consumed"}`` record per line.
 
     Oldest unconsumed wins; ``mark_consumed`` flips the first matching record and
-    rewrites the file. Append is plain text-append; reads tolerate partial/bad
-    lines. Zero-dependency.
+    rewrites the file atomically. Reads tolerate partial/bad lines.
+    Every mutation holds one shared advisory lock (v0.2.1) — concurrency and
+    atomicity parity with the other write paths (see ``memory.canon``).
+    Zero-dependency.
     """
 
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
+
+    def _locked(self):
+        """One shared lock file for *every* mutation. Appends and the
+        consume-rewrite previously used no lock, so an append racing the
+        rewrite could vanish with the replaced inode."""
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        return (self.path.with_name(self.path.name + ".lock")).open("w")
 
     def _read(self) -> list[dict]:
         if not self.path.exists():
@@ -58,10 +68,14 @@ class JsonlTopicsStore(PendingTopicsStore):
         return out
 
     def append(self, text: str) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
         rec = {"text": text, "consumed": False}
-        with self.path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        with self._locked() as lk:
+            fcntl.flock(lk.fileno(), fcntl.LOCK_EX)
+            try:
+                with self.path.open("a", encoding="utf-8") as f:
+                    f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+            finally:
+                fcntl.flock(lk.fileno(), fcntl.LOCK_UN)
 
     def read_oldest_unconsumed(self) -> str | None:
         for rec in self._read():
@@ -71,12 +85,21 @@ class JsonlTopicsStore(PendingTopicsStore):
         return None
 
     def mark_consumed(self, text: str) -> None:
-        recs = self._read()
-        for rec in recs:
-            if not rec.get("consumed") and rec.get("text") == text:
-                rec["consumed"] = True
-                self.path.write_text(
-                    "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in recs),
-                    encoding="utf-8",
-                )
-                return
+        # Read-modify-rewrite under the shared lock, landing via tmp+replace —
+        # a crash mid-rewrite must never eat the whole queue.
+        with self._locked() as lk:
+            fcntl.flock(lk.fileno(), fcntl.LOCK_EX)
+            try:
+                recs = self._read()
+                for rec in recs:
+                    if not rec.get("consumed") and rec.get("text") == text:
+                        rec["consumed"] = True
+                        tmp = self.path.with_suffix(self.path.suffix + ".tmp")
+                        tmp.write_text(
+                            "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in recs),
+                            encoding="utf-8",
+                        )
+                        tmp.replace(self.path)
+                        return
+            finally:
+                fcntl.flock(lk.fileno(), fcntl.LOCK_UN)

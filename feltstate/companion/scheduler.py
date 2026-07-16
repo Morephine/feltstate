@@ -186,7 +186,13 @@ class CompanionScheduler:
             return self._tick_once_locked(now)
 
     def _tick_once_locked(self, now: datetime | None = None) -> str | None:
-        now = now or datetime.now()
+        # Clock unification (v0.2.1): Engine speaks aware datetimes everywhere;
+        # the naive-local default here invited naive/aware comparison bugs. Day
+        # counters are a user-facing "today", so default to *aware local* time,
+        # and normalise any naive caller input the same way.
+        now = now or datetime.now().astimezone()
+        if now.tzinfo is None:
+            now = now.astimezone()
         now_ts = now.timestamp()
         st = self._state
         if not st.get("boot_ts"):

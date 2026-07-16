@@ -361,6 +361,10 @@ class AffectState:
     relationship: Relationship = field(default_factory=Relationship)
     pressure: PressureState = field(default_factory=PressureState)
     last_tick_ts: str | None = None
+    # persist-generation stamp (v0.2.1): bumps on every save() so operators can
+    # detect cross-file skew (e.g. a sidecar store restored from an older
+    # snapshot than state.json). Old files without it load as generation 0.
+    generation: int = 0
     # rolling window of recent readings: [{"ts","valence","arousal","labels"}, ...]
     history: list[dict] = field(default_factory=list)
 
@@ -371,6 +375,7 @@ class AffectState:
             "relationship": self.relationship.to_dict(),
             "pressure": self.pressure.to_dict(),
             "last_tick_ts": self.last_tick_ts,
+            "generation": int(self.generation or 0),
             "history": list(self.history)[-50:],
         }
 
@@ -383,11 +388,14 @@ class AffectState:
             relationship=Relationship.from_dict(d.get("relationship")),
             pressure=PressureState.from_dict(d.get("pressure")),
             last_tick_ts=d.get("last_tick_ts"),
+            generation=int(d.get("generation") or 0),
             history=list(d.get("history") or [])[-50:],
         )
 
     # --- persistence (atomic write) ---
     def save(self, path: str | Path) -> None:
+        # Bump the generation stamp on every persist (v0.2.1) — see field note.
+        self.generation = int(self.generation or 0) + 1
         p = Path(path)
         p.parent.mkdir(parents=True, exist_ok=True)
         tmp = p.with_suffix(p.suffix + ".tmp")

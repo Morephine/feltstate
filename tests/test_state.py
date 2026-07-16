@@ -366,3 +366,20 @@ def test_affect_delta_from_dict_ignores_unknown_fields():
     """Extra keys in a future schema version must not cause from_dict to fail."""
     back = AffectDelta.from_dict({"valence": 0.3, "future_field": "ignored"})
     assert back.valence == 0.3
+
+
+def test_generation_bumps_on_save_and_round_trips(tmp_path):
+    # v0.2.1: cross-file skew detector — each persist bumps the stamp,
+    # and old files without the field load as generation 0.
+    from feltstate.state import AffectState
+
+    p = tmp_path / "state.json"
+    st = AffectState()
+    assert st.generation == 0
+    st.save(p)
+    st.save(p)
+    assert st.generation == 2
+    loaded = AffectState.load(p)
+    assert loaded.generation == 2
+    legacy = AffectState.from_dict({"mood": None})
+    assert legacy.generation == 0
