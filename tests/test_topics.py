@@ -60,6 +60,7 @@ def test_scheduler_naive_now_is_normalised(tmp_path):
     # v0.2.1 clock unification: a naive caller datetime must not crash or
     # skew — it is treated as explicit local and becomes aware internally.
     from datetime import datetime
+
     from feltstate.state import AffectState  # noqa: F401  (import parity)
 
     naive = datetime.now()
