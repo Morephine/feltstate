@@ -183,9 +183,7 @@ def trace_contexts(
                 else:
                     verified = verify_source_ptr(pointer, exact_text)
             except Exception as exc:
-                verification_error = (
-                    f"source-text loader failed: {type(exc).__name__}: {exc}"
-                )
+                verification_error = f"source-text loader failed: {type(exc).__name__}: {exc}"
 
         item: dict[str, Any] = {
             "pointer": pointer,

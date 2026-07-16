@@ -23,7 +23,9 @@ SRC = [
 
 
 def test_faithful_summary_accepts():
-    r = check_consistency("he required tidy commits and hates vague reports, corrected the mixup", SRC)
+    r = check_consistency(
+        "he required tidy commits and hates vague reports, corrected the mixup", SRC
+    )
     assert r["verdict"] == ACCEPT
     assert r["fails"] == []
 
@@ -72,7 +74,9 @@ def test_person_check_catches_viewpoint_drift():
     src = [_row("astra", "made", "real progress on the greenhouse automation")]
     # self's own experience, long, told entirely in the third person, no "I", and
     # the verb sits far from the pronoun so the deed-adjacency check can't catch it
-    text = "the greenhouse automation finally came together and he seemed genuinely relieved about it"
+    text = (
+        "the greenhouse automation finally came together and he seemed genuinely relieved about it"
+    )
     r = check_consistency(text, src, self_names={"astra"})
     assert "person" in r["fails"]
 

@@ -256,8 +256,7 @@ def verify_fingerprint(fp: Any) -> bool:
         # Constructors emit a closed pointer schema. Extra/missing fields in the
         # immutable core are mutation, not harmless metadata.
         if any(
-            not isinstance(p, Mapping) or set(p) != {"file", "t0", "t1", "sha"}
-            for p in raw_ptrs
+            not isinstance(p, Mapping) or set(p) != {"file", "t0", "t1", "sha"} for p in raw_ptrs
         ):
             return False
         ptrs = _check_ptrs(raw_ptrs)

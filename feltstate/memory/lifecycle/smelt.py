@@ -94,9 +94,7 @@ def _validate_unsealed_fields(mid: str, birth_affect: Mapping, ts_utc: str) -> t
             or isinstance(value, bool)
             or not math.isfinite(value)
         ):
-            raise FingerprintError(
-                f"birth_affect[{key!r}] must be a finite number, got {value!r}"
-            )
+            raise FingerprintError(f"birth_affect[{key!r}] must be a finite number, got {value!r}")
         affect[str(key)] = float(value)
     if not isinstance(ts_utc, str) or not ts_utc:
         raise FingerprintError("ts must be a non-empty ISO-8601 string")

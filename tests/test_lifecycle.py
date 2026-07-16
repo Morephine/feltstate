@@ -54,9 +54,7 @@ def test_verify_fails_closed_on_garbage():
 def test_verify_rejects_schema_invalid_core_even_with_matching_hash():
     fp = _fp("m1", "source")
     fp["core"]["birth_affect"] = {"valence": "not-a-number"}
-    fp["fp_id"] = core_hash(
-        fp["core"]["source_ptrs"], fp["core"]["birth_affect"], fp["core"]["ts"]
-    )
+    fp["fp_id"] = core_hash(fp["core"]["source_ptrs"], fp["core"]["birth_affect"], fp["core"]["ts"])
     assert verify_fingerprint(fp) is False
 
 

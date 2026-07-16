@@ -195,8 +195,7 @@ def _load_jsonl(path: Path) -> list[dict]:
         )
         log = _log.warning if added != 0 else _log.debug
         log(
-            "canon: %d corrupt line(s) in %s skipped (%s); "
-            "store loaded from the readable records",
+            "canon: %d corrupt line(s) in %s skipped (%s); store loaded from the readable records",
             len(bad),
             path,
             where,

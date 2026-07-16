@@ -201,7 +201,5 @@ def test_range_context_falls_back_to_start_when_no_turn_is_inside():
 def test_range_context_rejects_reversed_range():
     from feltstate.memory.context import get_turn_range_context
 
-    r = get_turn_range_context(
-        _turns(), "2026-06-06T10:03:00", "2026-06-06T10:01:00"
-    )
+    r = get_turn_range_context(_turns(), "2026-06-06T10:03:00", "2026-06-06T10:01:00")
     assert r == {"ok": False, "reason": "range end precedes start"}

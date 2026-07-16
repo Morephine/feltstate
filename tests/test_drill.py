@@ -176,7 +176,6 @@ def test_tampered_core_shows_unverified():
     assert drill(fp, {}.get)["verified"] is False
 
 
-
 def test_trace_contexts_uses_full_pointer_range_and_can_verify_source_text():
     exact = "first source line\nsecond source line"
     ptr = make_source_ptr(
