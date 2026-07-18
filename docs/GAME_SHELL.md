@@ -154,7 +154,7 @@ kept here because every implementer hits the same walls:
   region has hours.
 * **Respect peripheral vision** (an SCP-173 implementer's scar): inflate the
   "seen" margin, or corner-of-the-eye movement breaks the illusion.
-* **Silence beats spectacle**: redirected-walking studies found players
+* **Silence beats spectacle**: impossible-spaces VR studies found players
   failing to notice ~56% room overlap when uninformed. The strongest
   version of this power is the one never announced — the player walks into
   a changed corridor believing it was always so.
