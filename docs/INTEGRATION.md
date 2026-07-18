@@ -249,4 +249,6 @@ agent work without breaking character · [FAILURE_IN_CHARACTER.md](FAILURE_IN_CH
 [BRIDGE_ETIQUETTE.md](BRIDGE_ETIQUETTE.md) — receipts, typing, attachments and
 the emergency command lane on a chat bridge ·
 [INTERRUPTION.md](INTERRUPTION.md) — barge-in, the stop chain, and recovering
-from being cut off.
+from being cut off · [PERCEPTION.md](PERCEPTION.md) — images and screens as
+input: the persist-perceive-reply path and the pull eye ·
+[INNER_LIFE.md](INNER_LIFE.md) — the silent thinking channel behind the lamp.

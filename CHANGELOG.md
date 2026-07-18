@@ -60,6 +60,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `docs/PERCEPTION.md`: input-side multimodality — the layering rule
+  (perception is input, not state: images move her through appraisal of the
+  conversation, never through a direct affect write), the inbound
+  persist→perceive→reply path for both multimodal backends (content array
+  with `render()` assembled by hand) and caption bridges (descriptions framed
+  as "seen, not heard"), and the pull-eye pattern: an always-fresh local file
+  she *chooses* to look at — looking as an act, cost under control, frames
+  treated as the most sensitive artifact in the system.
+- `docs/INNER_LIFE.md`: the silent thinking channel — what happens behind the
+  thinking lamp. The library's half (`IntrospectSource`: quota-free,
+  solitude-gated, once per window per day, retried on failed delivery) and
+  the app's half: a full turn fully swallowed (real persona + felt block +
+  introspection prompt; output to a sink, never the voice; only a
+  thinking/idle status crosses to the skin). Where the thought goes: diary or
+  Canon (thought vs said, distinguishable), the state ticks so idle hours
+  genuinely change her, and it seeps into the next felt block unannounced.
 - `docs/BRIDGE_ETIQUETTE.md`: being a person over a chat platform — the fixed
   emoji receipt vocabulary (working / done / deliberate-silence / queue-full)
   with the four rules that keep receipts trustworthy, the typing indicator as
