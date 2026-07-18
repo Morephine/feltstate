@@ -13,11 +13,11 @@
 &nbsp;![License: MIT](https://img.shields.io/badge/license-MIT-green)
 &nbsp;[English](README.md) | [中文](README.zh.md)
 
-feltstate is a small, opinionated reference library for **persistent affect and
-provenance-aware memory** in long-running LLM companions. It keeps affect
-appraisal outside the reply model, maintains structured memories that can fade,
-strengthen, change, merge, or be retired, and returns compact state as context
-rather than behavioural instruction. Around the engine sits an [integration
+feltstate is a **character engine for AI agents** — a small, opinionated
+reference library that gives a long-running agent a persistent, *tunable*
+character: affect appraised outside the reply model, structured memories that
+can fade, strengthen, change, merge, or be retired, and compact state returned
+as context rather than behavioural instruction. Around the engine sits an [integration
 handbook](#the-integration-handbook) — fifteen chapters on how the pieces
 assemble into a companion that speaks, shows a face, works, fails, and stays
 itself — with every quoted transcript reproducible from a runnable example.
@@ -97,8 +97,10 @@ with a one-line rationale, per-character values ride `PersonaDials`, and the
 defaults amount to one reference temperament. Retuning them is not breaking
 the model — it is how you write a *different* character: quicker to forgive,
 slower to warm, harder to tire. Personality being tunable is the design, not
-a disclaimer. What they are not is fitted to human data; no such claim is
-made, and none is needed for the job they do.
+a disclaimer. Taken together, `config.py` + `PersonaDials` are the **character
+configurator** — the dials are how you *write* a character, and the engine is
+what keeps that character running. What the numbers are not is fitted to human
+data; no such claim is made, and none is needed for the job they do.
 
 ### A note on memory fingerprints
 
@@ -367,8 +369,8 @@ python examples/game_director.py    # the game shell: intents, sight gate, one r
 - **Is:** a clean, runnable *reference implementation* of the ideas, dependency-
   free at the core. Bring your own `AffectSource`, persona text, and a place to
   store state.
-- **Isn't:** a finished product. There is no bundled personality, validated
-  affect model, conversational data, avatar, or TTS. The
+- **Isn't:** a finished product. There is no bundled personality, no trained
+  affect classifier, and no conversational data, avatar, or TTS. The
   `feltstate.companion` package is a reference orchestration skeleton, not a
   complete pet application. See `examples/companion.py` for a stubbed demo and
   `examples/companion_live.py` for the interactive one.

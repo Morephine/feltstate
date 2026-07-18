@@ -7,7 +7,7 @@ name = "feltstate"
 # Experimental pre-release. The API and the affect/memory dynamics may still
 # change between alphas; pin an exact version if you depend on current behaviour.
 version = "0.2.0a2"
-description = "Persistent affect and provenance-aware memory for LLM agents, with external appraisal, cache-safe context, and an auditable forgetting lifecycle. Experimental reference design; not a claim about consciousness or human-like emotion."
+description = "A character engine for AI agents: persistent affect, provenance-aware memory, external appraisal, cache-safe context, and an auditable forgetting lifecycle. Experimental reference design; not a claim about consciousness or human-like emotion."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }

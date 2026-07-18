@@ -1,12 +1,13 @@
-"""feltstate.config — every tunable in one place.
+"""feltstate.config — the character configurator: every dial in one place.
 
 In ad-hoc implementations these constants tend to scatter across dozens of files;
-pulling them into frozen dataclasses means you tune behaviour by editing config,
-not by hunting through logic. Every magic number below has a one-line rationale
-so you know what moving it does.
+pulling them into frozen dataclasses means you tune the character by editing
+config, not by hunting through logic. Every dial below has a one-line rationale
+so you know what moving it does — the numbers are personality parameters, not
+psychological measurements (see the README's "Where the numbers come from").
 
-Nothing here is character-specific. Personality is expressed through
-:class:`PersonaDials` (passed in per agent), not through code.
+Nothing here is character-specific. Per-character personality is expressed
+through :class:`PersonaDials` (passed in per agent), not through code.
 """
 
 from __future__ import annotations

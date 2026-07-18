@@ -27,6 +27,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Positioning: feltstate is a character engine for AI agents.** The README
+  intro (both languages), the package description, and the repo description
+  now lead with what the thing *is* — an engine that keeps a persistent,
+  tunable character running — rather than a list of mechanisms. Alongside:
+  `config.py` + `PersonaDials` named as the **character configurator** (the
+  dials are how you write a character), config.py's "magic number" self-talk
+  replaced with dial language, and the scope section's "no validated affect
+  model" reworded to the accurate object ("no trained affect classifier") so
+  honesty about classifiers stops reading as apology about the dynamics.
 - **The milestone tuning table moved out of logic into config**
   (`MILESTONE_EFFECTS` + `MILESTONE_ALIASES` in `feltstate.config`, same idiom
   as `LABEL_TO_PRESSURE`): `_apply_milestone` was a wall of hardcoded
