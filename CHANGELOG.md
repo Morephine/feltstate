@@ -8,6 +8,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The return-after-a-gap line could never render on the return turn**:
+  `tick()` re-anchored the last-contact clock before `inject()` read it, so
+  "3 days since we last spoke" only ever appeared on later proactive renders —
+  never on the turn where the user actually came back. The felt gap is now
+  captured at anchor time and preferred by `render()` while the live gap is
+  under the gate.
 - **Imprint decay was quadratic in age**: the decay anchor never advanced, so
   every `decay_imprints` call re-charged the entire window since the event — a
   per-tick loop drained "two to three years to floor" of vividness in days. A
@@ -54,6 +60,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `examples/prompt_shapes.py` + `docs/PROMPT_SHAPES.md`: the prompt-shape
+  gallery — one neutral persona, three prepared moments (first morning, back
+  after three days, a release let out vs held in), each shown as the full
+  message array; plus the variant master table mapping every backend signal to
+  its phrase bands and thresholds ("state moves → one line moves").
+- `examples/memory_tools.py` + `docs/MEMORY_TOOLS.md`: Canon exposed as five
+  function-calling tools (remember / recall / correct / retract / history) with
+  copy-paste JSON schemas, the ~30-line dispatcher, and a real four-turn trace
+  ending in the bi-temporal "what did I *used to* think?" answer.
 - `examples/companion_live.py`: an *interactive* companion loop — you type, a
   real background heartbeat runs, going quiet makes it raise a pending topic on
   its own, and facts stored in `Canon` survive a full process restart. Zero

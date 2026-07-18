@@ -185,6 +185,11 @@ class Engine:
 
         # Load engine bookkeeping (best-effort; never fatal).
         self._last_user_ts: str | None = None
+        # The felt-gap phrase captured at the moment the user-contact clock was
+        # re-anchored (2026-07-18 fix): computed *before* the overwrite, so the
+        # very turn where the user returns can still open with "3 days since we
+        # last spoke". None when the gap was under the gate.
+        self._since_phrase_at_anchor: str | None = None
         self.imprints: list[Imprint] = []
         # Label-hysteresis bookkeeping (see affect.smooth): the labels currently
         # shown, plus a candidate top label and how long it has been trying to win.
@@ -362,6 +367,15 @@ class Engine:
         # tick (no user text) does not reset it, so the felt distance keeps
         # growing while the conversation is quiet.
         if latest_user_text(messages).strip():
+            # Fix (2026-07-18): compute the felt gap *before* re-anchoring.
+            # tick() runs before inject() in a turn, so overwriting first meant
+            # the return-after-a-gap line could never appear on the return turn
+            # itself — the one moment it matters most. Capture the phrase now;
+            # render() prefers it while the exchange is active (live gap under
+            # the gate) and falls back to the live gap during long silences.
+            self._since_phrase_at_anchor = time_since_phrase(
+                self._last_user_ts, now, self.config.time
+            )
             self._last_user_ts = ts
 
         # (6) Sleep pressure: accrue tiredness for this tick's activity (it drives
@@ -457,7 +471,12 @@ class Engine:
         :meth:`inject` cheap to cache.
         """
         now = datetime.now(timezone.utc)
-        since = time_since_phrase(self._last_user_ts, now, self.config.time)
+        live = time_since_phrase(self._last_user_ts, now, self.config.time)
+        # Within an active exchange the live gap is under the gate (None) — the
+        # felt distance is the one from when the user came back, captured at
+        # anchor time. Once silence outgrows the gate, the growing live gap
+        # takes over (proactive renders during long quiet).
+        since = live if live else self._since_phrase_at_anchor
         # Fix (2026-07-18): now_phrase reads wall-clock fields (.weekday/.hour)
         # and its contract is caller-local time. Feeding it UTC rendered
         # "Tue night 12:11" for a Wednesday-8am machine in UTC+8 — every
@@ -711,6 +730,7 @@ class Engine:
                 raise ValueError("engine meta root must be a JSON object")
 
             last_user_ts = data.get("last_user_ts") or None
+            since_phrase_at_anchor = data.get("since_phrase_at_anchor") or None
             raw_imprints = data.get("imprints") or []
             if not isinstance(raw_imprints, list):
                 raise ValueError("engine meta imprints must be a JSON array")
@@ -743,6 +763,7 @@ class Engine:
             return
 
         self._last_user_ts = last_user_ts
+        self._since_phrase_at_anchor = since_phrase_at_anchor
         self.imprints = imprints
         self._labels_committed = labels_committed
         self._label_candidate = label_candidate
@@ -774,6 +795,7 @@ class Engine:
 
         payload = {
             "last_user_ts": self._last_user_ts,
+            "since_phrase_at_anchor": self._since_phrase_at_anchor,
             "imprints": [imp.to_dict() for imp in self.imprints],
             "labels_committed": list(self._labels_committed),
             "label_candidate": self._label_candidate,

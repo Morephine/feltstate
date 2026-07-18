@@ -246,3 +246,22 @@ def test_compact_archives_before_rewriting_main(tmp_path, monkeypatch):
     # And the fact really lives in the archive.
     archived = canon_mod._load_jsonl(canon.archived_path)
     assert any(e.get("what", {}).get("object") == "a dim old thing" for e in archived)
+
+
+# --------------------------------------------------------------------------- #
+# engine: the return-after-a-gap line must appear on the return turn itself   #
+# --------------------------------------------------------------------------- #
+def test_return_gap_opens_the_block_on_the_return_turn(tmp_path):
+    """Before: tick() re-anchored the last-contact clock *before* inject() read
+    it, so "3 days since we last spoke" could never render on the very turn
+    where the user came back — only on later proactive renders."""
+    from feltstate import Engine, KeywordSource
+
+    eng = Engine(source=KeywordSource(), state_path=tmp_path / "s.json")
+    eng._last_user_ts = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
+
+    history = [{"role": "user", "content": "hey, I'm back. long week."}]
+    eng.tick(history)
+    injected = eng.inject("hey, I'm back. long week.")
+    assert "since we last spoke" in injected
+    assert "a few days" in injected
