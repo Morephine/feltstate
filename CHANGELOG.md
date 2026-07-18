@@ -8,6 +8,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The milestone tuning table moved out of logic into config**
+  (`MILESTONE_EFFECTS` + `MILESTONE_ALIASES` in `feltstate.config`, same idiom
+  as `LABEL_TO_PRESSURE`): `_apply_milestone` was a wall of hardcoded
+  constants (0.025, 0.30·sev, …) — a tuning table pretending to be code. It
+  is now a small interpreter over the config table; numbers unchanged, pinned
+  by tests.
+- **The anticipation joy floor's magic 0.018 is now two named knobs**
+  (`anticipation_gain`, `anticipation_ref_decay`): the old formula divided by
+  a bare 0.018, silently re-scaling anticipation whenever `idle_decay` was
+  retuned. The coupling itself is intentional (a floor below per-tick cooling
+  evaporates the same tick) — it is now documented, and setting
+  `ref_decay = idle_decay` pins the floor absolute. Defaults reproduce the
+  old value bit-for-bit.
+- **`render()`/`inject()` accept an injectable clock** (`now=`), mirroring
+  `tick()` — the render side of the engine was untestable against a fixed
+  wall clock while the tick side wasn't.
+- **Canon degrades loudly, not silently, where `flock` is unavailable**: the
+  cross-process lock attempt was `except Exception: pass` around an inline
+  `import fcntl` — on Windows every write silently ran without cross-process
+  locking. The module now resolves `fcntl` once at import, warns exactly once
+  when falling back to in-process locks, and narrows the guards to `OSError`.
+- **Canon's scale envelope documented honestly** (module docstring + README
+  scope): every operation is an O(n) full-file load with lexical scoring —
+  right-sized for one companion's thousands of distilled facts, not for
+  fleet-scale corpora or semantic search; swap a real store behind the same
+  interface past that point.
 - Reframed how the dynamics constants present themselves (README "Where the
   numbers come from", the matching Chinese section, PHILOSOPHY §4): they are
   personality parameters tuned for character coherence over long-running use

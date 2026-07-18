@@ -318,6 +318,9 @@ python examples/companion_live.py   # 交互循环 (FELTSTATE_LIVE_FAST=1 加速
   `examples/companion.py`, 交互版见 `examples/companion_live.py`。
 - 默认的 `KeywordSource` 有意做得粗糙。`LLMSource` 仍是另一次模型调用产出的
   估计, 可选的 Vheart 适配器是实验演示而非验证过的分类器。
+- 默认的 `Canon` 每次操作整文件重载 (O(n), 词面打分)——按用途定尺寸: 一个
+  陪伴体的数千条蒸馏事实, 可审计的平文件胜过不透明的数据库, 衰减与压实会把
+  活跃集保持在小规模。要上大规模语料或语义检索, 就在同一接口后面换真数据库。
 
 ---
 

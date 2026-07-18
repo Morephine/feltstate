@@ -453,7 +453,7 @@ class Engine:
     # ------------------------------------------------------------------ #
     # Rendering affective state for the reply model                         #
     # ------------------------------------------------------------------ #
-    def render(self, *, header: str = "[how I feel right now]") -> str:
+    def render(self, *, header: str = "[how I feel right now]", now: datetime | None = None) -> str:
         """Render the current state as a first-person felt block.
 
         Builds the time-awareness line from the engine's "last real user turn"
@@ -466,11 +466,15 @@ class Engine:
         line reads as just the current moment, and after a long silence it leads
         with the felt distance back.
 
+        ``now`` overrides the wall clock, mirroring :meth:`tick` — pass the
+        same aware UTC datetime to both for deterministic tests and replays;
+        default is ``datetime.now(timezone.utc)``.
+
         The block uses coarse discrete phrase bands, so adjacent ticks whose
         numbers drift only slightly render byte-identically — which is what keeps
         :meth:`inject` cheap to cache.
         """
-        now = datetime.now(timezone.utc)
+        now = now or datetime.now(timezone.utc)
         live = time_since_phrase(self._last_user_ts, now, self.config.time)
         # Within an active exchange the live gap is under the gate (None) — the
         # felt distance is the one from when the user came back, captured at
@@ -497,7 +501,7 @@ class Engine:
             header=header,
         )
 
-    def inject(self, user_message: str) -> str:
+    def inject(self, user_message: str, *, now: datetime | None = None) -> str:
         """Return the current user turn with the felt block riding on its front.
 
         Thin wrapper over :meth:`render` +
@@ -505,9 +509,10 @@ class Engine:
         be sent as the **content of the current user turn**, after the static,
         cached system/persona prefix — never spliced into the system prompt
         (which would change every turn and bust the cache). See
-        :mod:`feltstate.render.inject` for the full discipline.
+        :mod:`feltstate.render.inject` for the full discipline. ``now`` is
+        passed through to :meth:`render`.
         """
-        return build_injection(self.render(), user_message)
+        return build_injection(self.render(now=now), user_message)
 
     # ------------------------------------------------------------------ #
     # Dreaming (optional, off the per-turn path)                         #

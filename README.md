@@ -373,6 +373,11 @@ python examples/companion_live.py   # the interactive loop (FELTSTATE_LIVE_FAST=
 - The default `KeywordSource` is intentionally crude. `LLMSource` is still an
   estimate produced by another model call, and the optional Vheart adapters are
   experimental demos rather than validated classifiers.
+- The default `Canon` reloads its flat file per operation (O(n), lexical
+  scoring) — right-sized for one companion's thousands of distilled facts,
+  where an auditable flat file beats an opaque database and decay/compaction
+  keep the live set small. Fleet-scale corpora or semantic search need a real
+  store behind the same interface.
 
 ---
 

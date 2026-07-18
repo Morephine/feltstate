@@ -53,11 +53,20 @@ Storage is line-delimited JSON (one record per line). Given a base ``path`` of
 Full-file rewrites use write-temp-then-replace. Append writes are serialised by
 a per-path lock; if a crash still leaves a partial JSONL tail, the next read
 quarantines that row instead of silently discarding it.
+
+**Scale, honestly.** Every operation loads the file — O(n), no index — and
+default recall scoring is lexical. That is right-sized on purpose for its job:
+one companion's distilled facts (thousands of records, single machine), where
+a flat auditable file beats an opaque database and decay/compaction actively
+keep the live set small. It is not built for fleet-scale corpora or semantic
+search; past that point, put a real store behind the same interface and keep
+the lifecycle semantics.
 """
 
 from __future__ import annotations
 
 import hashlib
+import importlib
 import json
 import logging
 import math
@@ -65,11 +74,35 @@ import threading
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+from types import ModuleType
 
 from ..config import MemoryConfig
 from .feeling import blend, derive, neutral_profile, observe
 
 _log = logging.getLogger(__name__)
+
+# Cross-process file locking is flock-based and therefore Unix-only. Where it
+# is unavailable (Windows), writes fall back to the per-process locks — and we
+# say so ONCE instead of degrading silently: two processes sharing one canon
+# file on such a platform genuinely race, and the operator should know.
+try:
+    _fcntl: ModuleType | None = importlib.import_module("fcntl")
+except ImportError:  # pragma: no cover - exercised on non-Unix platforms
+    _fcntl = None
+
+_no_flock_warned = False
+
+
+def _warn_no_flock_once() -> None:
+    global _no_flock_warned
+    if not _no_flock_warned:
+        _no_flock_warned = True
+        _log.warning(
+            "canon: cross-process file locking unavailable (fcntl missing or "
+            "flock failed) — falling back to in-process locks only. Sharing "
+            "one canon file across processes on this platform can race."
+        )
+
 
 __all__ = ["Canon"]
 
@@ -244,24 +277,26 @@ def _write_lock(path: Path):
         _LOCK_DEPTH[key] = depth + 1
         fh = None
         if depth == 0:  # outermost holder takes the cross-process file lock
-            try:
-                import fcntl
-
-                fh = (path.parent / (path.name + ".lock")).open("w")
-                fcntl.flock(fh, fcntl.LOCK_EX)
-            except Exception:
-                fh = None
+            if _fcntl is None:
+                _warn_no_flock_once()
+            else:
+                try:
+                    fh = (path.parent / (path.name + ".lock")).open("w")
+                    _fcntl.flock(fh, _fcntl.LOCK_EX)
+                except OSError:
+                    if fh is not None:
+                        fh.close()
+                    fh = None
+                    _warn_no_flock_once()
         try:
             yield
         finally:
             _LOCK_DEPTH[key] = max(0, _LOCK_DEPTH.get(key, 1) - 1)
             if fh is not None:
                 try:
-                    import fcntl
-
-                    fcntl.flock(fh, fcntl.LOCK_UN)
+                    _fcntl.flock(fh, _fcntl.LOCK_UN)  # type: ignore[union-attr]
                     fh.close()
-                except Exception:
+                except OSError:  # pragma: no cover - unlock best-effort
                     pass
 
 

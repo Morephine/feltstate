@@ -28,3 +28,4 @@ canon*.jsonl
 runtime/
 .mypy_cache/
 .ruff_cache/
+.venv_r/

@@ -60,6 +60,8 @@ from ..config import (
     BAR_TO_RELEASE,
     BAR_TO_RELEASE_SUPPRESS,
     LABEL_TO_PRESSURE,
+    MILESTONE_ALIASES,
+    MILESTONE_EFFECTS,
     PersonaDials,
     PressureConfig,
 )
@@ -245,11 +247,21 @@ def _accumulate(
         a_w = float(ant.get("weight", 0.0))
         if a_v > 0 and a_w > 0:
             progress = _anticipation_progress(ant, ts)
-            inflow["joy"] = max(inflow["joy"], 0.5 * a_v * a_w * progress * cfg.idle_decay / 0.018)
+            # Floor scaled by idle_decay / ref so it outlasts the per-tick
+            # cooling it competes with; both knobs are named in PressureConfig.
+            floor = (
+                cfg.anticipation_gain
+                * a_v
+                * a_w
+                * progress
+                * cfg.idle_decay
+                / cfg.anticipation_ref_decay
+            )
+            inflow["joy"] = max(inflow["joy"], floor)
 
     # --- (3) milestone shocks ---
     for m in delta.milestones or []:
-        _apply_milestone(inflow, pressure, m)
+        _apply_milestone(inflow, m)
 
     # --- valence-opposite mutual inhibition (you don't laugh while crying) ---
     sad_in = inflow["sadness"]
@@ -267,55 +279,37 @@ def _accumulate(
         setattr(pressure.bars, k, getattr(pressure.bars, k) + inflow[k])
 
 
-def _apply_milestone(inflow: dict, pressure: PressureState, m: dict) -> None:
+def _apply_milestone(inflow: dict, m: dict) -> None:
     """Route one appraised event onto the bars.
 
     ``kind`` selects the channel; ``severity`` (default 0.5) scales the deeper
     shocks; ``actor`` distinguishes something the *user* did from something the
     agent did. Care/repair events also *dampen* whatever negative inflow this
     turn already had — being comforted blunts the sadness, not just adds joy.
+
+    The numbers live in :data:`feltstate.config.MILESTONE_EFFECTS` (with kind
+    synonyms in :data:`~feltstate.config.MILESTONE_ALIASES`) — a tuning table,
+    kept in config like every other one. This function only interprets it.
     """
     kind = str(m.get("kind", ""))
     actor = m.get("actor")
     sev = float(m.get("severity", 0.5))
 
-    if kind == "conflict":
-        inflow["anger"] += 0.025
-        inflow["sadness"] += 0.015
-    elif kind in ("rejection", "rejection_or_boundary", "boundary"):
-        inflow["sadness"] += 0.02
-        inflow["boundary"] += 0.02
-    elif kind in ("confession", "confession_emotional", "confession_romantic") and actor == "user":
-        inflow["joy"] += 0.04
-    elif kind == "repair":
-        inflow["sadness"] *= 0.7  # making up shrinks the sadness that built this turn
-        inflow["anger"] *= 0.6
-    elif kind == "care" and actor == "user":
-        inflow["joy"] += 0.04
-        inflow["sadness"] *= 0.6
-        inflow["anger"] *= 0.7
-    # Warmth family — positive deep imprints, scaled by severity.
-    elif kind in ("warmth_love", "love"):
-        inflow["joy"] += 0.20 * sev
-        inflow["sadness"] *= 0.7
-    elif kind in ("warmth_gratitude", "gratitude"):
-        inflow["joy"] += 0.15 * sev
-    elif kind in ("warmth_secure", "reassurance"):
-        inflow["joy"] += 0.12 * sev
-        inflow["anxiety"] *= 0.7
-    # Trauma family — negative deep imprints, scaled by severity.
-    elif kind in ("trauma_betrayal", "betrayal"):
-        inflow["sadness"] += 0.30 * sev
-        inflow["anger"] += 0.25 * sev
-        inflow["boundary"] += 0.20 * sev
-        inflow["joy"] = max(0.0, inflow["joy"] - 0.15 * sev)
-    elif kind in ("trauma_loss", "loss"):
-        inflow["sadness"] += 0.40 * sev
-        inflow["joy"] = max(0.0, inflow["joy"] - 0.20 * sev)
-    elif kind in ("trauma_disappointment", "disappointment"):
-        inflow["sadness"] += 0.25 * sev
-        inflow["anger"] += 0.10 * sev
-        inflow["joy"] = max(0.0, inflow["joy"] - 0.15 * sev)
+    effect = MILESTONE_EFFECTS.get(MILESTONE_ALIASES.get(kind, kind))
+    if effect is None:
+        return
+    required = effect.get("require_actor")
+    if required is not None and actor != required:
+        return
+
+    for bar, inc in effect.get("add", {}).items():
+        inflow[bar] += inc
+    for bar, inc in effect.get("add_sev", {}).items():
+        inflow[bar] += inc * sev
+    for bar, dec in effect.get("sub_sev", {}).items():
+        inflow[bar] = max(0.0, inflow[bar] - dec * sev)
+    for bar, factor in effect.get("scale", {}).items():
+        inflow[bar] *= factor
 
 
 # --------------------------------------------------------------------------- #

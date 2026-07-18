@@ -12,6 +12,7 @@ Nothing here is character-specific. Personality is expressed through
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 
 # --------------------------------------------------------------------------- #
@@ -89,6 +90,14 @@ class PressureConfig:
     bar_floor: float = 0.40  # bars settle here after release, not to zero
     reset_keep: float = 0.15  # after aftertaste, bar = floor + (cur-floor)*this
     idle_decay: float = 0.018  # per-tick natural cooling
+    # Anticipation joy floor = gain × valence × weight × progress, then scaled
+    # by idle_decay / anticipation_ref_decay. The scaling is deliberate: a floor
+    # below the per-tick cooling would evaporate the same tick it was laid, so
+    # the floor tracks whatever cooling it must outlast. ref_decay names the
+    # idle_decay this gain was tuned against (it is NOT a second decay rate);
+    # set it equal to your idle_decay to pin the floor absolute instead.
+    anticipation_gain: float = 0.5
+    anticipation_ref_decay: float = 0.018
     # Multiplier on label-driven bar inflow. 1.0 = companion scale (a tick is a
     # conversation turn; bars are mostly moved by milestone shocks, and per-label
     # charge sits below idle_decay on purpose so ordinary chatter cannot ratchet
@@ -324,6 +333,54 @@ LABEL_TO_PRESSURE = {
     "embarrassed": {"anxiety": 0.007},
     "surprised": {"anxiety": 0.012, "joy": 0.012},
     "confused": {"anxiety": 0.006},
+}
+
+# Milestone shocks — the tuning table for _apply_milestone, in the same spirit
+# as LABEL_TO_PRESSURE: the numbers live here, not buried in logic. Ops per
+# canonical kind:
+#   add:           flat inflow increments
+#   add_sev:       increments scaled by the milestone's severity
+#   sub_sev:       severity-scaled reductions of inflow (clamped at zero)
+#   scale:         multiplicative damping of inflow already accrued this turn
+#                  (being comforted blunts the sadness, not just adds joy)
+#   require_actor: the effect only applies when the milestone's actor matches
+MILESTONE_ALIASES: dict[str, str] = {
+    "rejection_or_boundary": "rejection",
+    "boundary": "rejection",
+    "confession_emotional": "confession",
+    "confession_romantic": "confession",
+    "warmth_love": "love",
+    "warmth_gratitude": "gratitude",
+    "warmth_secure": "reassurance",
+    "trauma_betrayal": "betrayal",
+    "trauma_loss": "loss",
+    "trauma_disappointment": "disappointment",
+}
+
+MILESTONE_EFFECTS: dict[str, dict[str, Any]] = {
+    "conflict": {"add": {"anger": 0.025, "sadness": 0.015}},
+    "rejection": {"add": {"sadness": 0.02, "boundary": 0.02}},
+    "confession": {"require_actor": "user", "add": {"joy": 0.04}},
+    "repair": {"scale": {"sadness": 0.7, "anger": 0.6}},
+    "care": {
+        "require_actor": "user",
+        "add": {"joy": 0.04},
+        "scale": {"sadness": 0.6, "anger": 0.7},
+    },
+    # Warmth family — positive deep imprints, scaled by severity.
+    "love": {"add_sev": {"joy": 0.20}, "scale": {"sadness": 0.7}},
+    "gratitude": {"add_sev": {"joy": 0.15}},
+    "reassurance": {"add_sev": {"joy": 0.12}, "scale": {"anxiety": 0.7}},
+    # Trauma family — negative deep imprints, scaled by severity.
+    "betrayal": {
+        "add_sev": {"sadness": 0.30, "anger": 0.25, "boundary": 0.20},
+        "sub_sev": {"joy": 0.15},
+    },
+    "loss": {"add_sev": {"sadness": 0.40}, "sub_sev": {"joy": 0.20}},
+    "disappointment": {
+        "add_sev": {"sadness": 0.25, "anger": 0.10},
+        "sub_sev": {"joy": 0.15},
+    },
 }
 
 # label -> {trait: signal in [0,1]} fed to the trait EWMA. max() per trait.
