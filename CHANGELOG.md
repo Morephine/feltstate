@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0a2] - 2026-07-18
+
+The integration-handbook release: thirteen `docs/` chapters and five new
+runnable examples covering how the engine assembles into a full companion —
+plus a hardening pass (concurrency, NaN, timezone, decay-anchor fixes) pinned
+by a dedicated regression suite.
+
 ### Fixed
 
 - **The return-after-a-gap line could never render on the return turn**:
@@ -379,6 +386,7 @@ felt inner-state engine for LLM agents.
 - README and PHILOSOPHY; two runnable examples; tests across every module;
   ruff + mypy + CI configuration.
 
-[Unreleased]: https://github.com/Morephine/feltstate/compare/v0.2.0a1...HEAD
+[Unreleased]: https://github.com/Morephine/feltstate/compare/v0.2.0a2...HEAD
+[0.2.0a2]: https://github.com/Morephine/feltstate/releases/tag/v0.2.0a2
 [0.2.0a1]: https://github.com/Morephine/feltstate/compare/v0.1.0...v0.2.0a1
 [0.1.0]: https://github.com/Morephine/feltstate/releases/tag/v0.1.0

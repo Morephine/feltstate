@@ -101,6 +101,9 @@ prompt = eng.inject("so what should we build next?")
 python examples/quickstart.py     # 纯标准库, 无需安装
 ```
 
+想装成完整桌宠——脸、嗓子、心跳、记忆工具? 从
+[docs/INTEGRATION.md](docs/INTEGRATION.md) 进。
+
 ---
 
 ## 检索之外的记忆

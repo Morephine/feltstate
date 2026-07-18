@@ -177,7 +177,7 @@ def test_canon_concurrent_add_and_recall_lose_nothing(tmp_path):
     landing between a recall-bump's load and rewrite was erased by the stale
     snapshot. The lock now covers the whole transaction (and is reentrant)."""
     canon = Canon(tmp_path / "canon.jsonl")
-    canon.add("silver_wolf", "seed fact", action="likes")
+    canon.add("ava", "seed fact", action="likes")
 
     n_workers, n_each = 4, 12
     errors: list[BaseException] = []
@@ -185,7 +185,7 @@ def test_canon_concurrent_add_and_recall_lose_nothing(tmp_path):
     def adder(w: int) -> None:
         try:
             for i in range(n_each):
-                canon.add("silver_wolf", f"fact-{w}-{i}", action="likes")
+                canon.add("ava", f"fact-{w}-{i}", action="likes")
         except BaseException as exc:  # pragma: no cover - failure evidence
             errors.append(exc)
 
@@ -220,7 +220,7 @@ def test_compact_archives_before_rewriting_main(tmp_path, monkeypatch):
     import feltstate.memory.canon as canon_mod
 
     canon = Canon(tmp_path / "canon.jsonl")
-    canon.add("silver_wolf", "a dim old thing", action="remembers")
+    canon.add("ava", "a dim old thing", action="remembers")
     # Pin the fact into the *archived* band directly (visible_threshold 0.30 /
     # archive_threshold 0.10): base intensity 0.2 with a fresh timestamp decays
     # negligibly, so _tier() classifies it archived — not forgotten.

@@ -126,6 +126,9 @@ Run the full demo:
 python examples/quickstart.py     # pure stdlib, no install needed
 ```
 
+Want the full desktop-companion assembly — face, voice, heartbeat, memory
+tools? Start at [docs/INTEGRATION.md](docs/INTEGRATION.md).
+
 ---
 
 ## Memory beyond retrieval
