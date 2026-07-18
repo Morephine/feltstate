@@ -14,7 +14,7 @@
 feltstate 是一个小而有主张的参考库, 做长期运行 LLM 陪伴体的**持久感情与可溯源记忆**。
 它把感情判读放在回复模型之外, 维护一份会淡忘、会强化、会修正、会合并、会退役的
 结构化记忆, 并把紧凑的状态作为上下文交回——而不是作为行为指令。
-引擎之外还配了一套[集成手册](#集成手册): 十四章讲这些零件如何装配成一个
+引擎之外还配了一套[集成手册](#集成手册): 十五章讲这些零件如何装配成一个
 会说话、有脸、会干活、会出错、还保持住自己的陪伴体——手册里引用的每段对话
 都能用可运行的示例复现。
 
@@ -294,6 +294,7 @@ python examples/companion_live.py  # 交互式: 真实心跳、主动起话头�
 | [PERCEPTION](docs/PERCEPTION.md) | 图与屏作为输入: 落盘 → 感知 → 回应, 以及拉式眼睛 |
 | [INNER_LIFE](docs/INNER_LIFE.md) | 静默思考通道、轮与轮之间自己会动的脸, 与自纠轮 |
 | [MULTI_PERSON](docs/MULTI_PERSON.md) | 一魂多人: 按说话人分键的关系账本与零污染规则 |
+| [GAME_SHELL](docs/GAME_SHELL.md) | 游戏作为第三面: 分钟级导演意图对秒级引擎、视线门, 以及实机驱动 It Takes Two |
 | [MEMORY_TOOLS](docs/MEMORY_TOOLS.md) | 把 Canon 暴露成五个 function-calling 工具, 附真实的 bi-temporal 追溯 |
 | [PHILOSOPHY](PHILOSOPHY.md) | 为什么持久状态只对模型描述、从不命令 |
 
@@ -305,6 +306,7 @@ python examples/memory_tools.py     # 五个工具 + 分发器, 端到端
 python examples/agent_narration.py  # 罐头声带池、限流、故障台词
 python examples/style_spectrum.py   # 状态波段 → 表达注记
 python examples/companion_live.py   # 交互循环 (FELTSTATE_LIVE_FAST=1 加速)
+python examples/game_director.py    # 游戏壳: 意图队列、视线门、一张不停的嘴
 ```
 
 ---

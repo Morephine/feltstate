@@ -6,6 +6,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `docs/GAME_SHELL.md` + `examples/game_director.py`: the game as a third
+  surface. The identity flip (she is the space, or the second player — never
+  a bolted-on NPC), the constitution stated from its physical premise
+  (**model latency is seconds-to-minutes and not solvable**; minute-scale
+  intents vs second-scale engines is the consequence), prose-summary senses
+  with a pull-eye god view (never coordinate dumps), talking as the control
+  surface (intent extracted from her words — meddling as an extension of
+  banter), the pending-intent queue with a sight gate (plus per-action gate
+  exemption: being seen to act is sometimes the act), the
+  don't-get-caught research (renderer culling flags lie, raycast + margin,
+  peripheral vision, ~56% unnoticed-change findings), and the It Takes Two
+  ladder as played: virtual-gamepad tool daemon → process-memory telemetry →
+  a UE4SS bridge borrowing the game's own follow capability. Three maturity
+  tiers stated honestly (built-and-played / designed / written route). The
+  example runs the full loop offline and deterministic — four director
+  beats, every change landing out of sight on the engine's clock.
+
 ### Changed
 
 - **The milestone tuning table moved out of logic into config**

@@ -18,7 +18,7 @@ provenance-aware memory** in long-running LLM companions. It keeps affect
 appraisal outside the reply model, maintains structured memories that can fade,
 strengthen, change, merge, or be retired, and returns compact state as context
 rather than behavioural instruction. Around the engine sits an [integration
-handbook](#the-integration-handbook) — fourteen chapters on how the pieces
+handbook](#the-integration-handbook) — fifteen chapters on how the pieces
 assemble into a companion that speaks, shows a face, works, fails, and stays
 itself — with every quoted transcript reproducible from a runnable example.
 
@@ -345,6 +345,7 @@ runnable examples.
 | [PERCEPTION](docs/PERCEPTION.md) | images and screens as input: persist → perceive → reply, and the pull eye |
 | [INNER_LIFE](docs/INNER_LIFE.md) | the silent thinking channel, the face that moves between turns, and the self-correction round |
 | [MULTI_PERSON](docs/MULTI_PERSON.md) | one soul, many people: per-speaker relationship keying and the zero-pollution rule |
+| [GAME_SHELL](docs/GAME_SHELL.md) | the game as a third surface: minute-scale director intents vs second-scale engines, the sight gate, and driving It Takes Two |
 | [MEMORY_TOOLS](docs/MEMORY_TOOLS.md) | Canon as five function-calling tools, with a real bi-temporal trace |
 | [PHILOSOPHY](PHILOSOPHY.md) | why persisted state is described to the model and never commanded |
 
@@ -356,6 +357,7 @@ python examples/memory_tools.py     # the five tools + dispatcher, end to end
 python examples/agent_narration.py  # voicebank pools, throttle, failure lines
 python examples/style_spectrum.py   # state bands → delivery notes
 python examples/companion_live.py   # the interactive loop (FELTSTATE_LIVE_FAST=1 to hurry it)
+python examples/game_director.py    # the game shell: intents, sight gate, one running mouth
 ```
 
 ---

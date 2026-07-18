@@ -260,7 +260,9 @@ receipts and typing lamps as body language ([BRIDGE_ETIQUETTE.md](BRIDGE_ETIQUET
 Different medium, same person; the medium changes what she *can show*, never
 what she *is*.
 
-**A third surface, to prove the shape generalizes**: a game-director shell.
+**A third surface, to prove the shape generalizes**: a game-director shell
+(the full chapter, with a runnable loop and the commercial-game case, is
+[GAME_SHELL.md](GAME_SHELL.md)).
 A separate entry point feeds her a game world's state; she answers in her
 own identity with decisions — a structured verdict the game applies
 (environment changes, direction), plus in-character lines if the shell has a
@@ -306,4 +308,6 @@ input: the persist-perceive-reply path and the pull eye ·
 [INNER_LIFE.md](INNER_LIFE.md) — the silent thinking channel, the face that
 moves between turns, and the self-correction round ·
 [MULTI_PERSON.md](MULTI_PERSON.md) — one soul, many people: per-speaker
-relationship keying and the zero-pollution rule.
+relationship keying and the zero-pollution rule ·
+[GAME_SHELL.md](GAME_SHELL.md) — the game as a third surface: director
+intents, the sight gate, and the It Takes Two ladder.
