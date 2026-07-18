@@ -539,7 +539,13 @@ def _advance_time_phase(pressure: PressureState, cfg: PressureConfig, ts: str) -
             keep = float(cfg.reset_keep)
             for k in BAR_NAMES:
                 cur = getattr(pressure.bars, k)
-                setattr(pressure.bars, k, floor + (cur - floor) * keep)
+                # Fix (2026-07-18): only settle *downward*. For bars already
+                # below the floor the old formula pulled them UP to
+                # floor+(cur-floor)*keep — a release could conjure phantom
+                # charge in untouched bars (e.g. joy appearing after crying)
+                # and pre-load the next build-up cycle.
+                if cur > floor:
+                    setattr(pressure.bars, k, floor + (cur - floor) * keep)
 
 
 def _advance_level_phase(pressure: PressureState, cfg: PressureConfig) -> None:

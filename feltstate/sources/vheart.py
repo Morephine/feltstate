@@ -19,6 +19,7 @@ Install the extra::
 from __future__ import annotations
 
 import json
+import math
 import re
 from collections.abc import Sequence
 from typing import Any
@@ -142,6 +143,11 @@ def _parse_json_object(text: str) -> dict | None:
 
 
 def _clamp(x: float, lo: float, hi: float) -> float:
+    # NaN-safe (2026-07-18): max(lo, min(hi, nan)) evaluates to *hi*, so a NaN
+    # slipping in here would be "clamped" to the extreme bound with full
+    # confidence instead of being rejected. Non-finite -> midpoint (neutral).
+    if not math.isfinite(x):
+        return (lo + hi) / 2.0
     return max(lo, min(hi, x))
 
 
@@ -149,10 +155,15 @@ def _coerce_float(value: Any, default: float) -> float:
     if isinstance(value, bool):
         return default
     if isinstance(value, (int, float)):
-        return float(value)
+        f = float(value)
+        return f if math.isfinite(f) else default
     if isinstance(value, str):
         try:
-            return float(value.strip())
+            # float("nan")/float("inf") parse successfully — must still be
+            # rejected, else a model literally answering "NaN" writes a
+            # max-bound value into persisted state via the old clamp.
+            f = float(value.strip())
+            return f if math.isfinite(f) else default
         except ValueError:
             return default
     return default

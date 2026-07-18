@@ -6,7 +6,58 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Imprint decay was quadratic in age**: the decay anchor never advanced, so
+  every `decay_imprints` call re-charged the entire window since the event — a
+  per-tick loop drained "two to three years to floor" of vividness in days. A
+  dedicated `last_decay_ts` clock is stamped each pass, making decay
+  frequency-invariant; legacy imprints still pay their full absolute age once.
+- **NaN/Infinity readings clamped to the extreme bound**: `max(lo, min(hi, nan))`
+  evaluates to `hi`, so a model answering `NaN` (which `json.loads` accepts, and
+  `float("NaN")` parses) produced a maximal fully-trusted affect delta —
+  injectable via chat. `LLMSource`/`VheartSource` coercion and clamps now reject
+  non-finite values and fall back to neutral defaults.
+- **Injected "now" was rendered in UTC**: `Engine.render()` fed a UTC datetime
+  into `now_phrase`, whose contract is caller-local wall clock — on a UTC+8 host
+  every felt block carried a weekday/part-of-day/clock line up to a day off.
+  Gap arithmetic stays in UTC; display converts to local time. The `back on
+  {Mon DD}` fallback likewise names the local calendar day.
+- **Mixed naive/aware timestamps crashed or silently corrupted time features**:
+  `time_since_phrase` raised `TypeError` past its parse guard (killing the
+  caller); `Tiredness.rise` swallowed the same error as "no elapsed time" while
+  advancing the stamp (eating accrued sleep pressure); `hours_since_dream` read
+  it as "never dreamed" (bypassing the refractory floor). All three now coerce
+  legacy stamps into the caller's frame.
+- **Post-aftertaste settle conjured phantom charge**: `floor + (cur-floor)*keep`
+  pulled sub-floor bars *up*, so a sadness release materialised joy/anger from
+  nothing and pre-loaded the next build-up. Settling now only moves bars down.
+- **Agent-scale readout counted joy as load**: `render_agent_feeling` took its
+  band from `max()` over all bars with negative-only phrasing — a purely happy
+  agent read as "worn down and tense". Joy is excluded, mirroring the felt-block
+  aggregation.
+- **`feltstate.companion` failed to import on Windows**: the topics store's
+  concurrency fix introduced a top-level `import fcntl`. Locking now degrades to
+  a per-process `threading.Lock` where `flock` is unavailable.
+- **Canon read-modify-write races could erase records**: mutators loaded
+  *outside* the per-path lock and rewrote inside it, so an `add()` racing a
+  recall-bump/rating could be wiped by the loser's stale snapshot — the exact
+  failure the lock's header comment promised away. The lock is now reentrant
+  (thread `RLock` + flock depth counter) and held across the whole transaction
+  in `Canon` (`add`/reinforce, recall bumps, `confirm`, `correct`, `retract`,
+  `compact`) and the skill region (`record_rating`, `recall_skills`).
+- **`compact()` had a crash window that destroyed archived-tier facts**: the
+  main store was rewritten (dropping dim facts) *before* they were appended to
+  the archive sidecar; a crash between the two writes lost them from both files.
+  Compaction now lands the archive first — idempotent on retry via main-wins
+  dedup.
+
 ### Added
+
+- Regression suite `tests/test_bugfix_20260718.py` pinning each fix above
+  (frequency-invariant imprint decay, NaN rejection, mixed-frame tolerance,
+  settle direction, joy-band exclusion, fcntl-free locking, concurrent
+  add/recall integrity, archive-first compaction ordering).
 
 - Add a zero-LLM distilled-memory consistency gate (`memory.lifecycle.consistency`)
   covering lexical support, foreign-clause splicing, invented numbers, negation

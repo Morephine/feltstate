@@ -67,7 +67,12 @@ def render_agent_feeling(
     first-person form and may use it when generating a response.
     """
     bars = state.pressure.bars.to_dict()
-    mid = max(bars.values()) if bars else 0.0
+    # Fix (2026-07-18): joy is a positive-valence bar but every band phrase is
+    # negative-worded — including it in the max meant a purely happy agent
+    # (joy 0.7, all negatives ~0) rendered as "worn down and tense". Track the
+    # negative bars only, mirroring render/felt.py's negative-load aggregation.
+    neg = {k: v for k, v in bars.items() if k != "joy"}
+    mid = max(neg.values()) if neg else 0.0
     labels = ", ".join(state.mood.labels or []) or "even"
     phrase = bands[-1][1]
     for bound, text in bands:

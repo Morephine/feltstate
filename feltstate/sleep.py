@@ -29,6 +29,24 @@ from datetime import datetime
 from .config import TirednessConfig
 
 
+def _same_frame(prev: datetime, now: datetime) -> datetime:
+    """Return ``prev`` coerced into ``now``'s naive/aware frame (2026-07-18).
+
+    Subtracting a naive datetime from an aware one raises TypeError. Here that
+    error used to be swallowed by the callers' except-clauses, which is worse
+    than crashing: ``rise()`` read it as "no elapsed time" *and then advanced
+    the clock stamp*, permanently eating the accrued interval, while
+    ``hours_since_dream()`` read it as "never dreamed", bypassing the
+    refractory floor. Treat a legacy stamp as being in ``now``'s frame —
+    best-effort arithmetic beats silently corrupting the sleep economy.
+    """
+    if prev.tzinfo is None and now.tzinfo is not None:
+        return prev.replace(tzinfo=now.tzinfo)
+    if prev.tzinfo is not None and now.tzinfo is None:
+        return prev.replace(tzinfo=None)
+    return prev
+
+
 @dataclass
 class Tiredness:
     """The single sleep-pressure accumulator.
@@ -71,7 +89,7 @@ class Tiredness:
         """
         if self.last_update_ts is not None:
             try:
-                prev = datetime.fromisoformat(self.last_update_ts)
+                prev = _same_frame(datetime.fromisoformat(self.last_update_ts), now)
                 dt_h = max(0.0, (now - prev).total_seconds() / 3600.0)
             except (ValueError, TypeError):
                 dt_h = 0.0
@@ -98,7 +116,8 @@ class Tiredness:
         if not self.last_dream_ts:
             return float("inf")
         try:
-            return (now - datetime.fromisoformat(self.last_dream_ts)).total_seconds() / 3600.0
+            prev = _same_frame(datetime.fromisoformat(self.last_dream_ts), now)
+            return (now - prev).total_seconds() / 3600.0
         except (ValueError, TypeError):
             return float("inf")
 

@@ -1,0 +1,248 @@
+"""Regression pins for the 2026-07-18 bug-fix batch.
+
+Every test here pins a behaviour that was *silently wrong* before the fix —
+none of these paths were covered, which is exactly how the bugs survived a
+514-test suite. Each test names the failure it guards against.
+"""
+
+from __future__ import annotations
+
+import threading
+from datetime import datetime, timedelta, timezone
+
+from feltstate import AffectDelta, PersonaDials, PressureState, Relationship, Traits
+from feltstate.affect import step
+from feltstate.affect.imprint import Imprint, decay_imprints
+from feltstate.config import DEFAULT_CONFIG
+from feltstate.memory.canon import Canon
+from feltstate.render.agent import render_agent_feeling
+from feltstate.sleep import Tiredness, TirednessConfig
+from feltstate.sources.llm import _clamp as llm_clamp
+from feltstate.sources.llm import _coerce_float as llm_coerce
+from feltstate.state import AffectState
+from feltstate.timeawareness.relative_time import time_since_phrase
+
+T0 = datetime(2030, 1, 1, 9, 0, 0, tzinfo=timezone.utc)
+
+
+def _iso(**kw) -> str:
+    return (T0 + timedelta(**kw)).isoformat()
+
+
+# --------------------------------------------------------------------------- #
+# imprint: decay must be frequency-invariant (was quadratic)                  #
+# --------------------------------------------------------------------------- #
+def test_imprint_decay_is_frequency_invariant():
+    """Before: the decay anchor never advanced, so each call re-charged the
+    whole window since the event — N calls over an interval decayed ~N times
+    as much as one call. A per-tick loop drained years of vividness in days."""
+    one_shot = [Imprint(ts=T0.isoformat(), severity=0.9, intensity=0.9)]
+    decay_imprints(one_shot, _iso(days=30))
+
+    ticked = [Imprint(ts=T0.isoformat(), severity=0.9, intensity=0.9)]
+    for d in range(1, 31):
+        decay_imprints(ticked, _iso(days=d))
+
+    assert abs(one_shot[0].intensity - ticked[0].intensity) < 1e-6
+
+
+def test_imprint_decay_still_charges_absolute_age_on_first_pass():
+    """The fix must not stop legacy imprints (no last_decay_ts) from paying
+    their full elapsed age on the first pass."""
+    imp = [Imprint(ts=T0.isoformat(), severity=0.9, intensity=0.9, decay_per_day=0.001)]
+    decay_imprints(imp, _iso(days=100))
+    assert abs(imp[0].intensity - 0.8) < 1e-6  # 0.9 - 0.001*100
+
+
+# --------------------------------------------------------------------------- #
+# sources: NaN / Infinity must not launder into a max-bound reading           #
+# --------------------------------------------------------------------------- #
+def test_nan_does_not_clamp_to_extreme():
+    """Before: max(lo, min(hi, nan)) == hi, so a model answering NaN produced a
+    +1.0 valence / 1.0 confidence delta — a maximal, fully-trusted emotion —
+    and json.loads happily parses bare NaN. Injectable via chat."""
+    nan = float("nan")
+    assert llm_clamp(nan, -1.0, 1.0) == 0.0  # midpoint-neutral, not the bound
+    assert llm_coerce(nan, 0.0) == 0.0
+    assert llm_coerce("NaN", 0.4) == 0.4  # float("NaN") parses — must be rejected
+    assert llm_coerce("Infinity", 0.5) == 0.5
+    assert llm_coerce(float("inf"), 0.2) == 0.2
+
+
+# --------------------------------------------------------------------------- #
+# timeawareness: mixed naive/aware must not TypeError                         #
+# --------------------------------------------------------------------------- #
+def test_time_since_phrase_tolerates_mixed_frames():
+    """Before: the parse was guarded but the subtraction was not, so one legacy
+    naive stamp raised TypeError in the caller — which silently disabled every
+    proactive path that rendered a felt block."""
+    naive_prev = "2029-12-25T09:00:00"  # no tz
+    aware_now = T0
+    phrase = time_since_phrase(naive_prev, aware_now, DEFAULT_CONFIG.time)
+    assert isinstance(phrase, str) and phrase  # long gap -> some phrase, no crash
+
+    aware_prev = "2029-12-25T09:00:00+00:00"
+    naive_now = datetime(2030, 1, 1, 9, 0, 0)
+    assert time_since_phrase(aware_prev, naive_now, DEFAULT_CONFIG.time)
+
+
+# --------------------------------------------------------------------------- #
+# pressure: post-aftertaste settle must never *raise* an untouched bar        #
+# --------------------------------------------------------------------------- #
+def test_settle_does_not_conjure_phantom_charge():
+    """Before: floor + (cur-floor)*keep pulled sub-floor bars UP — after a
+    sadness release, joy/anger materialised at ~floor*(1-keep) from nothing."""
+    cfg = DEFAULT_CONFIG.pressure
+    pressure = PressureState()
+    pressure.phase = "aftertaste"
+    pressure.aftertaste_until_ts = T0.isoformat()
+    pressure.bars.sadness = 0.9
+    pressure.bars.joy = 0.0
+    pressure.bars.anger = 0.02
+
+    step(
+        pressure,
+        delta=AffectDelta(),
+        traits=Traits(),
+        relationship=Relationship(),
+        dials=PersonaDials(),
+        cfg=cfg,
+        ts=_iso(minutes=5),  # past the aftertaste window -> settle runs
+    )
+    floor = float(cfg.bar_floor)
+    assert pressure.bars.joy <= 0.02  # untouched bar stays near zero (idle decay only)
+    assert pressure.bars.anger <= 0.02
+    assert pressure.bars.sadness < 0.9  # the loaded bar did settle down
+    assert pressure.bars.sadness >= floor * 0.5
+
+
+# --------------------------------------------------------------------------- #
+# render/agent: a purely happy state must not read as "worn down and tense"   #
+# --------------------------------------------------------------------------- #
+def test_agent_readout_excludes_joy_from_negative_bands():
+    state = AffectState()
+    state.pressure.bars.joy = 0.75
+    state.pressure.bars.sadness = 0.0
+    state.pressure.bars.anger = 0.0
+    state.pressure.bars.anxiety = 0.0
+    state.pressure.bars.boundary = 0.0
+    line = render_agent_feeling(state)
+    assert "worn down" not in line
+    assert "steady" in line
+
+
+# --------------------------------------------------------------------------- #
+# sleep: legacy naive stamps must not eat accrual / bypass the refractory     #
+# --------------------------------------------------------------------------- #
+def test_sleep_rise_survives_naive_stamp():
+    """Before: the naive/aware TypeError was swallowed as dt=0 *and* the stamp
+    was overwritten — the whole awake interval silently vanished."""
+    cfg = TirednessConfig()
+    t = Tiredness()
+    t.last_update_ts = "2030-01-01T00:00:00"  # naive legacy stamp, 9h before T0
+    t.last_arousal = 0.5
+    t.rise(0.5, T0, cfg)
+    assert t.level > 0.0  # the 9h interval accrued instead of being eaten
+
+
+def test_sleep_refractory_survives_naive_dream_stamp():
+    t = Tiredness()
+    t.last_dream_ts = "2030-01-01T08:00:00"  # naive, 1h before T0
+    hours = t.hours_since_dream(T0)
+    assert hours != float("inf")
+    assert abs(hours - 1.0) < 0.01
+
+
+# --------------------------------------------------------------------------- #
+# companion.topics: must import (and lock) without fcntl                      #
+# --------------------------------------------------------------------------- #
+def test_topics_store_works_without_fcntl(tmp_path, monkeypatch):
+    """Before: a top-level ``import fcntl`` crashed the whole companion package
+    on Windows — introduced by the very commit that fixed the store's races."""
+    import feltstate.companion.topics as topics_mod
+
+    monkeypatch.setattr(topics_mod, "_fcntl", None)  # simulate Windows
+    store = topics_mod.JsonlTopicsStore(tmp_path / "topics.jsonl")
+    store.append("remember the fireworks")
+    assert store.read_oldest_unconsumed() == "remember the fireworks"
+    store.mark_consumed("remember the fireworks")
+    assert store.read_oldest_unconsumed() is None
+
+
+# --------------------------------------------------------------------------- #
+# canon: read-modify-write is transactional; compact is archive-first         #
+# --------------------------------------------------------------------------- #
+def test_canon_concurrent_add_and_recall_lose_nothing(tmp_path):
+    """Before: mutators did an *unlocked* load -> locked rewrite, so an add()
+    landing between a recall-bump's load and rewrite was erased by the stale
+    snapshot. The lock now covers the whole transaction (and is reentrant)."""
+    canon = Canon(tmp_path / "canon.jsonl")
+    canon.add("silver_wolf", "seed fact", action="likes")
+
+    n_workers, n_each = 4, 12
+    errors: list[BaseException] = []
+
+    def adder(w: int) -> None:
+        try:
+            for i in range(n_each):
+                canon.add("silver_wolf", f"fact-{w}-{i}", action="likes")
+        except BaseException as exc:  # pragma: no cover - failure evidence
+            errors.append(exc)
+
+    def bumper() -> None:
+        try:
+            for _ in range(n_each * 2):
+                canon.search("seed")
+        except BaseException as exc:  # pragma: no cover
+            errors.append(exc)
+
+    threads = [threading.Thread(target=adder, args=(w,)) for w in range(n_workers)]
+    threads += [threading.Thread(target=bumper) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert not errors
+    import feltstate.memory.canon as canon_mod
+
+    rows = canon_mod._load_jsonl(canon.path)
+    objects = {r.get("what", {}).get("object") for r in rows}
+    for w in range(n_workers):
+        for i in range(n_each):
+            assert f"fact-{w}-{i}" in objects  # nothing erased by a stale snapshot
+
+
+def test_compact_archives_before_rewriting_main(tmp_path, monkeypatch):
+    """Before: compact rewrote the main store (dropping dim facts) *before*
+    writing them to the archive — a crash in between lost them from both files.
+    Pin the order: the archive write must happen first."""
+    import feltstate.memory.canon as canon_mod
+
+    canon = Canon(tmp_path / "canon.jsonl")
+    canon.add("silver_wolf", "a dim old thing", action="remembers")
+    # Pin the fact into the *archived* band directly (visible_threshold 0.30 /
+    # archive_threshold 0.10): base intensity 0.2 with a fresh timestamp decays
+    # negligibly, so _tier() classifies it archived — not forgotten.
+    rows = canon_mod._load_jsonl(canon.path)
+    for row in rows:
+        row["intensity"] = 0.2
+    canon_mod._rewrite_jsonl(canon.path, rows)
+
+    calls: list[str] = []
+    real_rewrite = canon_mod._rewrite_jsonl
+
+    def spying_rewrite(path, entries):
+        calls.append(path.name)
+        return real_rewrite(path, entries)
+
+    monkeypatch.setattr(canon_mod, "_rewrite_jsonl", spying_rewrite)
+    canon.compact()
+
+    arch_name = canon.archived_path.name
+    main_name = canon.path.name
+    assert arch_name in calls and main_name in calls
+    assert calls.index(arch_name) < calls.index(main_name)
+    # And the fact really lives in the archive.
+    archived = canon_mod._load_jsonl(canon.archived_path)
+    assert any(e.get("what", {}).get("object") == "a dim old thing" for e in archived)

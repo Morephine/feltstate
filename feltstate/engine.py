@@ -458,7 +458,12 @@ class Engine:
         """
         now = datetime.now(timezone.utc)
         since = time_since_phrase(self._last_user_ts, now, self.config.time)
-        present = now_phrase(now)
+        # Fix (2026-07-18): now_phrase reads wall-clock fields (.weekday/.hour)
+        # and its contract is caller-local time. Feeding it UTC rendered
+        # "Tue night 12:11" for a Wednesday-8am machine in UTC+8 — every
+        # injected prompt carried a wrong "now". Keep UTC for gap arithmetic,
+        # convert to local only for display.
+        present = now_phrase(now.astimezone())
 
         if since:
             time_line = f"{since} since we last spoke · now {present}"

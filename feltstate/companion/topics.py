@@ -8,10 +8,36 @@ scheduler depends only on the :class:`PendingTopicsStore` interface;
 
 from __future__ import annotations
 
-import fcntl
 import json
+import threading
 from abc import ABC, abstractmethod
 from pathlib import Path
+
+# Cross-platform advisory locking (2026-07-18 fix). The previous top-level
+# ``import fcntl`` made importing feltstate.companion crash on Windows — the
+# very platform the concurrency fix was meant to protect. Mirror
+# memory/canon.py: use flock where available, else fall back to a per-process
+# threading lock (single-process safety, the common case).
+try:  # pragma: no cover - platform dependent
+    import fcntl as _fcntl
+except ImportError:  # Windows
+    _fcntl = None
+
+_FALLBACK_LOCK = threading.Lock()
+
+
+def _flock_ex(fh) -> None:
+    if _fcntl is not None:
+        _fcntl.flock(fh.fileno(), _fcntl.LOCK_EX)
+    else:
+        _FALLBACK_LOCK.acquire()
+
+
+def _flock_un(fh) -> None:
+    if _fcntl is not None:
+        _fcntl.flock(fh.fileno(), _fcntl.LOCK_UN)
+    else:
+        _FALLBACK_LOCK.release()
 
 
 class PendingTopicsStore(ABC):
@@ -70,12 +96,12 @@ class JsonlTopicsStore(PendingTopicsStore):
     def append(self, text: str) -> None:
         rec = {"text": text, "consumed": False}
         with self._locked() as lk:
-            fcntl.flock(lk.fileno(), fcntl.LOCK_EX)
+            _flock_ex(lk)
             try:
                 with self.path.open("a", encoding="utf-8") as f:
                     f.write(json.dumps(rec, ensure_ascii=False) + "\n")
             finally:
-                fcntl.flock(lk.fileno(), fcntl.LOCK_UN)
+                _flock_un(lk)
 
     def read_oldest_unconsumed(self) -> str | None:
         for rec in self._read():
@@ -88,7 +114,7 @@ class JsonlTopicsStore(PendingTopicsStore):
         # Read-modify-rewrite under the shared lock, landing via tmp+replace —
         # a crash mid-rewrite must never eat the whole queue.
         with self._locked() as lk:
-            fcntl.flock(lk.fileno(), fcntl.LOCK_EX)
+            _flock_ex(lk)
             try:
                 recs = self._read()
                 for rec in recs:
@@ -102,4 +128,4 @@ class JsonlTopicsStore(PendingTopicsStore):
                         tmp.replace(self.path)
                         return
             finally:
-                fcntl.flock(lk.fileno(), fcntl.LOCK_UN)
+                _flock_un(lk)

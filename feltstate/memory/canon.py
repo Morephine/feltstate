@@ -210,34 +210,51 @@ def _load_jsonl(path: Path) -> list[dict]:
 # in-process threading lock (the common case — foreground vs. heartbeat thread,
 # cross-platform) with a best-effort advisory file lock underneath (covers a
 # second *process* touching the same store, where available).
-_WRITE_LOCKS: dict[str, threading.Lock] = {}
+_WRITE_LOCKS: dict[str, threading.RLock] = {}
 _WRITE_LOCKS_GUARD = threading.Lock()
+# Nesting depth per path, only touched while holding that path's RLock.
+_LOCK_DEPTH: dict[str, int] = {}
 
 
-def _path_lock(path: Path) -> threading.Lock:
+def _path_lock(path: Path) -> threading.RLock:
     key = str(path.resolve())
     with _WRITE_LOCKS_GUARD:
         lk = _WRITE_LOCKS.get(key)
         if lk is None:
-            lk = _WRITE_LOCKS[key] = threading.Lock()
+            lk = _WRITE_LOCKS[key] = threading.RLock()
         return lk
 
 
 @contextmanager
 def _write_lock(path: Path):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with _path_lock(path):
-        fh = None
-        try:
-            import fcntl
+    """Exclusive lock for ``path`` — reentrant within a thread (2026-07-18).
 
-            fh = (path.parent / (path.name + ".lock")).open("w")
-            fcntl.flock(fh, fcntl.LOCK_EX)
-        except Exception:
-            fh = None
+    Fix: mutators used to run *unlocked* load -> mutate -> locked rewrite, so
+    the lock serialised writes but not the read-modify-write transaction — an
+    ``add()`` racing a ``search()`` recall-bump could be erased by the loser's
+    stale snapshot, exactly the failure the header comment promised away.
+    Mutators now hold this lock across the whole transaction; the RLock plus a
+    per-path depth counter make the inner ``_append_jsonl``/``_rewrite_jsonl``
+    acquisitions nest instead of deadlocking on a second ``flock`` fd.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    key = str(path.resolve())
+    with _path_lock(path):
+        depth = _LOCK_DEPTH.get(key, 0)
+        _LOCK_DEPTH[key] = depth + 1
+        fh = None
+        if depth == 0:  # outermost holder takes the cross-process file lock
+            try:
+                import fcntl
+
+                fh = (path.parent / (path.name + ".lock")).open("w")
+                fcntl.flock(fh, fcntl.LOCK_EX)
+            except Exception:
+                fh = None
         try:
             yield
         finally:
+            _LOCK_DEPTH[key] = max(0, _LOCK_DEPTH.get(key, 1) - 1)
             if fh is not None:
                 try:
                     import fcntl
@@ -510,6 +527,18 @@ class Canon:
         superseded entries are ignored when matching, so retract-then-readd yields
         a fresh active fact.
         """
+        # Transactional (2026-07-18): hold the path lock across the whole
+        # load -> match -> rewrite/append, so a concurrent add/bump cannot be
+        # erased by this method's stale snapshot (lock is reentrant; the inner
+        # write helpers nest).
+        with _write_lock(path):
+            return self._write_or_reinforce_locked(
+                path, entry, emotion=emotion, confidence=confidence
+            )
+
+    def _write_or_reinforce_locked(
+        self, path: Path, entry: dict, *, emotion: float | None = None, confidence: float = 0.9
+    ) -> dict:
         new_id = _entry_id(entry)
         existing = _load_jsonl(path)
         for e in existing:
@@ -578,15 +607,18 @@ class Canon:
         salience reflects the boost.
         """
         for path in (self.path, self.archived_path):
-            entries = _load_jsonl(path)
-            touched = False
-            for e in entries:
-                if _entry_id(e) in hit_ids and self._is_active(e):
-                    e["recalls"] = int(e.get("recalls", 0)) + 1
-                    e["_last_recalled"] = _now_iso()
-                    touched = True
-            if touched:
-                _rewrite_jsonl(path, entries)
+            # Transactional (2026-07-18): the recall bump is a read-modify-write;
+            # unlocked it could overwrite a fact appended between load and rewrite.
+            with _write_lock(path):
+                entries = _load_jsonl(path)
+                touched = False
+                for e in entries:
+                    if _entry_id(e) in hit_ids and self._is_active(e):
+                        e["recalls"] = int(e.get("recalls", 0)) + 1
+                        e["_last_recalled"] = _now_iso()
+                        touched = True
+                if touched:
+                    _rewrite_jsonl(path, entries)
         return [e for e in self._load_confirmed() if _entry_id(e) in hit_ids and self._is_active(e)]
 
     # ------------------------------------------------------------------ #
@@ -672,6 +704,18 @@ class Canon:
         promoted-or-reinforced entries (empty if nothing matched).
         """
         target = str(id_or_keyword).lower()
+        # Transactional (2026-07-18): promotion reads and rewrites three files;
+        # take their locks in a fixed order (main -> archived -> pending) so
+        # concurrent confirm/compact can't deadlock or interleave half-moved
+        # records.
+        with (
+            _write_lock(self.path),
+            _write_lock(self.archived_path),
+            _write_lock(self.pending_path),
+        ):
+            return self._confirm_locked(target)
+
+    def _confirm_locked(self, target: str) -> list[dict]:
         pending = _load_jsonl(self.pending_path)
         matched, remaining = [], []
         for e in pending:
@@ -735,53 +779,55 @@ class Canon:
         overridden — is written. Returns the new entry rendered, or ``{}`` if no
         active match was found.
         """
-        entries, idx = self._find_active(id_or_keyword, self.path)
-        if idx < 0:
-            return {}
-        old = entries[idx]
-        old_id = _entry_id(old)
+        # Transactional (2026-07-18): supersede is a read-modify-write.
+        with _write_lock(self.path):
+            entries, idx = self._find_active(id_or_keyword, self.path)
+            if idx < 0:
+                return {}
+            old = entries[idx]
+            old_id = _entry_id(old)
 
-        now_iso = _now_iso()
-        new_entry = dict(old)
-        for k in (
-            "_reinforce_count",
-            "_last_reinforced",
-            "_superseded_by",
-            "_superseded_at",
-            "_retracted",
-            "_retracted_at",
-            "invalid_at",
-        ):
-            new_entry.pop(k, None)
-        new_entry["ts"] = now_iso
-        new_entry["valid_at"] = now_iso  # M3: the corrected belief becomes true now
-        new_entry["supersedes"] = old_id
-        # Deep-copy the nested 5W1H: a shallow dict(old) shares the inner ``what``
-        # dict, so without this, correcting the new entry would also rewrite the
-        # old (superseded) one — which history() would then show wrong.
-        w = old.get("what")
-        new_entry["what"] = dict(w) if isinstance(w, dict) else {"object": w}
-        new_entry["what"]["object"] = object
-        if action is not None:
-            new_entry["what"]["action"] = action
-        if why is not None:
-            new_entry["why"] = why
-        if when is not None:
-            new_entry["when"] = when
-        if where is not None:
-            new_entry["where"] = where
-        if intensity is not None:
-            new_entry["intensity"] = float(intensity)
-        if confidence is not None:
-            new_entry["confidence"] = float(confidence)
+            now_iso = _now_iso()
+            new_entry = dict(old)
+            for k in (
+                "_reinforce_count",
+                "_last_reinforced",
+                "_superseded_by",
+                "_superseded_at",
+                "_retracted",
+                "_retracted_at",
+                "invalid_at",
+            ):
+                new_entry.pop(k, None)
+            new_entry["ts"] = now_iso
+            new_entry["valid_at"] = now_iso  # M3: the corrected belief becomes true now
+            new_entry["supersedes"] = old_id
+            # Deep-copy the nested 5W1H: a shallow dict(old) shares the inner ``what``
+            # dict, so without this, correcting the new entry would also rewrite the
+            # old (superseded) one — which history() would then show wrong.
+            w = old.get("what")
+            new_entry["what"] = dict(w) if isinstance(w, dict) else {"object": w}
+            new_entry["what"]["object"] = object
+            if action is not None:
+                new_entry["what"]["action"] = action
+            if why is not None:
+                new_entry["why"] = why
+            if when is not None:
+                new_entry["when"] = when
+            if where is not None:
+                new_entry["where"] = where
+            if intensity is not None:
+                new_entry["intensity"] = float(intensity)
+            if confidence is not None:
+                new_entry["confidence"] = float(confidence)
 
-        new_id = _entry_id(new_entry)
-        old["_superseded_by"] = new_id
-        old["_superseded_at"] = now_iso
-        old["invalid_at"] = now_iso  # M3: the old belief stopped being true now
-        entries.append(new_entry)
-        _rewrite_jsonl(self.path, entries)
-        return self._render(new_entry, datetime.now(timezone.utc))
+            new_id = _entry_id(new_entry)
+            old["_superseded_by"] = new_id
+            old["_superseded_at"] = now_iso
+            old["invalid_at"] = now_iso  # M3: the old belief stopped being true now
+            entries.append(new_entry)
+            _rewrite_jsonl(self.path, entries)
+            return self._render(new_entry, datetime.now(timezone.utc))
 
     def retract(self, id_or_keyword: str) -> dict:
         """Mark a fact retracted (hidden from views but kept for audit).
@@ -790,16 +836,18 @@ class Canon:
         this rather than deletion so a fact can be un-said without losing the
         record that it was ever held.
         """
-        entries, idx = self._find_active(id_or_keyword, self.path)
-        if idx < 0:
-            return {}
-        e = entries[idx]
-        now_iso = _now_iso()
-        e["_retracted"] = True
-        e["_retracted_at"] = now_iso
-        e["invalid_at"] = now_iso  # M3: this belief stopped being true now
-        _rewrite_jsonl(self.path, entries)
-        return self._render(e, datetime.now(timezone.utc))
+        # Transactional (2026-07-18): find + mutate + rewrite under one lock.
+        with _write_lock(self.path):
+            entries, idx = self._find_active(id_or_keyword, self.path)
+            if idx < 0:
+                return {}
+            e = entries[idx]
+            now_iso = _now_iso()
+            e["_retracted"] = True
+            e["_retracted_at"] = now_iso
+            e["invalid_at"] = now_iso  # M3: this belief stopped being true now
+            _rewrite_jsonl(self.path, entries)
+            return self._render(e, datetime.now(timezone.utc))
 
     def history(self, id_or_keyword: str) -> list[dict]:
         """The full timeline of a belief — every version ever held, including the
@@ -1038,38 +1086,53 @@ class Canon:
         """
         now = datetime.now(timezone.utc)
 
-        kept, to_archive = [], []
-        for e in _load_jsonl(self.path):
-            if not self._is_active(e):
-                # Superseded / retracted: the audit trail history()/as_of() read.
-                # Keep it in the main file, verbatim, so those methods still work.
-                kept.append(e)
-                continue
-            tier = self._tier(self._current_intensity(e, now))
-            if tier == "visible":
-                kept.append(e)
-            elif tier == "archived":
-                to_archive.append(e)
-            # forgotten (and active) -> dropped
-        _rewrite_jsonl(self.path, kept)
-        if to_archive:
-            merged = self._dedup_archive(_load_jsonl(self.archived_path) + to_archive)
-            # Bound cold storage: keep the most-salient up to the cap, drop the rest.
-            cap = int(getattr(self.cfg, "archive_max", ARCHIVE_MAX_DEFAULT))
-            if cap >= 0 and len(merged) > cap:
-                merged.sort(key=lambda e: self._current_intensity(e, now), reverse=True)
-                merged = merged[:cap]
-            _rewrite_jsonl(self.archived_path, merged)
+        # Transactional (2026-07-18): same fixed lock order as confirm().
+        with (
+            _write_lock(self.path),
+            _write_lock(self.archived_path),
+            _write_lock(self.pending_path),
+        ):
+            kept, to_archive = [], []
+            for e in _load_jsonl(self.path):
+                if not self._is_active(e):
+                    # Superseded / retracted: the audit trail history()/as_of() read.
+                    # Keep it in the main file, verbatim, so those methods still work.
+                    kept.append(e)
+                    continue
+                tier = self._tier(self._current_intensity(e, now))
+                if tier == "visible":
+                    kept.append(e)
+                elif tier == "archived":
+                    to_archive.append(e)
+                # forgotten (and active) -> dropped
 
-        # Prune the grey zone the same way (no archival tier for pending), but keep
-        # its audit trail too for symmetry with the main store.
-        pending_kept = []
-        for e in _load_jsonl(self.pending_path):
-            if not self._is_active(e):
-                pending_kept.append(e)
-            elif self._tier(self._current_intensity(e, now)) != "forgotten":
-                pending_kept.append(e)
-        _rewrite_jsonl(self.pending_path, pending_kept)
+            # Crash-safety order fix (2026-07-18): land the archived records
+            # *before* rewriting the main store. Previously the main rewrite
+            # (which drops the dim facts) ran first, so a crash in the window
+            # between the two writes lost every archived-tier fact from both
+            # files — silently, and the tamper chain would read it as unlawful
+            # evaporation. Archive-first is idempotent on retry:
+            # _load_confirmed() is main-wins and _dedup_archive collapses a
+            # re-archived duplicate.
+            if to_archive:
+                merged = self._dedup_archive(_load_jsonl(self.archived_path) + to_archive)
+                # Bound cold storage: keep the most-salient up to the cap, drop the rest.
+                cap = int(getattr(self.cfg, "archive_max", ARCHIVE_MAX_DEFAULT))
+                if cap >= 0 and len(merged) > cap:
+                    merged.sort(key=lambda e: self._current_intensity(e, now), reverse=True)
+                    merged = merged[:cap]
+                _rewrite_jsonl(self.archived_path, merged)
+            _rewrite_jsonl(self.path, kept)
+
+            # Prune the grey zone the same way (no archival tier for pending), but keep
+            # its audit trail too for symmetry with the main store.
+            pending_kept = []
+            for e in _load_jsonl(self.pending_path):
+                if not self._is_active(e):
+                    pending_kept.append(e)
+                elif self._tier(self._current_intensity(e, now)) != "forgotten":
+                    pending_kept.append(e)
+            _rewrite_jsonl(self.pending_path, pending_kept)
 
     @staticmethod
     def _dedup_archive(entries: list[dict]) -> list[dict]:

@@ -229,6 +229,7 @@ class Imprint:
     shifts_applied: bool = False
     echo_count: int = 0
     label: str = ""  # short human tag, for rendering / dedup
+    last_decay_ts: str | None = None  # decay clock anchor; advanced on every decay pass
 
     def to_dict(self) -> dict:
         return {
@@ -246,6 +247,7 @@ class Imprint:
             "shifts_applied": bool(self.shifts_applied),
             "echo_count": int(self.echo_count),
             "label": self.label,
+            "last_decay_ts": self.last_decay_ts,
         }
 
     @classmethod
@@ -266,6 +268,7 @@ class Imprint:
             shifts_applied=bool(d.get("shifts_applied", False)),
             echo_count=int(d.get("echo_count", 0) or 0),
             label=str(d.get("label", "") or ""),
+            last_decay_ts=d.get("last_decay_ts"),
         )
 
 
@@ -428,9 +431,12 @@ def decay_imprints(imprints: list[Imprint], ts: str) -> list[Imprint]:
     """Age imprints toward their floor based on elapsed wall-clock time.
 
     For each imprint, intensity is reduced by ``decay_per_day`` for every day
-    since its last activity — whichever is more recent of its creation ``ts`` or
-    its ``last_echo_ts`` (an echo re-anchors the clock, so a frequently revisited
-    event stays vivid). Intensity never drops below ``min_floor``.
+    elapsed since the previous decay pass (``last_decay_ts``, stamped each pass;
+    falls back to ``last_echo_ts``/``ts`` for legacy imprints). The pass is
+    idempotent per elapsed interval — calling it every tick or once a month
+    charges the same total decay. Frequently revisited events stay vivid through
+    the echo intensity bump, not by pausing the clock. Intensity never drops
+    below ``min_floor``.
 
     The decay rate is deliberately tiny: at the default ~0.001/day it takes
     roughly two to three years to fall from full vividness to the floor. These
@@ -441,11 +447,20 @@ def decay_imprints(imprints: list[Imprint], ts: str) -> list[Imprint]:
     list, so it composes either way.
     """
     now = _parse_iso(ts)
+    now_iso = ts
     for imp in imprints or []:
-        anchor = _parse_iso(imp.last_echo_ts) or _parse_iso(imp.ts)
+        # Fix (2026-07-18): decay must be charged against a *advancing* anchor.
+        # Previously the anchor stayed fixed at ts/last_echo_ts, so every call
+        # re-charged the whole window since the event — total decay grew
+        # quadratically with age and an imprint could hit the floor in days
+        # instead of years when apply_decay ran on every tick. The dedicated
+        # last_decay_ts clock is stamped after each pass, making the pass
+        # idempotent per elapsed interval (frequency-invariant).
+        anchor = _parse_iso(imp.last_decay_ts) or _parse_iso(imp.last_echo_ts) or _parse_iso(imp.ts)
         days = _days_between(anchor, now)
         if days <= 0.0:
             continue
+        imp.last_decay_ts = now_iso
         rate = float(imp.decay_per_day or DEFAULT_DECAY_PER_DAY)
         floor = float(imp.min_floor)
         imp.intensity = round(max(floor, float(imp.intensity) - rate * days), 4)

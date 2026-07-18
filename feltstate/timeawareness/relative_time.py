@@ -71,6 +71,16 @@ def time_since_phrase(
     except (ValueError, TypeError):
         return None
 
+    # Fix (2026-07-18): tolerate mixed naive/aware inputs. Subtracting a naive
+    # datetime from an aware one raises TypeError — previously that escaped the
+    # parse guard above and killed the whole caller (in a companion loop this
+    # silently disabled every proactive path). A legacy naive stamp is treated
+    # as being in ``now``'s frame: best-effort phrasing beats crashing.
+    if prev.tzinfo is None and now.tzinfo is not None:
+        prev = prev.replace(tzinfo=now.tzinfo)
+    elif prev.tzinfo is not None and now.tzinfo is None:
+        prev = prev.replace(tzinfo=None)
+
     gap_min = (now - prev).total_seconds() / 60.0
     # Gate: within this window the conversation is effectively continuous and the
     # model's own short-term time sense covers it — emit nothing.
@@ -85,8 +95,11 @@ def time_since_phrase(
             return phrase
 
     # Past the far end of the ladder, a fuzzy duration stops being meaningful;
-    # name the absolute day it last happened instead.
-    return f"back on {prev.strftime('%b')} {prev.day:02d}"
+    # name the absolute day it last happened instead. Render the *local*
+    # calendar day — an aware UTC stamp names yesterday for any evening event
+    # east of Greenwich (2026-07-18 fix).
+    local_prev = prev.astimezone() if prev.tzinfo is not None else prev
+    return f"back on {local_prev.strftime('%b')} {local_prev.day:02d}"
 
 
 # Parts of the day, keyed by hour-of-day cutoffs. (upper_hour_exclusive, label):

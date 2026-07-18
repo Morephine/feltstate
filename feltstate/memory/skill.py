@@ -51,6 +51,7 @@ from .canon import (
     _now_iso,
     _parse_ts,
     _rewrite_jsonl,
+    _write_lock,
 )
 
 __all__ = [
@@ -231,6 +232,36 @@ def record_rating(
 
     now_dt = now or datetime.now(timezone.utc)
     now_iso = now_dt.isoformat()
+    # Transactional (2026-07-18): the rating is a read-modify-write against
+    # whichever store holds the skill; take both store locks in canon's fixed
+    # order so a concurrent add/confirm can't erase the rating (reentrant —
+    # the nested confirm() below re-acquires safely).
+    with _write_lock(canon.path), _write_lock(canon.archived_path), _write_lock(canon.pending_path):
+        return _record_rating_locked(
+            canon,
+            skill_id_or_trigger,
+            rating,
+            actor=actor,
+            note=note,
+            source=source,
+            cfg=cfg,
+            now_dt=now_dt,
+            now_iso=now_iso,
+        )
+
+
+def _record_rating_locked(
+    canon,
+    skill_id_or_trigger,
+    rating,
+    *,
+    actor,
+    note,
+    source,
+    cfg,
+    now_dt,
+    now_iso,
+):
     path, entries, idx = _find_active_skill(canon, skill_id_or_trigger)
     if idx < 0:
         return add_skill(
@@ -384,12 +415,14 @@ def recall_skills(
     for _w, e, path, _p in chosen:
         by_path.setdefault(path, set()).add(_entry_id(e))
     for path, ids in by_path.items():
-        allrows = _load_jsonl(path)
-        for e in allrows:
-            if _entry_id(e) in ids and canon._is_active(e):
-                e["recalls"] = int(e.get("recalls", 0)) + 1
-                e["_last_recalled"] = _now_iso()
-        _rewrite_jsonl(path, allrows)
+        # Transactional (2026-07-18): recall bump under the store lock.
+        with _write_lock(path):
+            allrows = _load_jsonl(path)
+            for e in allrows:
+                if _entry_id(e) in ids and canon._is_active(e):
+                    e["recalls"] = int(e.get("recalls", 0)) + 1
+                    e["_last_recalled"] = _now_iso()
+            _rewrite_jsonl(path, allrows)
 
     return [_skill_view(canon, e, proven=proven) for _w, e, _path, proven in chosen]
 
