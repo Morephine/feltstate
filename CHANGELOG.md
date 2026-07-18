@@ -60,6 +60,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `docs/STYLE_SPECTRUM.md` + `examples/style_spectrum.py`: the style spectrum —
+  an optional app-side renderer turning affect bands into at most three
+  form-only "delivery notes" (punctuation temperature, sentence length, doubled
+  words, filler budget). Addresses the description-vs-instruction tension head
+  on: form never content, off-neutral only, examples inline, hard cap; a
+  suppressed release owns the whole delivery. Deterministic runnable demo.
 - `docs/AGENT_WORK_UX.md` + `examples/agent_narration.py`: working out loud —
   the canned-voicebank pattern for long agent work (pools per event kind,
   thinking-pool for memory digs, ok/fail/empty result pools, honest progress

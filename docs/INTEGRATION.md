@@ -244,4 +244,5 @@ sandwich ordering, and the forget-probe pattern ·
 renderer portability · [MEMORY_TOOLS.md](MEMORY_TOOLS.md) — memory as
 function-calling tools · [AGENT_WORK_UX.md](AGENT_WORK_UX.md) — narrating long
 agent work without breaking character · [FAILURE_IN_CHARACTER.md](FAILURE_IN_CHARACTER.md)
-— errors that don't break the fourth wall.
+— errors that don't break the fourth wall · [STYLE_SPECTRUM.md](STYLE_SPECTRUM.md)
+— delivery notes: how a feeling holds a pen (optional layer).
