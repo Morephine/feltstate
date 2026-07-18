@@ -164,7 +164,10 @@ kept here because every implementer hits the same walls:
 The maze is a game built *for* her. The harder question: a shipped title you
 don't own the source of. Answered in practice, co-op through It Takes Two
 with her driving one protagonist — via an actuator ladder, each rung a
-different depth of access:
+different depth of access. The ladder's reference tooling, as played, lives
+in [`examples/itt_bridge/`](../examples/itt_bridge/) (Windows + the game
+required; its README credits the third-party foundations — UE4SS, vgamepad/
+ViGEm, pymem are not this project's design; the composition is):
 
 1. **Virtual gamepad** (`vgamepad`, an emulated X360 pad): works on any
    game, zero game modification. The load-bearing design choice is that the

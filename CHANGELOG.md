@@ -8,6 +8,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `examples/itt_bridge/`: the It Takes Two actuator ladder as reference
+  tooling — the played scripts, renamed and parametrized. `pad_daemon.py`
+  (the emulated-X360 tool daemon: button/stick/spam/screenshot/state over
+  local HTTP, sticks re-asserted every 50 ms against ViGEm decay, plus the
+  **beacon-scan telemetry** channel: engine-side values published as
+  `beacon + value`, located by magnitude and change/stability — no
+  version-specific offsets to rot), `join_spam.py` / `hotkey_pad.py` (the
+  join dance), `brain_demo.py` (walk/stop/jump actuator proof), and
+  `ue4ss_mod/` (the file→cvar bridge riding the game's own follow
+  capability). The README front-loads attribution — UE4SS, vgamepad/ViGEm
+  and pymem are third-party foundations, not this project's design; ours is
+  the composition — and the honesty: Windows + game required, not
+  CI-runnable, reference not product. Closes the review gap of GAME_SHELL §7
+  describing a ladder with no artifacts in the repo.
 - **Plasticity — what fires, sensitizes; what is safe, heals**
   (`PressureConfig.plasticity`, on by default, with a true-no-op kill
   switch). Each pressure bar carries a sensitivity (0.5 neutral): ticks whose
