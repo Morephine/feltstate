@@ -78,6 +78,12 @@ Why pull beats push, in order of importance:
    companion owns the glance. No frame queue, no backpressure — the newest
    image is simply *the file*, every time.
 
+The library formalizes the *ask* side of this seam:
+`FrontendAdapter.read_screen()` (`companion/frontend.py`) returns "the latest
+frame bytes for a vision-in turn, or `None` for no eyes" — and its docstring
+carries the whole philosophy: *the application decides how (file poll,
+capture); feltstate only asks. Default: no eyes.*
+
 The same rule as §1 applies: what she sees on screen affects her through what
 she says and does about it, never through a side-channel state write.
 
@@ -98,4 +104,5 @@ consumed in place and never copied out.
 | `Engine.render()` | felt block as plain text | the text part of a multimodal content array — assemble yourself when content isn't a string |
 | `Engine.inject(user_message)` | string in, string out | the simple path for pure-text turns; documented as a thin wrapper so the array case is first-class |
 | appraisal sources (`KeywordSource` / `LLMSource`) | judge the exchange text | how what-she-saw becomes what-she-feels — through the conversation, with the trust dial in the loop |
+| `FrontendAdapter.read_screen()` | latest frame bytes, or `None` = no eyes | the pull eye as a first-class adapter method — the app owns the refresh, the companion owns the glance |
 | `BRIDGE_ETIQUETTE` §3 inbound rule | persist first, perceive locally | the doorway every image enters through |

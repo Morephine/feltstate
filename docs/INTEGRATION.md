@@ -251,4 +251,5 @@ the emergency command lane on a chat bridge ·
 [INTERRUPTION.md](INTERRUPTION.md) — barge-in, the stop chain, and recovering
 from being cut off · [PERCEPTION.md](PERCEPTION.md) — images and screens as
 input: the persist-perceive-reply path and the pull eye ·
-[INNER_LIFE.md](INNER_LIFE.md) — the silent thinking channel behind the lamp.
+[INNER_LIFE.md](INNER_LIFE.md) — the silent thinking channel, the face that
+moves between turns, and the self-correction round.

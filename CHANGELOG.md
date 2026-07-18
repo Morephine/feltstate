@@ -67,15 +67,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   with `render()` assembled by hand) and caption bridges (descriptions framed
   as "seen, not heard"), and the pull-eye pattern: an always-fresh local file
   she *chooses* to look at — looking as an act, cost under control, frames
-  treated as the most sensitive artifact in the system.
-- `docs/INNER_LIFE.md`: the silent thinking channel — what happens behind the
-  thinking lamp. The library's half (`IntrospectSource`: quota-free,
-  solitude-gated, once per window per day, retried on failed delivery) and
-  the app's half: a full turn fully swallowed (real persona + felt block +
-  introspection prompt; output to a sink, never the voice; only a
-  thinking/idle status crosses to the skin). Where the thought goes: diary or
-  Canon (thought vs said, distinguishable), the state ticks so idle hours
-  genuinely change her, and it seeps into the next felt block unannounced.
+  treated as the most sensitive artifact in the system;
+  `FrontendAdapter.read_screen()` documented as the ask-side seam ("the
+  application decides how; feltstate only asks — default: no eyes").
+- `docs/INNER_LIFE.md`: three patterns that make idle time real. **The silent
+  thinking channel** — what happens behind the thinking lamp: the library's
+  half (`IntrospectSource`: quota-free, solitude-gated, once per window per
+  day, retried on failed delivery) and the app's half, a full turn fully
+  swallowed (output to a sink, never the voice; only a thinking/idle status
+  crosses to the skin; the thought lands in diary/Canon, the state ticks, and
+  it seeps into the next felt block unannounced). **The expression direct
+  push** — extending the turn-edge face channel to plain heartbeat ticks:
+  `expression_signal` is a pure function of (prev, new) and the adapter owns
+  the throttle, so a drifting state reaches the face with zero tokens —
+  dedupe before throttle or the face strobes. **The self-correction round** —
+  the slow half of self-maintenance pairing the forget probe's fast reflex: a
+  solitude-gated swallowed turn over her own recent replies, judging voice
+  not facts, sinking to notes-to-self and an expiring nudge line — never an
+  apology, never a permanent instruction.
 - `docs/BRIDGE_ETIQUETTE.md`: being a person over a chat platform — the fixed
   emoji receipt vocabulary (working / done / deliberate-silence / queue-full)
   with the four rules that keep receipts trustworthy, the typing indicator as
