@@ -60,6 +60,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `docs/AGENT_WORK_UX.md` + `examples/agent_narration.py`: working out loud —
+  the canned-voicebank pattern for long agent work (pools per event kind,
+  thinking-pool for memory digs, ok/fail/empty result pools, honest progress
+  counts, distinct completion cues), the narration throttle ("the mouth rests,
+  the hands don't"), and carrying finished work across turns through the
+  proactive path. Deterministic runnable demo; its transcript is the doc's.
+- `docs/FAILURE_IN_CHARACTER.md`: errors that don't break the fourth wall —
+  two audiences two truths (user hears a person, operator log keeps the
+  exception), felt failure kinds over exception classes (net_down /
+  model_stalled / interrupted) with a cheap-probe diagnosis, delivery rules,
+  the watchdog case (the system speaks *as her* when she can't), and recovery
+  etiquette.
 - `docs/PROMPT_STACK.md`: the prompt-stack chapter — the static/dynamic
   partition with the reason each line sits where it does, the sandwich
   structure and the ordering physics of the bottom slice, and the
