@@ -80,7 +80,8 @@ Why pull beats push, in order of importance:
 
 The library formalizes the *ask* side of this seam:
 `FrontendAdapter.read_screen()` (`companion/frontend.py`) returns "the latest
-frame bytes for a vision-in turn, or `None` for no eyes" — and its docstring
+frame bytes (e.g. JPEG) for a vision-in turn, or `None` for no eyes" — and its
+docstring
 carries the whole philosophy: *the application decides how (file poll,
 capture); feltstate only asks. Default: no eyes.*
 

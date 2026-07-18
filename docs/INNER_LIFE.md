@@ -121,7 +121,7 @@ heartbeat tick ──► engine state drifts (no turn, no tokens)
 
 The pieces are already shaped for it: `expression_signal` is a pure function
 of (prev, new) — it doesn't care whether a turn caused the change — and
-`push_expression`'s contract says *"throttle here if the avatar needs a min
+`push_expression`'s contract says *"Throttle here if the avatar needs a min
 switch interval"* (`companion/frontend.py`), so the adapter owns the minimum
 gap (a few hundred milliseconds up to ~a second reads naturally on an
 avatar; per-frame pushes read as twitching).
