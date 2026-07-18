@@ -62,7 +62,11 @@ Its main design choices are:
    relationship, pressure, aftertaste, anticipation, and optional imprints are
    integrated with configurable human-inspired asymmetric dynamics — every
    rate a personality dial rather than a fitted constant (see
-   ["Where the numbers come from"](#where-the-numbers-come-from)).
+   ["Where the numbers come from"](#where-the-numbers-come-from)). The slowest
+   layer is **plasticity**: per-bar sensitivity carved by micro hits from
+   lived charge, amplifying future inflow, healing toward baseline at a
+   safety-paced daily percentage — character change on a ~180-day scale
+   (`examples/plasticity.py`).
 4. **Capability is judged separately from mood.** An optional skill-memory
    region uses human 1/2/3 ratings, promotion, retirement, and bounded
    exploration rather than letting the reply model declare its own competence.

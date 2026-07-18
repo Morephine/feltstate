@@ -314,6 +314,11 @@ class PressureState:
     aftertaste_until_ts: str | None = None
     last_tick_ts: str | None = None
     history: list[dict] = field(default_factory=list)  # last 5 release events
+    # Plasticity (see PressureConfig.plasticity): per-bar sensitivity carved by
+    # lived hits, healing toward the 0.5 baseline on a safety-paced clock.
+    # Missing keys read as neutral 0.5.
+    sensitivity: dict = field(default_factory=dict)
+    sens_last_decay_ts: str | None = None  # healing anchor (advances every pass)
 
     def to_dict(self) -> dict:
         return {
@@ -326,6 +331,8 @@ class PressureState:
             "aftertaste_until_ts": self.aftertaste_until_ts,
             "last_tick_ts": self.last_tick_ts,
             "history": list(self.history)[-5:],
+            "sensitivity": dict(self.sensitivity),
+            "sens_last_decay_ts": self.sens_last_decay_ts,
         }
 
     @classmethod
@@ -341,6 +348,8 @@ class PressureState:
             aftertaste_until_ts=d.get("aftertaste_until_ts"),
             last_tick_ts=d.get("last_tick_ts"),
             history=list(d.get("history") or [])[-5:],
+            sensitivity=dict(d.get("sensitivity") or {}),
+            sens_last_decay_ts=d.get("sens_last_decay_ts"),
         )
 
 

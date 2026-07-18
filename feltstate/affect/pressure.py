@@ -54,6 +54,7 @@ phases.
 
 from __future__ import annotations
 
+import math
 from datetime import datetime, timedelta, timezone
 
 from ..config import (
@@ -274,9 +275,108 @@ def _accumulate(
         # joy also lightly damps anger — it is hard to stay furious while elated
         pressure.bars.anger = max(0.0, pressure.bars.anger - joy_in * inh * 0.5)
 
+    # Plasticity: hits are metered on the RAW merged inflow (pre-gain — the
+    # stimulus, not the amplified echo), then the commit below multiplies by
+    # the carved gain. Merging already guarantees one hit per bar per tick.
+    if cfg.plasticity:
+        _plast_register_hits(pressure, inflow, cfg)
+
     # commit inflow
     for k in BAR_NAMES:
-        setattr(pressure.bars, k, getattr(pressure.bars, k) + inflow[k])
+        gain = _plast_gain(pressure, k, cfg) if cfg.plasticity else 1.0
+        setattr(pressure.bars, k, getattr(pressure.bars, k) + inflow[k] * gain)
+
+
+# --------------------------------------------------------------------------- #
+# Plasticity — what fires, sensitizes; what is safe, heals                    #
+# --------------------------------------------------------------------------- #
+def _sens_of(pressure: PressureState, bar: str, cfg: PressureConfig) -> float:
+    """Read one bar's sensitivity; missing/non-finite values read as 0.5."""
+    try:
+        v = float(pressure.sensitivity.get(bar, 0.5))
+    except (TypeError, ValueError, AttributeError):
+        return 0.5
+    if not math.isfinite(v):
+        return 0.5
+    return max(cfg.plast_floor, min(cfg.plast_ceil, v))
+
+
+def _plast_register_hits(pressure: PressureState, inflow: dict, cfg: PressureConfig) -> None:
+    """Meter this tick's raw inflow into micro sensitivity hits.
+
+    Two charge grades (ordinary label traffic vs event-grade shocks), each
+    adding a *micro* increment — single digits of 1e-6 — so character change
+    is an accumulation of lived days, never one loud message. Rounded to 8
+    decimals: at micro scale a coarser rounding would quantize small
+    updates to zero and the sensitivity could never move (or come home).
+    """
+    for k in BAR_NAMES:
+        d = inflow.get(k, 0.0)
+        try:
+            d = float(d)
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(d):
+            continue
+        if d >= cfg.plast_charge_heavy:
+            inc = cfg.plast_hit_heavy
+        elif d >= cfg.plast_charge_light:
+            inc = cfg.plast_hit_light
+        else:
+            continue
+        pressure.sensitivity[k] = round(min(cfg.plast_ceil, _sens_of(pressure, k, cfg) + inc), 8)
+
+
+def _plast_gain(pressure: PressureState, bar: str, cfg: PressureConfig) -> float:
+    """Inflow multiplier from carved sensitivity: 1 + k×(sens − 0.5)."""
+    return 1.0 + cfg.plast_gain_k * (_sens_of(pressure, bar, cfg) - 0.5)
+
+
+def _plast_heal(
+    pressure: PressureState, relationship: Relationship, cfg: PressureConfig, ts: str
+) -> None:
+    """Percentage healing of sensitivity toward the 0.5 baseline.
+
+    The daily rate interpolates between ``plast_decay_lo`` (safety 0) and
+    ``plast_decay_hi`` (safety 1): a safe bond softens carved edges faster.
+    Settled over *real elapsed days* since the anchor, and the anchor is
+    stamped **before** applying — advance-always, so healing is
+    frequency-invariant and a missed stamp can never recharge the whole
+    window twice (the imprint quadratic-decay lesson, applied here from
+    birth).
+    """
+    try:
+        now_dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        now_dt = datetime.now(timezone.utc)
+    if now_dt.tzinfo is None:
+        now_dt = now_dt.replace(tzinfo=timezone.utc)
+    prev = pressure.sens_last_decay_ts
+    pressure.sens_last_decay_ts = now_dt.isoformat()
+    if not prev:
+        return  # first sighting just plants the anchor
+    try:
+        prev_dt = datetime.fromisoformat(str(prev).replace("Z", "+00:00"))
+        if prev_dt.tzinfo is None:
+            prev_dt = prev_dt.replace(tzinfo=timezone.utc)
+        days = (now_dt - prev_dt).total_seconds() / 86400.0
+    except (ValueError, TypeError):
+        return
+    if days <= 0:
+        return
+    safety = relationship.safety
+    try:
+        safety = float(safety)
+    except (TypeError, ValueError):
+        safety = 0.5
+    if not math.isfinite(safety):
+        safety = 0.5
+    safety = max(0.0, min(1.0, safety))
+    pct = cfg.plast_decay_lo + (cfg.plast_decay_hi - cfg.plast_decay_lo) * safety
+    keep = (1.0 - pct) ** days
+    for k in BAR_NAMES:
+        cur = _sens_of(pressure, k, cfg)
+        pressure.sensitivity[k] = round(0.5 + (cur - 0.5) * keep, 8)
 
 
 def _apply_milestone(inflow: dict, m: dict) -> None:
@@ -635,6 +735,11 @@ def step(
 
     # (0) expire timed phases by the clock, BEFORE the accumulate gate (#13).
     _advance_time_phase(pressure, cfg, ts)
+
+    # (0.5) plasticity healing — every tick, every phase: carved sensitivity
+    # relaxes toward 0.5 on real elapsed time, paced by relationship.safety.
+    if cfg.plasticity:
+        _plast_heal(pressure, relationship, cfg, ts)
 
     # (1) accumulate — only outside the vent.
     if pressure.phase not in ("releasing", "aftertaste"):

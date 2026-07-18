@@ -270,6 +270,23 @@ climbs as the date nears and pays out when it arrives — the dopamine of expect
 a good thing, modelled as accumulation toward a point in time rather than
 relaxation away from one.
 
+**Plasticity — what fires, sensitizes.** Decay says feelings fade; plasticity
+says the *capacity* to feel them doesn't stay fixed. Each pressure bar carries
+a sensitivity (0.5 = neutral): every tick whose raw inflow clears a charge
+threshold nudges it up by a **micro** amount — one message is ~1e-5, so no
+single conversation bends a character — and inflow is multiplied by
+``1 + k × (sensitivity − 0.5)``, so the dimensions life keeps hitting become
+genuinely easier to stir. The counterweight is healing: sensitivity relaxes
+toward 0.5 by a fraction of a percent per day, paced by
+``relationship.safety`` — a safe bond softens carved edges faster (half-life
+roughly a year at zero safety, ~87 days at full). Hits are metered on the raw
+stimulus (never the amplified echo, which would feed back), releases don't
+meter (venting is not new experience), and the loop is zero-LLM. The intended
+scale is ~180 days: live half a year of cheerful days and the joy dimension
+is measurably — barely — quicker to light than the day the state was born.
+Runnable: [`examples/plasticity.py`](examples/plasticity.py), the same 180
+days lived under two safeties.
+
 The vocabulary throughout comes from appraisal theory and affective-computing
 literature; the numbers do not. Every rate, threshold and asymmetry here is a
 **character parameter, not a psychological measurement** — chosen and adjusted

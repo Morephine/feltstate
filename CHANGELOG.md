@@ -8,6 +8,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Plasticity — what fires, sensitizes; what is safe, heals**
+  (`PressureConfig.plasticity`, on by default, with a true-no-op kill
+  switch). Each pressure bar carries a sensitivity (0.5 neutral): ticks whose
+  raw merged inflow clears a charge threshold add a *micro* hit (two grades —
+  ordinary label traffic vs event-grade shocks; ~1e-5 per hit, so no single
+  conversation bends a character), inflow commits through a
+  ``1 + k×(sens−0.5)`` gain, and sensitivity heals toward 0.5 by a daily
+  percentage interpolated on `relationship.safety` (half-life ~1y at safety
+  0, ~87d at safety 1). Hits are metered pre-gain on the stimulus (no
+  feedback loop) and never during a release; healing is anchored
+  advance-always and frequency-invariant; sensitivity writes round to 8
+  decimals so micro updates survive quantization; non-finite values read as
+  neutral. All knobs are character-configurator dials in `PressureConfig`.
+  New state fields serialize round-trip. Pinned by `tests/test_plasticity.py`
+  (11 tests); `examples/plasticity.py` lives the same 180 days under two
+  safeties, deterministically. Intended character timescale: ~180 days.
 - `docs/GAME_SHELL.md` + `examples/game_director.py`: the game as a third
   surface. The identity flip (she is the space, or the second player — never
   a bolted-on NPC), the constitution stated from its physical premise

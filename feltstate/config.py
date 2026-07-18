@@ -99,6 +99,30 @@ class PressureConfig:
     # set it equal to your idle_decay to pin the floor absolute instead.
     anticipation_gain: float = 0.5
     anticipation_ref_decay: float = 0.018
+    # ── Plasticity: what fires, sensitizes ─────────────────────────────────
+    # Each bar carries a sensitivity (0.5 = neutral). Every tick whose inflow
+    # on a bar clears a charge threshold nudges that bar's sensitivity up a
+    # *micro* amount — one message is ~1e-5, so no single conversation bends a
+    # character — and inflow is multiplied by 1 + gain_k × (sensitivity − 0.5),
+    # so what life keeps hitting becomes genuinely easier to stir. Sensitivity
+    # heals toward 0.5 by a small percentage per day, paced by
+    # relationship.safety: a safe bond softens carved edges faster. The whole
+    # loop is zero-LLM and tuned to a ~180-day character timescale — these are
+    # dials of the character configurator like everything else here.
+    plasticity: bool = True  # master switch; off = no reads, no writes
+    plast_hit_light: float = 0.000005  # per qualifying tick, ordinary charge
+    plast_hit_heavy: float = 0.00001  # per qualifying tick, event-grade charge
+    # Charge thresholds sit on the real inflow scale: ordinary labels charge
+    # ~0.008–0.025 per tick (see LABEL_TO_PRESSURE), milestone shocks 0.1–0.4.
+    # Light collects daily life; heavy collects events. Fainter traces than
+    # 0.008 carve nothing on purpose.
+    plast_charge_light: float = 0.008
+    plast_charge_heavy: float = 0.08
+    plast_decay_lo: float = 0.002  # safety=0: 0.2%/day toward 0.5 (half-life ~1y)
+    plast_decay_hi: float = 0.008  # safety=1: 0.8%/day toward 0.5 (half-life ~87d)
+    plast_gain_k: float = 1.2  # inflow gain slope around the 0.5 baseline
+    plast_floor: float = 0.2  # sensitivity clamp, low side
+    plast_ceil: float = 0.9  # sensitivity clamp, high side (micro-hits cap here)
     # Multiplier on label-driven bar inflow. 1.0 = companion scale (a tick is a
     # conversation turn; bars are mostly moved by milestone shocks, and per-label
     # charge sits below idle_decay on purpose so ordinary chatter cannot ratchet
