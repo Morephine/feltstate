@@ -364,6 +364,8 @@ python examples/agent_narration.py  # voicebank pools, throttle, failure lines
 python examples/style_spectrum.py   # state bands → delivery notes
 python examples/companion_live.py   # the interactive loop (FELTSTATE_LIVE_FAST=1 to hurry it)
 python examples/game_director.py    # the game shell: intents, sight gate, one running mouth
+python examples/maze_game/play.py   # the director shape as a playable maze (WASD; offline stub,
+                                    # or any OpenAI-compatible model via MAZE_LLM=1)
 ```
 
 ---

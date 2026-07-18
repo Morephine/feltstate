@@ -7,9 +7,13 @@ the space* the player is trapped in, and a commercial co-op title — It Takes
 Two — where she sits in the second seat. Same soul, same memory, same mood;
 what changed is only the body.
 
-Runnable reference: [`examples/game_director.py`](../examples/game_director.py)
-— the full control loop with the model stubbed, deterministic, offline. Every
-transcript below is its real output.
+Runnable references: [`examples/game_director.py`](../examples/game_director.py)
+— the control loop with the model stubbed, deterministic and offline; every
+transcript below is its real output. And
+[`examples/maze_game/`](../examples/maze_game/) — the director shape as a
+**complete playable game**: WASD in a terminal against a space that
+redecorates around you, offline stub director by default, any
+OpenAI-compatible model as the space via one env var.
 
 ---
 

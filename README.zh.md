@@ -313,6 +313,8 @@ python examples/agent_narration.py  # 罐头声带池、限流、故障台词
 python examples/style_spectrum.py   # 状态波段 → 表达注记
 python examples/companion_live.py   # 交互循环 (FELTSTATE_LIVE_FAST=1 加速)
 python examples/game_director.py    # 游戏壳: 意图队列、视线门、一张不停的嘴
+python examples/maze_game/play.py   # 导演形态做成可玩迷宫 (WASD; 默认离线桩导演,
+                                    # MAZE_LLM=1 可接任意 OpenAI 兼容模型)
 ```
 
 ---

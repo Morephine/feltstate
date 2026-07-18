@@ -8,6 +8,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `examples/maze_game/`: the director shape as a **complete playable game** —
+  fully original to this project, pure stdlib. `world.py` (the single source
+  of truth: grid/walls/exit, stuck & circling tracking, the director's verbs
+  from single walls to `reset_interior`, JSON round-trip), `director.py`
+  (prose scene summary with the raw vector attached, `<<DIRECTOR>>` decision
+  extraction with brace fallback, action execution, and two minds: an
+  offline heuristic `StubDirector` so it plays with zero config, and
+  `LLMDirector` over any `LLMBackend`), `play.py` (cross-platform WASD loop;
+  the director is asked **on a background thread** — the player never blocks
+  on model latency, the two-speed constitution as something you feel), and
+  `HOW_TO_PLAY.md`, one file serving as both the human manual and the LLM
+  system prompt. Unparseable model turns become logged no-ops; the maze
+  plays on.
 - `examples/itt_bridge/`: the It Takes Two actuator ladder as reference
   tooling — the played scripts, renamed and parametrized. `pad_daemon.py`
   (the emulated-X360 tool daemon: button/stick/spam/screenshot/state over
