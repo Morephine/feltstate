@@ -8,18 +8,21 @@ scheduler depends only on the :class:`PendingTopicsStore` interface;
 
 from __future__ import annotations
 
+import importlib
 import json
 import threading
 from abc import ABC, abstractmethod
 from pathlib import Path
+from types import ModuleType
 
 # Cross-platform advisory locking (2026-07-18 fix). The previous top-level
 # ``import fcntl`` made importing feltstate.companion crash on Windows — the
 # very platform the concurrency fix was meant to protect. Mirror
 # memory/canon.py: use flock where available, else fall back to a per-process
 # threading lock (single-process safety, the common case).
+_fcntl: ModuleType | None
 try:  # pragma: no cover - platform dependent
-    import fcntl as _fcntl
+    _fcntl = importlib.import_module("fcntl")
 except ImportError:  # Windows
     _fcntl = None
 
