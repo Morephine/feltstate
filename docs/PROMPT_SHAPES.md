@@ -117,7 +117,7 @@ knot that won't loosen" at ≥0.90) and repair history ("mended once or twice" a
 
 | signal | variants |
 |---|---|
-| max negative bar | ≥0.85 brimming, hard to hold · ≥0.70 heavy · ≥0.50 building, weighing a little · ≥0.35 a touch of pressure · ≥0.20 low · below: pressure clear |
+| max negative bar | ≥0.85 pressure brimming, hard to hold · ≥0.70 pressure heavy · ≥0.50 pressure building, weighing a little · ≥0.35 a touch of pressure · ≥0.20 pressure low · below: pressure clear |
 | joy bar (separate clause) | ≥0.80 joy brimming · ≥0.50 joy bright · ≥0.20 a flicker of joy · below: silent |
 | phase | calm→settled · building→building · releasing→spilling over · aftertaste→still echoing |
 
