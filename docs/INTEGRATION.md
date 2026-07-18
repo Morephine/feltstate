@@ -232,5 +232,14 @@ treat the bridge as an **untrusted surface**:
   multiple people can talk to it, key relationship state per speaker and never
   leak one person's context into another's turn.
 
-A fuller layering write-up (body / bridge / soul) is planned alongside the
-prompt-shape gallery; this section is the part you should not defer.
+A fuller layering write-up (body / bridge / soul) is planned; this section is
+the part you should not defer.
+
+---
+
+*Further reading:* [PROMPT_SHAPES.md](PROMPT_SHAPES.md) — the rendered blocks
+and the variant master table · [PROMPT_STACK.md](PROMPT_STACK.md) — partition,
+sandwich ordering, and the forget-probe pattern ·
+[OUTPUT_CHAIN.md](OUTPUT_CHAIN.md) — reply → face and voice, streaming and
+renderer portability · [MEMORY_TOOLS.md](MEMORY_TOOLS.md) — memory as
+function-calling tools.

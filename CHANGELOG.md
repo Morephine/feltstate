@@ -60,6 +60,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `docs/PROMPT_STACK.md`: the prompt-stack chapter — the static/dynamic
+  partition with the reason each line sits where it does, the sandwich
+  structure and the ordering physics of the bottom slice, and the
+  **forget-probe pattern**: a per-turn checkable micro-act (the sentence-initial
+  emotion tag) whose absence triggers a one-turn identity reminder —
+  persona upkeep that costs nothing until it's needed.
+- `docs/OUTPUT_CHAIN.md`: the output-chain chapter — the two signal channels
+  (state-edge → face, reply-tag → voice colour) with the live transcript
+  showing them deliberately disagreeing, first-sentence TTS streaming,
+  interruption etiquette via `should_speak`, and renderer portability down to
+  a global-hotkey bridge (the label is the protocol).
 - `examples/prompt_shapes.py` + `docs/PROMPT_SHAPES.md`: the prompt-shape
   gallery — one neutral persona, three prepared moments (first morning, back
   after three days, a release let out vs held in), each shown as the full
