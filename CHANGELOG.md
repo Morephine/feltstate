@@ -6,6 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Reframed how the dynamics constants present themselves (README "Where the
+  numbers come from", the matching Chinese section, PHILOSOPHY §4): they are
+  personality parameters tuned for character coherence over long-running use
+  — exposed as dials (`config.py`, `PersonaDials`), with the defaults forming
+  one reference temperament — rather than an apology for not being fitted to
+  human data. Tunability is the design; the no-psychological-claim honesty is
+  unchanged. Also mends a broken sentence the old PHILOSOPHY paragraph
+  carried.
+
 ## [0.2.0a2] - 2026-07-18
 
 The integration-handbook release: thirteen `docs/` chapters and five new

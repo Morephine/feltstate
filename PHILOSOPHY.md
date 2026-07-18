@@ -270,10 +270,19 @@ climbs as the date nears and pays out when it arrives — the dopamine of expect
 a good thing, modelled as accumulation toward a point in time rather than
 relaxation away from one.
 
-The grounding throughout is appraisal-theory and basic-emotion psychology
-The terminology is inspired by appraisal and affective-computing literature,
-but the configured dynamics are design choices rather than a validated model of
-human emotion.
+The vocabulary throughout comes from appraisal theory and affective-computing
+literature; the numbers do not. Every rate, threshold and asymmetry here is a
+**character parameter, not a psychological measurement** — chosen and adjusted
+the way animators tune a movement curve: iterated against long-running use
+until the temperament feels coherent, then exposed as a dial. `config.py`
+holds every one with a one-line rationale, per-character values ride
+`PersonaDials`, and the defaults amount to one hand-tuned reference
+personality — not a claim about people in general. Retuning them is not
+deviating from the model; it is the intended way to write a *different*
+character: quicker to forgive, slower to warm, harder to tire. The honest
+test for these numbers is whether the resulting character stays coherent over
+months, not whether a constant agrees with a published one — they are not
+fitted to human data, and their job does not require them to be.
 
 ---
 

@@ -60,7 +60,9 @@ Its main design choices are:
    author its own persisted state.
 3. **State changes across several timescales.** Fast mood, slow temperament,
    relationship, pressure, aftertaste, anticipation, and optional imprints are
-   integrated with configurable human-inspired asymmetric dynamics.
+   integrated with configurable human-inspired asymmetric dynamics — every
+   rate a personality dial rather than a fitted constant (see
+   ["Where the numbers come from"](#where-the-numbers-come-from)).
 4. **Capability is judged separately from mood.** An optional skill-memory
    region uses human 1/2/3 ratings, promotion, retirement, and bounded
    exploration rather than letting the reply model declare its own competence.
@@ -83,6 +85,20 @@ reply generation — the parts most companions blur together are here kept
 deliberately, and visibly, apart. Each choice above is unpacked, with working
 code and real transcripts, in [the integration
 handbook](#the-integration-handbook).
+
+### Where the numbers come from
+
+The dynamics constants — EWMA rates, decay curves, pressure thresholds, the
+asymmetries — are **personality parameters, not psychological measurements**.
+They were hand-tuned against a long-running private deployment the way game
+designers tune a movement curve: for a character that stays coherent over
+months, not to match a published constant. Every one lives in `config.py`
+with a one-line rationale, per-character values ride `PersonaDials`, and the
+defaults amount to one reference temperament. Retuning them is not breaking
+the model — it is how you write a *different* character: quicker to forgive,
+slower to warm, harder to tire. Personality being tunable is the design, not
+a disclaimer. What they are not is fitted to human data; no such claim is
+made, and none is needed for the job they do.
 
 ### A note on memory fingerprints
 
