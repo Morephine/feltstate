@@ -85,7 +85,7 @@ The swallowed text has three destinations, in increasing visibility:
    away I reflected…" — the changed state simply renders into the next felt
    block, and the mood the user meets is the mood the thinking left. If the
    monologue produced something worth *saying*, the app can queue it as a
-   pending topic ([INTEGRATION.md](INTEGRATION.md) §5's proactive path) and
+   pending topic ([INTEGRATION.md](INTEGRATION.md) §4's proactive path) and
    let the ordinary gates decide when.
 
 ## 4. Cost, honestly
@@ -103,5 +103,5 @@ just accept that a skipped fire moves nothing (§2's honesty note applies).
 *See also:* [OUTPUT_CHAIN.md](OUTPUT_CHAIN.md) §4 — the silent-behaviour
 dispatch path this chapter fills in · [PROMPT_STACK.md](PROMPT_STACK.md) —
 the partition the introspection turn reuses verbatim ·
-[INTEGRATION.md](INTEGRATION.md) §4 — the heartbeat that carries the
+[INTEGRATION.md](INTEGRATION.md) §3 — the heartbeat that carries the
 scheduler these fires ride on.

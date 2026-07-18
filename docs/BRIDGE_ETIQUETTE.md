@@ -71,10 +71,11 @@ through the model. Design rules:
   one-line status strings, not conversation. The deliberate tone-break marks
   the boundary between talking *to her* and operating *her machinery* — the
   one place out-of-character is correct.
-* **Reducing operations only.** The emergency lane may stop, mute, clear,
-  report. Anything that *grants* — permissions, capabilities, spending — goes
-  through the full, gated path. A hatch that can only de-escalate is a hatch
-  you never regret having.
+* **De-escalate or configure — never grant.** The lane may stop, clear,
+  restart, report status, and flip neutral config (a model-tier switch, a
+  verbosity level). What it must never do is *grant*: permissions,
+  capabilities, spending all go through the full, gated path. A hatch that
+  cannot escalate is a hatch you never regret having.
 * **Commands are not conversation.** They don't enter history, don't tick the
   engine, don't leave receipts beyond their own status line.
 
