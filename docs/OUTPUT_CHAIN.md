@@ -98,12 +98,21 @@ cleanly at exactly this line.
 
 ## 4. Silent behaviours are part of the chain
 
-Not every turn speaks. Dreams and introspection dispatch with an **empty
-payload** — the proactive path runs, state shifts, and `should_speak("")`
-gates the voice to silence. A skin can still show *something* (a lamp, an
-idle animation, a slow blink) by listening to the same dispatch without
-voicing it. Silence with a visible inner life reads as thinking; silence with
-a frozen face reads as crashed — budget one visual for the former.
+Not every fired behaviour speaks. Dreams and introspection propose an **empty
+payload**: the state work has already happened inside the source (a dream's
+mood residue is applied by `Engine.maybe_dream` itself), and the dispatcher
+returns before the turn machinery — an empty payload never reaches the voice
+at all (`companion/app.py`, the `_proactive_say` early return).
+
+`should_speak` is a different gate with two real jobs: skipping non-speakable
+text (the default heuristic drops pure punctuation/whitespace) and carrying
+your app's own muting — return `False` while the user is talking (VAD) and
+the line is dropped, not queued.
+
+A skin can still show *something* for the silent behaviours (a lamp, an idle
+animation, a slow blink) by observing the scheduler's fires without voicing
+them. Silence with a visible inner life reads as thinking; silence with a
+frozen face reads as crashed — budget one visual for the former.
 
 ---
 
