@@ -230,10 +230,62 @@ treat the bridge as an **untrusted surface**:
   the companion lives on;
 * per-surface, write down what it can see and what it can never see; if
   multiple people can talk to it, key relationship state per speaker and never
-  leak one person's context into another's turn.
+  leak one person's context into another's turn
+  ([MULTI_PERSON.md](MULTI_PERSON.md) is the full keying pattern).
 
-A fuller layering write-up (body / bridge / soul) is planned; this section is
-the part you should not defer.
+§8 is the layering map this law applies to — per surface, spelled out.
+
+## 8. One soul, many surfaces — shell / bridge / soul
+
+The architecture that keeps a companion *one person* across every place she
+appears is a three-way split:
+
+| layer | what it is | cardinality |
+|---|---|---|
+| **soul** | the Engine + its stores: state, Canon, scheduler state, history | **exactly one**, on the machine she lives on |
+| **shell** | a body at home — avatar + voice + the pull eye + whatever hands you give it | swappable |
+| **bridge** | a phone — a chat platform surface for when the user is away | addable |
+
+Shells render her; bridges relay her; only the soul *is* her. Swap the
+avatar, retheme the voice, add a second chat platform — nothing about
+identity, memory, or mood is touched, because none of it lives in those
+layers. And because there is one soul, state is continuous across surfaces:
+walk away from the desktop mid-conversation, message her from a phone, and
+it is the same afternoon in the same life — the felt block carries on,
+the ledgers carry on, nothing "logs in".
+
+Experienced from the user's side: **home is face-to-face** — voice, a face
+that moves between turns, real-time interruption; **away is texting her** —
+receipts and typing lamps as body language ([BRIDGE_ETIQUETTE.md](BRIDGE_ETIQUETTE.md)).
+Different medium, same person; the medium changes what she *can show*, never
+what she *is*.
+
+**A third surface, to prove the shape generalizes**: a game-director shell.
+A separate entry point feeds her a game world's state; she answers in her
+own identity with decisions — a structured verdict the game applies
+(environment changes, direction), plus in-character lines if the shell has a
+mouth. Same soul: what happened in the game is remembered in the evening
+conversation. The design philosophy, stated once: **don't read her state and
+inject rules into the world — give her the world and let her decide.**
+Piping bars into game logic ("sadness > 0.6 → rain") is the instruction
+anti-pattern wearing a game skin; handing her the situation and applying her
+decision keeps the agency where the soul is. Shells multiply this way
+without limit — the soul never does.
+
+The per-surface visibility law, in one table:
+
+| surface | receives | never receives |
+|---|---|---|
+| reply model | the felt block — first-person *description* | numeric bars, instructions to feel |
+| shell frontend | expression labels, a thinking/idle status | bars, stores, monologue text |
+| voice | stripped text + an emotion hint label | raw tags, state |
+| bridge | rendered speech, receipts, in-character failure lines | state files, stores, operator-side error text |
+| game shell | world-relevant decisions, in-character lines | memory dumps, raw state |
+| operator log | everything, verbatim | — (it's yours; keep it off user surfaces) |
+
+Every row is the same sentence with different nouns: *rendered, first-person,
+already-shaped output crosses; the stores and the numbers never do.* That is
+§7 as an architecture rather than a warning.
 
 ---
 
@@ -252,4 +304,6 @@ the emergency command lane on a chat bridge ·
 from being cut off · [PERCEPTION.md](PERCEPTION.md) — images and screens as
 input: the persist-perceive-reply path and the pull eye ·
 [INNER_LIFE.md](INNER_LIFE.md) — the silent thinking channel, the face that
-moves between turns, and the self-correction round.
+moves between turns, and the self-correction round ·
+[MULTI_PERSON.md](MULTI_PERSON.md) — one soul, many people: per-speaker
+relationship keying and the zero-pollution rule.

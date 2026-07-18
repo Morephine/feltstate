@@ -60,6 +60,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `docs/MULTI_PERSON.md`: one soul, many people — the relationship-keying
+  pattern. The invariant (mood/pressure/traits and Canon are singular;
+  `Relationship` is one *per pair* — its five axes, `repair_history`
+  included, are properties of a pair and not transferable), the mechanical
+  keying flow on `Relationship.to_dict`/`from_dict` (stable platform ids,
+  never display names), the zero-pollution rule (no speaker identity → no
+  ledger: introspection, frontend and game fires write to no one's account;
+  unknown speakers never default onto the mainline key), memory staying
+  whole (per-person recall is a filter over one store via Canon's `who`,
+  with rendering discretion on top), and what the felt block changes per
+  speaker: relationship lines only — the stranger meets the same person on
+  a different footing.
+- `docs/INTEGRATION.md` §8: the shell / bridge / soul layering — the
+  promised body/bridge/soul write-up. One soul (engine + stores, exactly
+  one), swappable shells (a body at home), addable bridges (a phone), state
+  continuous across surfaces with nothing "logging in"; the home
+  (face-to-face) vs away (texting her) experience contrast; a game-director
+  shell as the third surface proving the shape generalizes — give her the
+  world and let her decide, never pipe bars into world rules; and the
+  per-surface visibility law as one table (rendered first-person output
+  crosses; stores and numbers never do).
 - `docs/PERCEPTION.md`: input-side multimodality — the layering rule
   (perception is input, not state: images move her through appraisal of the
   conversation, never through a direct affect write), the inbound
