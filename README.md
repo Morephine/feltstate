@@ -11,12 +11,16 @@
 [![CI](https://github.com/Morephine/feltstate/actions/workflows/ci.yml/badge.svg)](https://github.com/Morephine/feltstate/actions/workflows/ci.yml)
 &nbsp;![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 &nbsp;![License: MIT](https://img.shields.io/badge/license-MIT-green)
+&nbsp;[English](README.md) | [中文](README.zh.md)
 
 feltstate is a small, opinionated reference library for **persistent affect and
 provenance-aware memory** in long-running LLM companions. It keeps affect
 appraisal outside the reply model, maintains structured memories that can fade,
 strengthen, change, merge, or be retired, and returns compact state as context
-rather than behavioural instruction.
+rather than behavioural instruction. Around the engine sits an [integration
+handbook](#the-integration-handbook) — fourteen chapters on how the pieces
+assemble into a companion that speaks, shows a face, works, fails, and stays
+itself — with every quoted transcript reproducible from a runnable example.
 
 It draws on affective computing, agent memory, appraisal, and selective
 forgetting, but the architecture is its own: affect is appraised outside the
@@ -76,7 +80,9 @@ Its main design choices are:
 Its contribution is a concrete, inspectable, tested architecture with a specific
 ownership boundary between appraisal, persisted state, memory lifecycle, and
 reply generation — the parts most companions blur together are here kept
-deliberately, and visibly, apart.
+deliberately, and visibly, apart. Each choice above is unpacked, with working
+code and real transcripts, in [the integration
+handbook](#the-integration-handbook).
 
 ### A note on memory fingerprints
 
@@ -288,7 +294,49 @@ all the timing and gating adapted from mechanisms used in a private companion
 prototype, with the endpoints and prompts left to you.
 
 ```bash
-python examples/companion.py   # runnable stub companion — no deps, no network
+python examples/companion.py       # runnable stub companion — no deps, no network
+python examples/companion_live.py  # interactive: a real heartbeat, proactive
+                                   # topic raises, memory that survives restart
+```
+
+---
+
+## The integration handbook
+
+The engine is the smaller half of building a companion; the larger half is
+integration — what goes in the prompt and in what order, how a reply becomes a
+face and a voice, what the user sees while the agent works, fails, or thinks.
+The `docs/` chapters cover that half as concrete patterns over this library's
+actual seams. They describe one coherent way to assemble a companion — the
+shape used by the private reference implementation this library was distilled
+from — not the only way. Transcripts quoted in them are real output of the
+runnable examples.
+
+| chapter | what it covers |
+|---|---|
+| [INTEGRATION](docs/INTEGRATION.md) | the assembly manual: wiring diagram, prompt partition and its cache economics, heartbeat duties, the proactive path, adapter swaps, the shell / bridge / soul layering, the privacy boundary |
+| [PROMPT_STACK](docs/PROMPT_STACK.md) | the static/dynamic partition, sandwich ordering, and the forget probe — persona upkeep that costs nothing until it's needed |
+| [PROMPT_SHAPES](docs/PROMPT_SHAPES.md) | one neutral persona, three prepared moments as full message arrays; the variant master table from state bands to phrases |
+| [STYLE_SPECTRUM](docs/STYLE_SPECTRUM.md) | optional delivery notes — how a feeling holds a pen: form, never content |
+| [OUTPUT_CHAIN](docs/OUTPUT_CHAIN.md) | reply → face and voice: two signal channels, first-sentence TTS streaming, renderer portability down to a hotkey bridge |
+| [AGENT_WORK_UX](docs/AGENT_WORK_UX.md) | narrating long agent work without breaking character: canned voicebanks, the narration throttle, cross-turn work |
+| [FAILURE_IN_CHARACTER](docs/FAILURE_IN_CHARACTER.md) | two audiences, two truths: felt failure kinds, the watchdog case, recovery etiquette |
+| [BRIDGE_ETIQUETTE](docs/BRIDGE_ETIQUETTE.md) | being a person over a chat platform: receipts, typing, attachments, and the emergency command lane |
+| [INTERRUPTION](docs/INTERRUPTION.md) | being cut off gracefully: no-headphone barge-in, the stop chain, the recovery posture |
+| [PERCEPTION](docs/PERCEPTION.md) | images and screens as input: persist → perceive → reply, and the pull eye |
+| [INNER_LIFE](docs/INNER_LIFE.md) | the silent thinking channel, the face that moves between turns, and the self-correction round |
+| [MULTI_PERSON](docs/MULTI_PERSON.md) | one soul, many people: per-speaker relationship keying and the zero-pollution rule |
+| [MEMORY_TOOLS](docs/MEMORY_TOOLS.md) | Canon as five function-calling tools, with a real bi-temporal trace |
+| [PHILOSOPHY](PHILOSOPHY.md) | why persisted state is described to the model and never commanded |
+
+The matching runnable examples, all deterministic or offline:
+
+```bash
+python examples/prompt_shapes.py    # the three moments, full message arrays
+python examples/memory_tools.py     # the five tools + dispatcher, end to end
+python examples/agent_narration.py  # voicebank pools, throttle, failure lines
+python examples/style_spectrum.py   # state bands → delivery notes
+python examples/companion_live.py   # the interactive loop (FELTSTATE_LIVE_FAST=1 to hurry it)
 ```
 
 ---
@@ -301,7 +349,8 @@ python examples/companion.py   # runnable stub companion — no deps, no network
 - **Isn't:** a finished product. There is no bundled personality, validated
   affect model, conversational data, avatar, or TTS. The
   `feltstate.companion` package is a reference orchestration skeleton, not a
-  complete pet application. See `examples/companion.py` for a stubbed demo.
+  complete pet application. See `examples/companion.py` for a stubbed demo and
+  `examples/companion_live.py` for the interactive one.
 - The default `KeywordSource` is intentionally crude. `LLMSource` is still an
   estimate produced by another model call, and the optional Vheart adapters are
   experimental demos rather than validated classifiers.

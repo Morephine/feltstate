@@ -58,8 +58,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Compaction now lands the archive first — idempotent on retry via main-wins
   dedup.
 
+### Changed
+
+- `README.md`: the integration handbook surfaced — a fourteen-chapter table
+  (thirteen `docs/` chapters + PHILOSOPHY) with the deterministic/offline
+  example commands beside it, the companion-loop section pointing at both the
+  stub and the interactive example, and intro/design-choice pointers into the
+  handbook. Framing kept factual: the chapters describe one coherent assembly
+  shape — the one the private reference implementation uses — not the only
+  way.
+
 ### Added
 
+- `README.zh.md`: full Chinese translation of the README, kept
+  section-for-section with the English one; language switcher linked from
+  both.
 - `docs/MULTI_PERSON.md`: one soul, many people — the relationship-keying
   pattern. The invariant (mood/pressure/traits and Canon are singular;
   `Relationship` is one *per pair* — its five axes, `repair_history`
