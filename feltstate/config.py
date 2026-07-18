@@ -119,7 +119,7 @@ class PressureConfig:
     plast_charge_light: float = 0.008
     plast_charge_heavy: float = 0.08
     plast_decay_lo: float = 0.002  # safety=0: 0.2%/day toward 0.5 (half-life ~1y)
-    plast_decay_hi: float = 0.008  # safety=1: 0.8%/day toward 0.5 (half-life ~87d)
+    plast_decay_hi: float = 0.008  # safety=1: 0.8%/day toward 0.5 (half-life ~86d)
     plast_gain_k: float = 1.2  # inflow gain slope around the 0.5 baseline
     plast_floor: float = 0.2  # sensitivity clamp, low side
     plast_ceil: float = 0.9  # sensitivity clamp, high side (micro-hits cap here)

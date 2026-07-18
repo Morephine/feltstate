@@ -279,7 +279,7 @@ single conversation bends a character — and inflow is multiplied by
 genuinely easier to stir. The counterweight is healing: sensitivity relaxes
 toward 0.5 by a fraction of a percent per day, paced by
 ``relationship.safety`` — a safe bond softens carved edges faster (half-life
-roughly a year at zero safety, ~87 days at full). Hits are metered on the raw
+roughly a year at zero safety, ~86 days at full). Hits are metered on the raw
 stimulus (never the amplified echo, which would feed back), releases don't
 meter (venting is not new experience), and the loop is zero-LLM. The intended
 scale is ~180 days: live half a year of cheerful days and the joy dimension

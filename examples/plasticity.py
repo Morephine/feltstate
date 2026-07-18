@@ -103,7 +103,7 @@ def main() -> None:
     print()
     print("What to read off the numbers:")
     print("- joy is the most-carved dimension: seven thousand small hits, not one")
-    print("  big one. The betrayal registered exactly one heavy hit — a single")
+    print("  big one. The betrayal registered one heavy hit per touched bar — a single")
     print("  bad day cannot bend a character.")
     print("- both lived identical days; they differ only in how fast the carving")
     print("  relaxes. Safety is the healing rate, not the experience.")

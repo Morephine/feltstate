@@ -16,7 +16,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   conversation bends a character), inflow commits through a
   ``1 + k×(sens−0.5)`` gain, and sensitivity heals toward 0.5 by a daily
   percentage interpolated on `relationship.safety` (half-life ~1y at safety
-  0, ~87d at safety 1). Hits are metered pre-gain on the stimulus (no
+  0, ~86d at safety 1). Hits are metered pre-gain on the stimulus (no
   feedback loop) and never during a release; healing is anchored
   advance-always and frequency-invariant; sensitivity writes round to 8
   decimals so micro updates survive quantization; non-finite values read as
