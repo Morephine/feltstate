@@ -54,6 +54,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `examples/companion_live.py`: an *interactive* companion loop — you type, a
+  real background heartbeat runs, going quiet makes it raise a pending topic on
+  its own, and facts stored in `Canon` survive a full process restart. Zero
+  network/API; fast-timer mode via `FELTSTATE_LIVE_FAST=1`.
+- `docs/INTEGRATION.md`: the assembly manual — wiring diagram (foreground turn,
+  heartbeat thread, memory tools), the prompt partition table and its caching
+  economics, heartbeat cadence knobs, the propose/dispatch/commit proactive
+  path, adapter swap table, and the privacy boundary for chat-platform bridges.
+  Every quoted transcript is real output of the live example.
 - Regression suite `tests/test_bugfix_20260718.py` pinning each fix above
   (frequency-invariant imprint decay, NaN rejection, mixed-frame tolerance,
   settle direction, joy-band exclusion, fcntl-free locking, concurrent
