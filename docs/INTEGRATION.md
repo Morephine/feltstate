@@ -245,4 +245,8 @@ renderer portability · [MEMORY_TOOLS.md](MEMORY_TOOLS.md) — memory as
 function-calling tools · [AGENT_WORK_UX.md](AGENT_WORK_UX.md) — narrating long
 agent work without breaking character · [FAILURE_IN_CHARACTER.md](FAILURE_IN_CHARACTER.md)
 — errors that don't break the fourth wall · [STYLE_SPECTRUM.md](STYLE_SPECTRUM.md)
-— delivery notes: how a feeling holds a pen (optional layer).
+— delivery notes: how a feeling holds a pen (optional layer) ·
+[BRIDGE_ETIQUETTE.md](BRIDGE_ETIQUETTE.md) — receipts, typing, attachments and
+the emergency command lane on a chat bridge ·
+[INTERRUPTION.md](INTERRUPTION.md) — barge-in, the stop chain, and recovering
+from being cut off.

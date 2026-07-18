@@ -60,6 +60,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `docs/BRIDGE_ETIQUETTE.md`: being a person over a chat platform — the fixed
+  emoji receipt vocabulary (working / done / deliberate-silence / queue-full)
+  with the four rules that keep receipts trustworthy, the typing indicator as
+  the bridge's thinking lamp, attachment in/out etiquette, and the emergency
+  command lane: a plain-text `!` control plane parsed by the bridge process
+  itself — alive when the model is the problem, terse by design, reducing
+  operations only.
+- `docs/INTERRUPTION.md`: being cut off gracefully — no-headphone voice
+  barge-in (the echo problem and its solutions ladder), the text stop chain
+  (playback → synthesis queue → in-flight turn → pending narration, idempotent,
+  acknowledged by the lane not the character), stop-*talking* vs stop-*working*
+  as separate intents, and the recovery posture: never resume the cut sentence,
+  the user's content leads, one clause at most. Maps each pattern to its
+  library seam (`should_speak`, the async turn lock, the `is_busy` scheduler
+  gate, the `interrupted` canned line).
 - `docs/STYLE_SPECTRUM.md` + `examples/style_spectrum.py`: the style spectrum —
   an optional app-side renderer turning affect bands into at most three
   form-only "delivery notes" (punctuation temperature, sentence length, doubled
