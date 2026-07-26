@@ -657,3 +657,27 @@ def test_as_of_refuses_a_when_it_cannot_parse(tmp_path):
         with pytest.raises(ValueError) as exc:
             c.as_of("company", bad)
         assert "when" in str(exc.value)  # the error names the argument to fix
+
+
+def test_compaction_fsyncs_the_rewrite(tmp_path, monkeypatch):
+    """``replace`` is atomic but not durable.
+
+    A power cut can land the rename with the bytes still in the page cache,
+    leaving a zero-length store — the atomicity guarantee intact and the
+    memories gone. The reaper already fsyncs for this reason; compaction, which
+    is the rewrite that drops the forgotten tier, did not. Ordinary reads
+    (a recall bumps counters and rewrites) deliberately stay non-durable: the
+    cost there is real and what they can lose is one counter.
+    """
+    from feltstate.memory import canon as canon_mod
+
+    synced: list[str] = []
+    monkeypatch.setattr(canon_mod, "_fsync_path", lambda p: synced.append(p.name))
+
+    canon = Canon(tmp_path / "c.jsonl")
+    canon.add("kai", "likes tea")
+    canon.search("tea")  # a read: rewrites to bump recalls, must not fsync
+    assert synced == []
+
+    canon.compact()
+    assert any(name.startswith("c") for name in synced), "compaction did not fsync"

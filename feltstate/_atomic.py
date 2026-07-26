@@ -45,8 +45,46 @@ def path_lock(path: Path) -> Iterator[None]:
         yield
 
 
-def atomic_write_text(path: str | Path, text: str, *, encoding: str = "utf-8") -> None:
-    """Replace ``path`` with ``text``, atomically and without racing a sibling."""
+def fsync_path(p: Path) -> None:
+    """Best-effort durability: fsync the file, then its parent directory.
+
+    ``replace`` gives atomicity — a reader sees the old file or the new one,
+    never a half-written one — but not durability. Without this a power cut can
+    land the rename while the bytes are still in the page cache, which on some
+    filesystems leaves a zero-length file: the atomic guarantee holds and the
+    content is gone anyway. Best-effort by design; a platform that cannot fsync
+    a directory should not fail the write.
+    """
+    try:
+        fd = os.open(str(p), os.O_RDONLY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+    except OSError:  # pragma: no cover - platform dependent
+        return
+    try:
+        dfd = os.open(str(p.parent), os.O_RDONLY)
+        try:
+            os.fsync(dfd)
+        finally:
+            os.close(dfd)
+    except OSError:  # pragma: no cover - Windows cannot fsync a directory
+        return
+
+
+def atomic_write_text(
+    path: str | Path, text: str, *, encoding: str = "utf-8", durable: bool = False
+) -> None:
+    """Replace ``path`` with ``text``, atomically and without racing a sibling.
+
+    ``durable=True`` also fsyncs — see :func:`fsync_path`. It is off by default
+    because the callers on the hot path rewrite whole-file state on every turn:
+    fsyncing each one costs far more than it buys (the suite goes from 8s to
+    37s, dominated by a 24-hour-at-1-minute-cadence run), and losing the very
+    last tick of an affect state is not the failure worth paying for. Turn it on
+    for writes that can lose *accumulated* data rather than one turn of it.
+    """
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     with path_lock(p):
@@ -54,6 +92,8 @@ def atomic_write_text(path: str | Path, text: str, *, encoding: str = "utf-8") -
         try:
             tmp.write_text(text, encoding=encoding)
             os.replace(tmp, p)
+            if durable:
+                fsync_path(p)
         finally:
             if tmp.exists():  # pragma: no cover - only on a failed write
                 tmp.unlink(missing_ok=True)

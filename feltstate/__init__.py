@@ -65,7 +65,7 @@ from .state import (
 )
 from .timeawareness import time_since_phrase
 
-__version__ = "0.2.0a1"
+__version__ = "0.2.0a2"
 
 __all__ = [
     "Engine",

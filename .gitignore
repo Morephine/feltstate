@@ -17,6 +17,10 @@ state.json
 scheduler_state.json
 *_state.json
 *.scheduler.json
+# examples/companion_live.py writes a bare scheduler.json; the two patterns
+# above missed it, so running the example dirtied the tree and one such file
+# was committed.
+scheduler.json
 *.corrupt
 *.corrupt-*
 *.lock

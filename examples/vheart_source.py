@@ -13,8 +13,17 @@ Install requirements::
 (brings in torch, transformers, peft, huggingface_hub).
 """
 
-from feltstate import Engine
-from feltstate.sources.vheart import VheartSource
+import sys
+from pathlib import Path
+
+# Every other top-level example inserts the repo root so it runs uninstalled
+# (pyproject says so in as many words). This one did not, so it died at import
+# with ModuleNotFoundError instead of reaching the intended "install the vheart
+# extra" RuntimeError — the very message it exists to show.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from feltstate import Engine  # noqa: E402
+from feltstate.sources.vheart import VheartSource  # noqa: E402
 
 
 def main() -> None:

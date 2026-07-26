@@ -235,9 +235,9 @@ def test_compact_archives_before_rewriting_main(tmp_path, monkeypatch):
     calls: list[str] = []
     real_rewrite = canon_mod._rewrite_jsonl
 
-    def spying_rewrite(path, entries):
+    def spying_rewrite(path, entries, **kw):
         calls.append(path.name)
-        return real_rewrite(path, entries)
+        return real_rewrite(path, entries, **kw)
 
     monkeypatch.setattr(canon_mod, "_rewrite_jsonl", spying_rewrite)
     canon.compact()

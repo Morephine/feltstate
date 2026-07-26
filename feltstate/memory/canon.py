@@ -76,6 +76,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from types import ModuleType
 
+from .._atomic import fsync_path as _fsync_path
 from ..config import MemoryConfig
 from .feeling import blend, derive, neutral_profile, observe
 
@@ -438,13 +439,27 @@ def _append_jsonl(path: Path, entry: dict) -> None:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
-def _rewrite_jsonl(path: Path, entries: list[dict]) -> None:
-    """Atomically replace a file with ``entries`` (write temp, then ``replace``)."""
+def _rewrite_jsonl(path: Path, entries: list[dict], *, durable: bool = False) -> None:
+    """Atomically replace a file with ``entries`` (write temp, then ``replace``).
+
+    ``durable=True`` also fsyncs. ``replace`` is atomic but not durable: a power
+    cut can land the rename with the bytes still in the page cache, leaving a
+    zero-length store — the atomicity guarantee intact and the memories gone.
+    The reaper already fsyncs for this reason.
+
+    It is off by default because this function also runs on ordinary reads (a
+    recall bumps counters and rewrites), and fsyncing every read costs more than
+    it buys — the suite goes from 8s to 40s. It is on for the rewrites that can
+    actually lose data: compaction, which drops the forgotten tier, and
+    confirmation, which moves rows between files.
+    """
     with _write_lock(path):
         body = "\n".join(json.dumps(e, ensure_ascii=False) for e in entries)
         tmp = path.with_suffix(path.suffix + ".tmp")
         tmp.write_text(body + "\n" if entries else "", encoding="utf-8")
         tmp.replace(path)
+        if durable:
+            _fsync_path(path)
 
 
 # --------------------------------------------------------------------------- #
@@ -925,10 +940,10 @@ class Canon:
                 active_main[eid] = e  # a later match in the same call dedups too
                 out.append(self._render(e, now))
         if appended or main_touched:
-            _rewrite_jsonl(self.path, confirmed + appended)
+            _rewrite_jsonl(self.path, confirmed + appended, durable=True)
         if arch_touched:
-            _rewrite_jsonl(self.archived_path, archived)
-        _rewrite_jsonl(self.pending_path, remaining)
+            _rewrite_jsonl(self.archived_path, archived, durable=True)
+        _rewrite_jsonl(self.pending_path, remaining, durable=True)
         return out
 
     def correct(
@@ -1350,8 +1365,8 @@ class Canon:
                 if cap >= 0 and len(merged) > cap:
                     merged.sort(key=lambda e: self._current_intensity(e, now), reverse=True)
                     merged = merged[:cap]
-                _rewrite_jsonl(self.archived_path, merged)
-            _rewrite_jsonl(self.path, kept)
+                _rewrite_jsonl(self.archived_path, merged, durable=True)
+            _rewrite_jsonl(self.path, kept, durable=True)
 
             # Prune the grey zone the same way (no archival tier for pending), but keep
             # its audit trail too for symmetry with the main store.
@@ -1361,7 +1376,7 @@ class Canon:
                     pending_kept.append(e)
                 elif self._tier(self._current_intensity(e, now)) != "forgotten":
                     pending_kept.append(e)
-            _rewrite_jsonl(self.pending_path, pending_kept)
+            _rewrite_jsonl(self.pending_path, pending_kept, durable=True)
 
     @staticmethod
     def _dedup_archive(entries: list[dict]) -> list[dict]:
