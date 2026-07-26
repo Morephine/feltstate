@@ -138,12 +138,46 @@ def test_permanent_fact_never_decays(tmp_path):
 def test_reinforce_on_duplicate_add_bumps_and_dedups(tmp_path):
     c = _canon(tmp_path)
     c.add("user", "the same fact", why="first")
-    c.add("user", "the same fact", why="ignored on dup")  # same (actor|object)
+    c.add("user", "the same fact", why="said again")  # same (actor|object)
     v = c.view()
     # Deduped to a single entry...
     assert len(v) == 1
     # ...whose reinforce count went up.
     assert v[0]["reinforced"] >= 1
+
+
+def test_reinforce_adopts_the_callers_newer_wording(tmp_path):
+    """A second add() of the same (actor|object) updates the fact, not just its count.
+
+    The id ignores action/why/when, so this is the same fact being restated. It
+    used to keep the first wording forever: the store went on saying "loves /
+    drinks 4 cups a day" after being told "quit / doctor told him to stop".
+    """
+    c = _canon(tmp_path)
+    c.add("kai", "coffee", action="loves", why="drinks 4 cups a day", when="for years")
+    c.add("kai", "coffee", action="quit", why="doctor told him to stop", when="last month")
+
+    hits = c.search("coffee")
+    assert len(hits) == 1  # still one fact...
+    assert hits[0]["reinforced"] >= 1  # ...reinforced, not duplicated
+    assert hits[0]["action"] == "quit"
+    assert hits[0]["why"] == "doctor told him to stop"
+    assert hits[0]["when"] == "last month"
+
+
+def test_bare_re_mention_does_not_blank_the_narrative_fields(tmp_path):
+    """Reinforcing with nothing new to say leaves the stored wording alone."""
+    c = _canon(tmp_path)
+    c.add("kai", "coffee", action="quit", why="doctor told him to stop", when="last month")
+    # `where` has no add() keyword, so write it through the seam add() itself uses.
+    c._write_or_reinforce(c.path, c._build_entry("kai", "coffee", where="the office"))
+    c.add("kai", "coffee")  # a bare re-mention: every narrative field empty
+
+    hit = c.search("coffee")[0]
+    assert hit["action"] == "quit"
+    assert hit["why"] == "doctor told him to stop"
+    assert hit["when"] == "last month"
+    assert hit["where"] == "the office"  # supplied once, then kept
 
 
 # --------------------------------------------------------------------------- #

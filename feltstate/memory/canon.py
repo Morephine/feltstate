@@ -646,8 +646,12 @@ class Canon:
     ) -> dict:
         """Append ``entry``, or reinforce an existing active entry with the same id.
 
-        Reinforcing bumps ``_reinforce_count`` (which slows that fact's decay) and
-        refreshes its timestamp — salience reinforce is unchanged. If ``emotion``
+        Reinforcing bumps ``_reinforce_count`` (which slows that fact's decay),
+        refreshes its timestamp — salience reinforce is unchanged — and adopts any
+        non-empty ``action`` / ``why`` / ``when`` / ``where`` on ``entry``, since
+        the id is ``(actor | object)`` only and a second write about that pair is
+        the caller restating the fact. Fields the caller left empty keep whatever
+        the stored record already said. If ``emotion``
         is given, this turn's reading is *also* folded into the fact's
         evidence-weighted affect (M1): a recurring feeling settles and gains
         inertia; a recurring *flat* mention keeps the fact neutral. Retracted /
@@ -684,6 +688,26 @@ class Canon:
                 e["_reinforce_count"] = int(e.get("_reinforce_count", 0)) + 1
                 e["_last_reinforced"] = _now_iso()
                 e["ts"] = _now_iso()
+                # The newer wording wins. An id is derived from (actor | object)
+                # alone, so a second write about the same pair is the caller
+                # *updating* that fact, not merely repeating it — but reinforce
+                # only bumped the counter and threw the new narrative on the
+                # floor. add("kai", "coffee", action="quit", why="doctor told him
+                # to stop") after add(..., action="loves", why="drinks 4 cups a
+                # day") left every read path still saying "loves / drinks 4 cups
+                # a day": the store could not be told that a belief had changed
+                # except by correct(), which also renames the object. Only
+                # non-empty fields are adopted — _build_entry fills the unused
+                # ones with "", and a bare re-mention must not blank what the
+                # fact already says.
+                new_what = entry.get("what")
+                new_action = new_what.get("action") if isinstance(new_what, dict) else ""
+                old_what = e.get("what")
+                if new_action and isinstance(old_what, dict):
+                    old_what["action"] = new_action
+                for field in ("why", "when", "where"):
+                    if entry.get(field):
+                        e[field] = entry[field]
                 if emotion is not None:
                     aff = e.get("affect")
                     if isinstance(aff, dict):
