@@ -610,16 +610,24 @@ class Engine:
         return d
 
     @staticmethod
-    def _elapsed_ticks(prev_ts: str | None, now: datetime) -> float:
-        """Real elapsed time since ``prev_ts`` in reference ticks, floored at 1.0.
+    def _elapsed_ticks(prev_ts: str | None, now: datetime, *, floor: float = 1.0) -> float:
+        """Real elapsed time since ``prev_ts`` in reference ticks, floored at ``floor``.
 
         A reference tick is :data:`_REFERENCE_TICK_SECONDS` (one minute). This is
         the frequency-invariance seam: every decay in :meth:`tick` scales by this,
         so the same real elapsed time decays the state the same amount however
-        often :meth:`tick` is called. The 1.0 floor keeps rapid / sub-minute ticks
-        (and any caller ignoring wall-clock precision) at the historical one-unit-
-        per-call behaviour; genuinely spaced ticks decay by their real span. A
-        missing or unparseable / non-monotonic previous timestamp yields the floor.
+        often :meth:`tick` is called. The default 1.0 floor keeps rapid / sub-minute
+        ticks (and any caller ignoring wall-clock precision) at the historical
+        one-unit-per-call behaviour; genuinely spaced ticks decay by their real
+        span. A missing or unparseable / non-monotonic previous timestamp yields
+        the floor.
+
+        The floor is safe only because :meth:`tick`'s anchor (``last_tick_ts``)
+        advances once per turn, so it is charged once per turn. A caller that
+        re-anchors on *every* call must pass ``floor=0.0`` and integrate the real
+        span instead, or the floor becomes a per-call decay — which is exactly the
+        frequency dependence this seam exists to remove (see
+        :meth:`_decay_dream_residue`).
 
         **Legacy naive timestamps.** State files written before the UTC migration
         (``datetime.now()`` without ``timezone.utc``) may carry naive ISO strings.
@@ -630,19 +638,19 @@ class Engine:
         after the first tick on any migrated state file.
         """
         if not prev_ts:
-            return 1.0
+            return floor
         try:
             prev = datetime.fromisoformat(prev_ts.replace("Z", "+00:00"))
             if prev.tzinfo is None:
                 prev = prev.replace(tzinfo=timezone.utc)
         except (ValueError, TypeError):
-            return 1.0
+            return floor
         # Normalize `now` to the same awareness so the subtraction never raises.
         _now = now
         if _now.tzinfo is None:
             _now = _now.replace(tzinfo=timezone.utc)
         elapsed_s = (_now - prev).total_seconds()
-        return max(1.0, elapsed_s / _REFERENCE_TICK_SECONDS)
+        return max(floor, elapsed_s / _REFERENCE_TICK_SECONDS)
 
     def _decay_dream_residue(self, now: datetime) -> None:
         """Age the tracked dream residue by real elapsed time; forget when spent.
@@ -654,10 +662,20 @@ class Engine:
         later mood can neither keep a spent dream alive nor cancel a fresh one;
         only elapsed time forgets it. Below :data:`_DREAM_FORGET_EPS` the residue
         is zeroed and the dream text dropped. No-op once there is nothing to age.
+
+        ``floor=0.0``, unlike every other caller of :meth:`_elapsed_ticks`. This
+        one advances its anchor on *every* call, so the default 1.0 floor was
+        charged per call rather than per elapsed minute and the residue decayed by
+        tick count: ten ticks a second apart (ten real seconds) spent it and forgot
+        the dream, while a single tick ten seconds later left it nearly untouched.
+        With no floor the span integrates exactly — and, since the exponential
+        composes, however the same span is subdivided.
         """
         if self._dream_residue <= 0.0:
             return
-        ticks = self._elapsed_ticks(self._dream_residue_ts, now)
+        # A missing / unparseable anchor now yields 0.0 ticks: nothing ages this
+        # call, and the re-stamp below re-anchors it so the next one does.
+        ticks = self._elapsed_ticks(self._dream_residue_ts, now, floor=0.0)
         self._dream_residue *= (1.0 - self.config.mood.va_alpha) ** ticks
         self._dream_residue_ts = now.isoformat()
         if self._dream_residue < _DREAM_FORGET_EPS:

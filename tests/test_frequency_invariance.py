@@ -451,6 +451,25 @@ def test_dream_residue_decays_over_elapsed_time_and_forgets(tmp_path):
     assert eng._last_dream == ""
 
 
+def test_dream_residue_decay_does_not_depend_on_tick_cadence(tmp_path):
+    """The residue is a function of elapsed time, not of how many ticks follow.
+
+    The anchor is advanced on every call, so a per-call floor was charged once per
+    tick: ten ticks one second apart spent ten reference ticks of decay over ten
+    real seconds (residue -> 0.0, dream forgotten) while a single tick ten seconds
+    later spent one (0.154, dream remembered). Same ten seconds, opposite outcome."""
+    burst, d = _dream_engine(tmp_path / "burst")
+    once, _ = _dream_engine(tmp_path / "once")
+    msg = [{"role": "user", "content": "the wooden table is brown"}]
+
+    for i in range(1, 11):
+        burst.tick(msg, now=T0 + timedelta(seconds=i))
+    once.tick(msg, now=T0 + timedelta(seconds=10))
+
+    _assert_close(burst._dream_residue, once._dream_residue, 1e-9, "residue over the same 10s")
+    assert burst._last_dream == once._last_dream == d.text  # and both still remember it
+
+
 def test_dream_residue_persists_across_reload(tmp_path):
     """The tracked residue is bookkeeping the engine must not lose on restart, or a
     reloaded companion would mis-time when it forgets the dream."""
