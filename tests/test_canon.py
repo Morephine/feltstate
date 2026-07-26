@@ -463,3 +463,40 @@ def test_display_dial_cannot_delete_memories(tmp_path):
             f"salience_charge_weight={scw} deleted stored facts "
             f"(main={len(rows)}, archived={len(arch_rows)})"
         )
+
+
+def test_keyword_search_matches_content_not_schema(tmp_path):
+    """A keyword search must look at what a fact SAYS, not at how it is stored.
+
+    Matching ran over ``json.dumps(entry)``, so the record's own key names were
+    in the haystack: "why", "when", "where", "confidence", "recalls" — all
+    ordinary words to search for — matched every fact in the store, and the
+    wall-clock stamp meant "2026" did too. That reached the mutating APIs, which
+    select by keyword: ``confirm("valid_at")`` promoted the entire grey zone in
+    one call, and ``retract`` could hide an arbitrary fact.
+    """
+    canon = Canon(tmp_path / "c.jsonl")
+    canon.add("kai", "likes tea", why="drinks it daily")
+    canon.add("kai", "works late", why="deadline")
+    canon.add("mao", "naps a lot", when="last summer")
+
+    for schema_word in ("why", "when", "where", "confidence", "recalls", "actor", "valid_at"):
+        assert canon.search(schema_word) == [], f"{schema_word!r} matched on schema"
+    assert canon.search("2026") == []  # the storage timestamp is not content
+
+    # Real content still matches, including the fields whose *names* are schema.
+    assert len(canon.search("tea")) == 1
+    assert len(canon.search("kai")) == 2
+    assert len(canon.search("deadline")) == 1  # a `why` value
+    assert len(canon.search("last summer")) == 1  # a `when` value
+
+
+def test_confirm_by_a_schema_word_does_not_promote_the_whole_grey_zone(tmp_path):
+    canon = Canon(tmp_path / "c.jsonl")
+    canon.ask("kai", "might switch editors")
+    canon.ask("kai", "might move house")
+
+    canon.confirm("valid_at")
+
+    still_pending = canon.view(include_archived=True)
+    assert not any(r["object"].startswith("might ") for r in still_pending)

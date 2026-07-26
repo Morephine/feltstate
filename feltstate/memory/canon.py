@@ -157,9 +157,75 @@ def _entry_id(entry: dict) -> str:
     return hashlib.sha256(key.encode("utf-8")).hexdigest()[:32]
 
 
+# Structural keys of a stored record. They carry no meaning for a keyword
+# search and must not be searchable: flattening the whole record with
+# json.dumps put the key NAMES in the haystack, so "why", "when", "where",
+# "confidence", "recalls" — all ordinary things to ask about — matched every
+# fact in the store. That reached confirm() and retract(), which act on a
+# keyword: confirm("valid_at") promoted the entire grey zone at once.
+_STRUCTURAL_KEYS = frozenset(
+    {
+        "ts",
+        "who",
+        "what",
+        "why",
+        "when",
+        "where",
+        "intensity",
+        "base_intensity",
+        "confidence",
+        "recalls",
+        "valid_at",
+        "invalid_at",
+        "permanent",
+        "region",
+        "affect",
+        "reinforced",
+        "_reinforce_count",
+        "actor",
+        "action",
+        "object",
+        "id",
+        "meta",
+        "skill",
+        "emotion",
+    }
+)
+
+
+# Keys whose VALUES are machine bookkeeping too, not content. A wall-clock
+# stamp is not something to keyword-search: "2026" otherwise matched every
+# record written this year. (``when`` is deliberately not here — that one holds
+# the user's own words about timing, "last summer".)
+_OPAQUE_VALUE_KEYS = frozenset({"ts", "valid_at", "invalid_at", "id", "fp", "affect"})
+
+
+def _searchable_values(node) -> list[str]:
+    """Every value in a record, flattened — keys and bookkeeping excluded."""
+    out: list[str] = []
+    if isinstance(node, dict):
+        for k, v in node.items():
+            # A structural key's own name is not content; its value usually is.
+            if k not in _OPAQUE_VALUE_KEYS:
+                out.extend(_searchable_values(v))
+            if k not in _STRUCTURAL_KEYS and isinstance(k, str):
+                out.append(k)
+    elif isinstance(node, (list, tuple)):
+        for v in node:
+            out.extend(_searchable_values(v))
+    elif node is not None and not isinstance(node, bool):
+        out.append(str(node))
+    return out
+
+
 def _entry_text(entry: dict) -> str:
-    """Whole record flattened to lowercase text for keyword matching."""
-    return json.dumps(entry, ensure_ascii=False).lower()
+    """Record content flattened to lowercase text for keyword matching.
+
+    Values only. See :data:`_STRUCTURAL_KEYS` for why the key names are left
+    out: they used to be part of the haystack, so searching for an ordinary
+    word like "why" or "when" matched every record in the store.
+    """
+    return " ".join(_searchable_values(entry)).lower()
 
 
 def _affect_field(prof: tuple[float, float, float], w: float) -> dict:
