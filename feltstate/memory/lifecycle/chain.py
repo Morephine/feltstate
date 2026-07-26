@@ -23,6 +23,25 @@ What each patrol distinguishes:
   disappearance is an evaporation: ALARM. Note the fail-safe direction — delete
   a real tombstone and the next patrol alarms; it cannot go silent.
 
+Threat model — what this does and does not catch. The chain is an unkeyed
+SHA-256 chain stored beside the data it protects, so it detects **accidental
+corruption and naive edits**, not an adversary with write access to the ledger:
+such an adversary can recompute the whole chain, or append a ``legal_death``
+tombstone for a memory they then delete and the disappearance reads as lawful.
+The fail-safe direction is the honest half of the guarantee — *deleting* a real
+tombstone alarms, *forging* one does not. ``verify_full`` attests link
+integrity, never "no memory evaporated"; that question is what :meth:`patrol`
+answers, and only for as long as its own ledger has not been rewritten.
+Treat it as a smoke detector, not a lock. Keyed sealing (HMAC with a secret the
+store cannot read, or an off-box append-only sink) is what would change this,
+and is deliberately out of scope here.
+
+An unexplained loss is also *sticky*: it stays in each subsequent link's
+``unresolved`` list and keeps alarming until an operator passes
+``rebaseline=True``. It used to be a one-shot notification — the round after an
+alarm re-anchored the baseline and reported ``missing: []``, so a real
+evaporation quietly looked as though it had resolved itself.
+
 Retention: links and tombstones age out after ``keep_days``. Pruning does not
 orphan the chain — the first surviving link is re-anchored as an **epoch**
 whose ``prev`` commits to the hash of the last discarded link, so
@@ -34,6 +53,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import warnings
 from collections.abc import Callable, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
@@ -91,8 +111,16 @@ class Chain:
         self.watch = list(watch)
         self.key_of = key_of or self._default_key
         self.bite = bite
-        self.on_alarm = on_alarm or (lambda msg: None)
+        # No handler must not mean no alarm. The default swallowed the one
+        # notification a patrol ever emits, so a deployment that simply forgot
+        # to pass on_alarm looked identical to one where nothing ever went
+        # wrong. A warning is the quietest thing that still leaves a trace.
+        self.on_alarm = on_alarm or self._warn_alarm
         self.keep_days = keep_days
+
+    @staticmethod
+    def _warn_alarm(msg: str) -> None:
+        warnings.warn(msg, RuntimeWarning, stacklevel=2)
 
     @staticmethod
     def _default_key(r: dict, i: int, p: Path) -> str:
@@ -111,9 +139,18 @@ class Chain:
             if not line:
                 continue
             try:
-                yield json.loads(line)
+                row = json.loads(line)
             except Exception:
                 yield {"__malformed__": True}
+                continue
+            # A tamper-evidence reader must not be crashable by the tampering it
+            # is meant to detect. json.loads happily returns a list or a number,
+            # and every consumer here calls .get() on what it receives: one
+            # appended "[]" raised AttributeError out of verify_full() and
+            # patrol(), permanently disabling the watchdog instead of alarming.
+            # Anything that is not an object is malformed, which is the signal
+            # verify_full already knows how to fail on.
+            yield row if isinstance(row, dict) else {"__malformed__": True}
 
     def _links(self):
         for j in self._lines():
@@ -158,10 +195,17 @@ class Chain:
         prev = self.last_link()
         prev_fp = prev["fp"] if prev else "genesis"
         prev_state = prev.get("state", {}) if prev else {}
+        # An unexplained loss stays on the books until someone clears it.
+        # Previously the next link's state simply became the new baseline, so
+        # the round after an alarm reported missing=[] and the evaporation
+        # became invisible — a one-shot notification, and if the handler was
+        # the (silent) default nothing was left at all.
+        prev_unresolved = list((prev or {}).get("payload", {}).get("unresolved", []))
         cur = self._snapshot()
 
         if rebaseline:
             missing, mutated, lawful = [], [], []
+            prev_unresolved = []  # explicit operator acknowledgement
         else:
             missing = sorted(k for k in prev_state if k not in cur)
             mutated = sorted(k for k in prev_state if k in cur and cur[k] != prev_state[k])
@@ -170,6 +214,9 @@ class Chain:
             lawful = sorted(k for k in missing if k.split("::")[-1] in lawful_keys)
             missing = [k for k in missing if k not in lawful]
 
+        # Anything still gone (or gone again) carries forward; anything that
+        # came back drops off by itself.
+        unresolved = sorted({*prev_unresolved, *missing} - set(cur))
         payload = {
             "ts": datetime.now(timezone.utc).isoformat(),
             "n": len(cur),
@@ -177,6 +224,7 @@ class Chain:
             "missing": missing,
             "mutated": mutated,
             "lawful": lawful,
+            "unresolved": unresolved,
         }
         link = {
             "fp": _link_fp(prev_fp, payload, cur),
@@ -192,12 +240,20 @@ class Chain:
                 f"memory chain alarm: {len(missing)} evaporated "
                 f"{missing[:5]}, {len(mutated)} mutated {mutated[:5]}"
             )
+        elif unresolved:
+            # Still unexplained from an earlier round. Keep saying so; silence
+            # here is what made a real loss look like it had resolved itself.
+            self.on_alarm(
+                f"memory chain alarm (unresolved): {len(unresolved)} still "
+                f"evaporated {unresolved[:5]} — pass rebaseline=True to accept"
+            )
         self._prune()
         return {
             "added": payload["added"],
             "missing": missing,
             "mutated": mutated,
             "lawful_deaths": lawful,
+            "unresolved": unresolved,
         }
 
     def verify_full(self) -> bool:
@@ -243,8 +299,22 @@ class Chain:
             except Exception:
                 keep.append(ln)
                 continue
-            ts = j.get("payload", {}).get("ts", "") or j.get("ts", "")
-            old = ts and datetime.fromisoformat(ts).timestamp() < cutoff
+            if not isinstance(j, dict):
+                keep.append(ln)  # not a record; leave it for verify_full to fail on
+                continue
+            payload = j.get("payload") if isinstance(j.get("payload"), dict) else {}
+            ts = payload.get("ts", "") or j.get("ts", "")
+            # ``ts`` on a tombstone comes from the caller (reaper's now_iso is a
+            # free-text argument), so it is not guaranteed to be ISO. A bare
+            # fromisoformat here meant one odd stamp raised ValueError out of
+            # every later patrol() — the watchdog dying on data it was supposed
+            # to police. An unparseable stamp simply is not old enough to prune.
+            old = False
+            if ts:
+                try:
+                    old = datetime.fromisoformat(str(ts)).timestamp() < cutoff
+                except (ValueError, TypeError):
+                    old = False
             if old:
                 if j.get("fp") and "payload" in j:
                     dropped_last_fp = j["fp"]  # remember the tail we cut

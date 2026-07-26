@@ -354,3 +354,95 @@ def test_collectable_definition():
         }
     )
     assert is_collectable({"fp": _fp("good", "real")})
+
+
+def test_an_unexplained_loss_keeps_alarming_until_acknowledged(tmp_path):
+    """An evaporation must not go quiet on the next round.
+
+    The following patrol simply took the current state as the new baseline, so
+    it reported ``missing: []`` and the loss became invisible — a one-shot
+    notification for something nobody had explained. It now carries in
+    ``unresolved`` and keeps alarming until an operator passes
+    ``rebaseline=True``.
+    """
+    store, ledger = tmp_path / "s.jsonl", tmp_path / "l.jsonl"
+    alarms = []
+    rows = [{"cid": "a", "text": "alpha", "fp": {"mid": "FA", "fp_id": "HA"}}]
+    store.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+    ch = Chain(ledger, [store], on_alarm=alarms.append)
+    ch.patrol()
+
+    store.write_text("")  # untombstoned evaporation
+    first = ch.patrol()
+    assert first["missing"] and len(alarms) == 1
+
+    second = ch.patrol()
+    assert second["missing"] == []  # nothing NEW went missing
+    assert second["unresolved"], "the earlier loss stopped being reported"
+    assert len(alarms) == 2, "the watchdog went quiet on an unexplained loss"
+
+    cleared = ch.patrol(rebaseline=True)
+    assert cleared["unresolved"] == []
+    assert len(alarms) == 2  # an explicit acknowledgement is not an alarm
+
+
+def test_a_malformed_ledger_line_does_not_disable_the_watchdog(tmp_path):
+    """The tamper-evidence reader must not be crashable by tampering.
+
+    ``json.loads`` happily returns a list, and every consumer called ``.get()``
+    on whatever it got: one appended ``[]`` raised ``AttributeError`` out of
+    ``verify_full()`` and ``patrol()``, permanently disabling the watchdog
+    instead of alarming.
+    """
+    store, ledger = tmp_path / "s.jsonl", tmp_path / "l.jsonl"
+    store.write_text(json.dumps({"cid": "a", "text": "alpha"}) + "\n")
+    ch = Chain(ledger, [store], on_alarm=lambda m: None)
+    ch.patrol()
+
+    with ledger.open("a", encoding="utf-8") as fh:
+        fh.write("[]\n")
+
+    assert ch.verify_full() is False  # reported as broken, not raised
+    ch.patrol()  # and the patrol still runs
+
+
+def test_a_non_iso_tombstone_stamp_does_not_break_later_patrols(tmp_path):
+    """``now_iso`` is caller-supplied free text; one odd stamp used to raise
+    ``ValueError`` out of every subsequent patrol via the pruning pass."""
+    store, ledger = tmp_path / "s.jsonl", tmp_path / "l.jsonl"
+    store.write_text(json.dumps({"cid": "a", "text": "alpha"}) + "\n")
+    ch = Chain(ledger, [store], on_alarm=lambda m: None)
+    ch.patrol()
+    with ledger.open("a", encoding="utf-8") as fh:
+        fh.write(
+            json.dumps({"event": "legal_death", "cids": ["a"], "ts": "not-a-timestamp"}) + "\n"
+        )
+
+    ch.patrol()  # must not raise
+
+
+def test_the_reaper_survives_a_torn_tombstone_line(tmp_path):
+    """A crash-recovery module has to survive the crash it exists for.
+
+    The tombstone is an append, so a crash mid-write leaves a partial final
+    line. A bare ``json.loads`` over the ledger then raised ``JSONDecodeError``
+    on every subsequent ``execute()`` and ``replay_if_pending()``: the pending
+    ledger could never be cleared and the deletion could never complete.
+    """
+    store, ledger = tmp_path / "s.jsonl", tmp_path / "l.jsonl"
+    rows = [{"cid": "a", "text": "alpha", "fp": {"mid": "FA", "fp_id": "HA"}}]
+    store.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+    ledger.write_text('{"event": "legal_death", "txid": "tx0", "ci')  # torn append
+
+    execute(
+        {"dead_ids": ["FA"], "dead_sources": [], "prune": {}},
+        stores=[store],
+        ledger_path=ledger,
+        pending_path=tmp_path / "p.json",
+        txid="t1",
+        now_iso=TS,
+    )
+
+    remaining = [ln for ln in store.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    assert remaining == []  # the deletion actually completed
+    assert not (tmp_path / "p.json").exists()  # and the pending ledger was cleared

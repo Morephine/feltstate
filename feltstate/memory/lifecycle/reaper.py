@@ -53,9 +53,33 @@ class ReaperError(RuntimeError):
 
 
 def _read_jsonl(p: Path) -> list[dict]:
+    """Read a JSONL file, skipping any line that is not a complete record.
+
+    The tombstone below is an append, so a crash mid-write leaves a partial
+    final line. A bare ``json.loads`` over the file then raised
+    ``JSONDecodeError`` on every subsequent ``execute()`` *and*
+    ``replay_if_pending()`` — the pending ledger could never be cleared and the
+    deletion could never finish. A crash-recovery module has to survive the
+    crash it exists for; ``canon._load_jsonl`` already quarantines bad lines
+    rather than dying on them.
+
+    A torn line is dropped: it is by definition an event that was never
+    completely recorded, so no live decision may depend on it.
+    """
     if not p.exists():
         return []
-    return [json.loads(x) for x in p.read_text(encoding="utf-8").splitlines() if x.strip()]
+    rows: list[dict] = []
+    for line in p.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(row, dict):
+            rows.append(row)
+    return rows
 
 
 def _fsync_path(p: Path) -> None:
@@ -138,6 +162,10 @@ def execute(
             for r in _read_jsonl(path):
                 if _key(r) in dead and r.get("cid"):
                     row_keys.append(r["cid"])
+        # One complete line, written and flushed in a single call, so a crash
+        # can only leave the ledger with the tombstone fully present or fully
+        # absent — never half of it. (_read_jsonl also tolerates a torn line
+        # from an older file.)
         with ledger_path.open("a", encoding="utf-8") as lf:
             lf.write(
                 json.dumps(
