@@ -302,7 +302,8 @@ class Chain:
             if not isinstance(j, dict):
                 keep.append(ln)  # not a record; leave it for verify_full to fail on
                 continue
-            payload = j.get("payload") if isinstance(j.get("payload"), dict) else {}
+            raw_payload = j.get("payload")
+            payload: dict = raw_payload if isinstance(raw_payload, dict) else {}
             ts = payload.get("ts", "") or j.get("ts", "")
             # ``ts`` on a tombstone comes from the caller (reaper's now_iso is a
             # free-text argument), so it is not guaranteed to be ISO. A bare

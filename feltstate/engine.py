@@ -44,6 +44,7 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
+from ._atomic import atomic_write_text
 from .affect import (
     apply_trait_shift,
     baseline_from_imprints,
@@ -822,8 +823,4 @@ class Engine:
             "dream_residue_ts": self._dream_residue_ts,
             "tiredness": self.tiredness.to_dict(),
         }
-        p = self._meta_path
-        p.parent.mkdir(parents=True, exist_ok=True)
-        tmp = p.with_suffix(p.suffix + ".tmp")
-        tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        tmp.replace(p)
+        atomic_write_text(self._meta_path, json.dumps(payload, ensure_ascii=False, indent=2))

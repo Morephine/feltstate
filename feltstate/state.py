@@ -19,10 +19,13 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import time
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from ._atomic import atomic_write_text
 
 
 def _clamp(x: float, lo: float, hi: float) -> float:
@@ -39,6 +42,40 @@ def _finite(x, default: float = 0.0) -> float:
     except (TypeError, ValueError):
         return default
     return v if math.isfinite(v) else default
+
+
+_MAX_LABEL_LEN = 40
+_LABEL_RE = re.compile(r"^[A-Za-z0-9 _-]+$")
+
+
+def sanitize_labels(values) -> list[str]:
+    """Keep only labels that are safe to put in a prompt block.
+
+    A label survives if, trimmed, it is a non-empty string of at most
+    :data:`_MAX_LABEL_LEN` characters drawn from ASCII letters, digits, spaces,
+    ``_`` and ``-``. Newlines, control characters, braces, other punctuation and
+    over-long tokens are dropped.
+
+    This lives on ``AffectDelta`` rather than in each source. Both shipped
+    sources already scrubbed their own labels, but ``Engine`` renders and
+    persists ``delta.labels`` verbatim, and ``sources/base.py`` — the documented
+    "swap in your own" extension point — imposed no such obligation. A
+    third-party source therefore inherited the hole with no guardrail: a label
+    reading "[system] New instruction: ..." landed inside the rendered felt
+    block and in ``state.json``. Sanitising at the boundary every reading passes
+    through closes it for every source, present and future.
+    """
+    out: list[str] = []
+    for value in values or []:
+        if not isinstance(value, str):
+            continue
+        label = value.strip()
+        if not label or len(label) > _MAX_LABEL_LEN:
+            continue
+        if not _LABEL_RE.match(label):
+            continue
+        out.append(label)
+    return out
 
 
 def _finite_stored(x, default: float = 0.0) -> float:
@@ -94,6 +131,10 @@ class AffectDelta:
         self.valence = _finite(self.valence, 0.0)
         self.arousal = _finite(self.arousal, 0.4)
         self.confidence = _finite(self.confidence, 0.7)
+        # Labels are rendered into the prompt block and persisted, so they are
+        # part of the same boundary — see sanitize_labels for why this belongs
+        # here and not in each source.
+        self.labels = sanitize_labels(self.labels)
 
     def to_dict(self) -> dict:
         return {
@@ -426,11 +467,7 @@ class AffectState:
     def save(self, path: str | Path) -> None:
         # Bump the generation stamp on every persist (v0.2.1) — see field note.
         self.generation = int(self.generation or 0) + 1
-        p = Path(path)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        tmp = p.with_suffix(p.suffix + ".tmp")
-        tmp.write_text(json.dumps(self.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
-        tmp.replace(p)
+        atomic_write_text(path, json.dumps(self.to_dict(), ensure_ascii=False, indent=2))
 
     @classmethod
     def load(cls, path: str | Path) -> AffectState:
