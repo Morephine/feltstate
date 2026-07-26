@@ -10,6 +10,8 @@ from __future__ import annotations
 import threading
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from feltstate import AffectDelta, PersonaDials, PressureState, Relationship, Traits
 from feltstate.affect import step
 from feltstate.affect.imprint import Imprint, decay_imprints
@@ -265,3 +267,93 @@ def test_return_gap_opens_the_block_on_the_return_turn(tmp_path):
     injected = eng.inject("hey, I'm back. long week.")
     assert "since we last spoke" in injected
     assert "a few days" in injected
+
+
+# --------------------------------------------------------------------------- #
+# The non-finite guard reaches the persistence and milestone boundaries too.  #
+# --------------------------------------------------------------------------- #
+def test_nan_in_a_state_file_does_not_load_as_an_extreme(tmp_path):
+    """A NaN can round-trip through save/load looking well-formed.
+
+    ``json`` emits and accepts bare ``NaN``/``Infinity``, and the stored-state
+    deserialisers used a plain ``float()``. The value then laundered on the
+    first use: ``max(lo, min(hi, nan))`` returns ``hi``, so a NaN mood read back
+    as a maximal, fully-trusted feeling the character never had. Same trap the
+    source boundary was already fixed for — this closes the other end.
+    """
+    import json as _json
+
+    path = tmp_path / "s.json"
+    path.write_text(
+        _json.dumps(
+            {
+                "mood": {"valence": float("nan")},
+                "traits": {"depression": float("nan")},
+                "relationship": {"trust": float("-inf")},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    st = AffectState.load(path)
+
+    assert st.mood.valence == 0.0
+    assert st.traits.depression == 0.5
+    assert st.relationship.trust == 0.5
+
+
+def test_a_genuinely_corrupt_state_file_is_still_quarantined(tmp_path):
+    """Coercing non-finite numbers must not turn into "accept anything".
+
+    A stored value that is not a number at all means the file is damaged; that
+    still has to reach the quarantine path rather than boot on a silent default.
+    """
+    path = tmp_path / "garbage.json"
+    path.write_text('{"mood": {"valence": "not-a-number"}}', encoding="utf-8")
+
+    with pytest.warns(UserWarning, match="corrupt"):
+        AffectState.load(path)
+
+    assert any(p.name.startswith("garbage.json.corrupt") for p in tmp_path.iterdir())
+
+
+@pytest.mark.parametrize("severity", [float("nan"), "high", None, [1], {"a": 1}])
+def test_a_dirty_milestone_severity_neither_crashes_nor_maxes_out(severity):
+    """``milestones`` ride in from a source without passing AffectDelta's
+    sanitiser, so the severity field had no boundary check at all.
+
+    NaN clamped to 1.0 — a full-strength trauma the user never reported, carved
+    permanently by the imprint path. A non-numeric one raised straight out of
+    ``step()``. Both now fall back to the 0.5 default.
+    """
+    baseline = PressureState()
+    step(
+        baseline,
+        delta=AffectDelta(
+            valence=-0.5,
+            arousal=0.5,
+            milestones=[{"kind": "trauma_loss", "severity": 0.5}],
+        ),
+        traits=Traits(),
+        relationship=Relationship(),
+        dials=PersonaDials(),
+        cfg=DEFAULT_CONFIG.pressure,
+        ts="2030-01-01T00:00:00+00:00",
+    )
+
+    dirty = PressureState()
+    step(
+        dirty,
+        delta=AffectDelta(
+            valence=-0.5,
+            arousal=0.5,
+            milestones=[{"kind": "trauma_loss", "severity": severity}],
+        ),
+        traits=Traits(),
+        relationship=Relationship(),
+        dials=PersonaDials(),
+        cfg=DEFAULT_CONFIG.pressure,
+        ts="2030-01-01T00:00:00+00:00",
+    )
+
+    assert dirty.bars.sadness == pytest.approx(baseline.bars.sadness)

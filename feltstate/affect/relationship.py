@@ -21,7 +21,7 @@ the relationship.
 from __future__ import annotations
 
 from ..config import RelationshipConfig
-from ..state import AffectDelta, Relationship
+from ..state import AffectDelta, Relationship, _finite
 
 # Milestone-kind substrings grouped by how they move the bond. Matched
 # case-insensitively so callers can namespace kinds freely (e.g. "warmth_care").
@@ -86,7 +86,12 @@ def update_relationship(
         if not isinstance(m, dict):
             continue
         kind = str(m.get("kind", "")).lower()
-        sev = max(0.0, min(1.0, float(m.get("severity", 0.5))))
+        # A milestone rides in from a source, not from AffectDelta's sanitiser,
+        # so it has had no boundary check. json accepts bare NaN, and
+        # max(lo, min(hi, nan)) returns hi — a NaN severity would land as a
+        # full-strength betrayal/care. A non-numeric one ("high", None, [1])
+        # used to raise straight out of the tick. Both fall back to 0.5.
+        sev = max(0.0, min(1.0, _finite(m.get("severity", 0.5), 0.5)))
 
         if _any(kind, _CARE):
             trust += cfg.trust_per_care * sev

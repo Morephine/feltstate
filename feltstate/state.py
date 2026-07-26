@@ -41,6 +41,27 @@ def _finite(x, default: float = 0.0) -> float:
     return v if math.isfinite(v) else default
 
 
+def _finite_stored(x, default: float = 0.0) -> float:
+    """Same non-finite guard as :func:`_finite`, for values read back off disk.
+
+    The difference is what counts as *corrupt*. A stored value that is not a
+    number at all (``"not-a-number"``) means the state file is damaged: let the
+    ``ValueError`` reach ``AffectState.load``, which quarantines the file and
+    warns, rather than silently substituting a default and booting on a file
+    nobody knows is broken.
+
+    A stored value that IS a number but not finite is a different failure:
+    ``json`` emits and accepts bare ``NaN``/``Infinity``, so a NaN can round-trip
+    through save/load looking perfectly well-formed. Left alone it launders into
+    an extreme on the first tick — ``max(lo, min(hi, nan))`` returns ``hi`` —
+    giving a maximal, fully-trusted emotion the character never felt. Those are
+    coerced to ``default``, the same treatment the source boundary already gives
+    a model's NaN.
+    """
+    v = float(x)  # non-numeric -> ValueError -> quarantine upstream
+    return v if math.isfinite(v) else default
+
+
 # --------------------------------------------------------------------------- #
 # Per-turn reading                                                            #
 # --------------------------------------------------------------------------- #
@@ -148,12 +169,12 @@ class Traits:
         d = d or {}
         raw_baseline = d.get("baseline") or {}
         baseline = (
-            {k: float(v) for k, v in raw_baseline.items() if k in _TRAIT_KEYS}
+            {k: _finite_stored(v, 0.5) for k, v in raw_baseline.items() if k in _TRAIT_KEYS}
             if isinstance(raw_baseline, dict)
             else {}
         )
         return cls(
-            **{k: float(d.get(k, 0.5)) for k in _TRAIT_KEYS},
+            **{k: _finite_stored(d.get(k, 0.5), 0.5) for k in _TRAIT_KEYS},
             baseline=baseline,
         )
 
@@ -189,11 +210,11 @@ class Relationship:
     def from_dict(cls, d: dict | None) -> Relationship:
         d = d or {}
         return cls(
-            closeness=float(d.get("closeness", 0.5)),
-            trust=float(d.get("trust", 0.5)),
-            safety=float(d.get("safety", 0.5)),
-            unresolved_tension=float(d.get("unresolved_tension", 0.0)),
-            repair_history=float(d.get("repair_history", 0.0)),
+            closeness=_finite_stored(d.get("closeness", 0.5), 0.5),
+            trust=_finite_stored(d.get("trust", 0.5), 0.5),
+            safety=_finite_stored(d.get("safety", 0.5), 0.5),
+            unresolved_tension=_finite_stored(d.get("unresolved_tension", 0.0), 0.0),
+            repair_history=_finite_stored(d.get("repair_history", 0.0), 0.0),
         )
 
 
@@ -239,13 +260,13 @@ class Mood:
     def from_dict(cls, d: dict | None) -> Mood:
         d = d or {}
         return cls(
-            valence=float(d.get("valence", 0.0)),
-            arousal=float(d.get("arousal", 0.4)),
+            valence=_finite_stored(d.get("valence", 0.0), 0.0),
+            arousal=_finite_stored(d.get("arousal", 0.4), 0.4),
             labels=list(d.get("labels") or []),
             aftertaste=d.get("aftertaste"),
             mixed_blend=d.get("mixed_blend"),
             tide=d.get("tide"),
-            velocity=float(d.get("velocity", 0.0) or 0.0),
+            velocity=_finite_stored(d.get("velocity", 0.0), 0.0),
         )
 
 
@@ -276,7 +297,7 @@ class PressureBars:
     @classmethod
     def from_dict(cls, d: dict | None) -> PressureBars:
         d = d or {}
-        return cls(**{k: float(d.get(k, 0.0)) for k in BAR_NAMES})
+        return cls(**{k: _finite_stored(d.get(k, 0.0), 0.0) for k in BAR_NAMES})
 
     def max_bar(self) -> tuple[str, float]:
         """Return ``(bar_name, value)`` for the bar currently carrying the most

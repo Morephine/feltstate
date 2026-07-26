@@ -72,6 +72,7 @@ from ..state import (
     PressureState,
     Relationship,
     Traits,
+    _finite,
 )
 
 __all__ = ["step", "compute_power"]
@@ -393,7 +394,9 @@ def _apply_milestone(inflow: dict, m: dict) -> None:
     """
     kind = str(m.get("kind", ""))
     actor = m.get("actor")
-    sev = float(m.get("severity", 0.5))
+    # Unsanitised milestone field — see relationship.py. NaN would clamp to the
+    # maximum and dump a full-severity shock into the bars.
+    sev = _finite(m.get("severity", 0.5), 0.5)
 
     effect = MILESTONE_EFFECTS.get(MILESTONE_ALIASES.get(kind, kind))
     if effect is None:

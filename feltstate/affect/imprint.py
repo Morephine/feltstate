@@ -51,7 +51,7 @@ import hashlib
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from ..state import Mood, Traits
+from ..state import Mood, Traits, _finite
 
 # --------------------------------------------------------------------------- #
 # Tunables (intentionally local — these are imprint dynamics, not global cfg). #
@@ -258,8 +258,8 @@ class Imprint:
             ts=str(d.get("ts", "") or ""),
             kind=str(d.get("kind", "") or ""),
             valence_sign=int(d.get("valence_sign", 0) or 0),
-            severity=float(d.get("severity", 0.5)),
-            intensity=float(d.get("intensity", d.get("severity", 0.5))),
+            severity=_finite(d.get("severity", 0.5), 0.5),
+            intensity=_finite(d.get("intensity", d.get("severity", 0.5)), 0.5),
             decay_per_day=float(d.get("decay_per_day", DEFAULT_DECAY_PER_DAY)),
             min_floor=float(d.get("min_floor", DEFAULT_MIN_FLOOR)),
             echo_keywords=list(d.get("echo_keywords") or []),
@@ -319,7 +319,9 @@ def ingest_milestones(milestones: list[dict], ts: str) -> list[Imprint]:
         if spec is None:
             continue
         sign, base_shifts = spec
-        severity = _clamp(float(ms.get("severity", 0.5)), 0.0, 1.0)
+        # Unsanitised milestone field — see relationship.py. NaN would clamp
+        # to 1.0 and carve a permanent, maximal mark.
+        severity = _clamp(_finite(ms.get("severity", 0.5), 0.5), 0.0, 1.0)
         label = str(ms.get("label", "") or kind)
         # Scale the one-time trait shift by severity so a mild event nudges less.
         shifts = {k: round(v * severity, 4) for k, v in base_shifts.items()}
