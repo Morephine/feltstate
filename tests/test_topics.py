@@ -57,13 +57,60 @@ def test_mark_consumed_is_atomic_and_keeps_queue(tmp_path):
 
 
 def test_scheduler_naive_now_is_normalised(tmp_path):
-    # v0.2.1 clock unification: a naive caller datetime must not crash or
-    # skew — it is treated as explicit local and becomes aware internally.
-    from datetime import datetime
+    """v0.2.1 clock unification: a naive caller datetime must not crash or skew.
 
-    from feltstate.state import AffectState  # noqa: F401  (import parity)
+    This used to assert stdlib truisms — that ``datetime.now()`` is naive and
+    ``.astimezone()`` makes it aware — without touching the scheduler at all.
+    Deleting the normalisation it names (``scheduler.py``, ``tick_once``) left
+    the whole suite green. It now drives the real code: a naive ``now`` must
+    produce the same decision, and the same stored timestamps, as the aware
+    instant it denotes.
+    """
+    import random
+    from datetime import datetime, timedelta
 
-    naive = datetime.now()
-    assert naive.tzinfo is None
+    from feltstate import Engine
+    from feltstate.companion.scheduler import CompanionScheduler, SchedulerConfig
+    from feltstate.companion.sources_ref import RandomSource
+    from feltstate.sources.keyword import KeywordSource
+
+    class _Idle:
+        def is_idle(self) -> bool:
+            return True
+
+        def seconds_since_last_user_message(self) -> float:
+            return float("inf")
+
+    class _Rec:
+        def __init__(self):
+            self.said = []
+
+        def say(self, text, **_):
+            self.said.append(text)
+            return text
+
+    def _make(tag: str) -> tuple[CompanionScheduler, _Rec]:
+        rec = _Rec()
+        sch = CompanionScheduler(
+            Engine(source=KeywordSource(), state_path=str(tmp_path / f"state_{tag}.json")),
+            presence=_Idle(),
+            dispatcher=rec,
+            sources=[RandomSource(["hi"], probability=1.0, rng=random.Random(0), kind="random")],
+            state_path=str(tmp_path / f"sch_{tag}.json"),
+            cfg=SchedulerConfig(boot_grace_s=0),
+        )
+        return sch, rec
+
+    naive = datetime.now().replace(microsecond=0) - timedelta(hours=1)
     aware = naive.astimezone()
-    assert aware.tzinfo is not None and abs(aware.timestamp() - naive.timestamp()) < 2
+    assert naive.tzinfo is None and aware.tzinfo is not None
+
+    naive_sch, naive_rec = _make("naive")
+    aware_sch, aware_rec = _make("aware")
+    naive_sch.tick_once(now=naive)
+    aware_sch.tick_once(now=aware)
+
+    # Same instant, same decision, same bookkeeping — the naive input was
+    # normalised rather than compared against an aware value or stored raw.
+    assert naive_rec.said == aware_rec.said
+    assert naive_sch._state.get("boot_ts") == aware_sch._state.get("boot_ts")

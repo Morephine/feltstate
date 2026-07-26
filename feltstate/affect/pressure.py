@@ -394,7 +394,15 @@ def _plast_heal(
     keep = (1.0 - pct) ** days
     for k in BAR_NAMES:
         cur = _sens_of(pressure, k, cfg)
-        pressure.sensitivity[k] = round(0.5 + (cur - 0.5) * keep, 8)
+        # Rounded to 12 places, not 8. The anchor is stamped advance-always, so
+        # whatever a pass rounds away is not deferred — it is discarded. At a
+        # one-minute cadence a pass heals dev * ~3.5e-6, which for a lightly
+        # carved bar (dev ~1e-3) is ~3.5e-9: entirely below 8 places. A week of
+        # healing then came to exactly zero at one-minute ticks while the same
+        # week at hourly ticks healed 3.4e-5 — a one-way ratchet for any
+        # character ticked often, which is precisely the busy one. 12 places is
+        # still far coarser than float noise and keeps the file readable.
+        pressure.sensitivity[k] = round(0.5 + (cur - 0.5) * keep, 12)
 
 
 def _apply_milestone(inflow: dict, m: dict) -> None:

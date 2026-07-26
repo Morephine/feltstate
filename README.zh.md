@@ -102,10 +102,12 @@ eng.tick([{"role": "user", "content": "I finally shipped it!! couldn't have done
 
 print(eng.render())
 # [how I feel right now]
-# close · trusted · mostly safe · no friction
-# curious, content | warm, mild energy
-# pressure low, joy bright | building
-# ...
+# now Sun morning 9:56
+# with you: warming · mostly trusting · mostly safe
+# mood: relieved | level, low energy
+# inside: pressure clear | settled
+# lingering: a faint trace of the last moment, half-faded
+# underneath: spirits steady · nerves even · moderately curious · even-keeled
 
 # 缓存安全地喂回你的回复模型, 作为第一人称上下文:
 prompt = eng.inject("so what should we build next?")

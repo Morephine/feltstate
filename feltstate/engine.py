@@ -40,6 +40,7 @@ Quickstart::
 from __future__ import annotations
 
 import logging
+import warnings
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -747,6 +748,24 @@ class Engine:
             if not isinstance(data, dict):
                 raise ValueError("engine meta root must be a JSON object")
 
+            # Cross-file skew check. The sidecar records which generation of
+            # state.json it was written beside; state.generation only ever goes
+            # up. A sidecar that claims a generation *newer* than the state file
+            # means the two came from different snapshots — typically state.json
+            # restored from a backup while the sidecar was left alone. Warn:
+            # silently pairing a restored state with a stale sidecar resurrects
+            # imprints and label streaks the state no longer knows about.
+            sidecar_gen = data.get("state_generation")
+            if isinstance(sidecar_gen, int) and sidecar_gen > int(self.state.generation or 0):
+                warnings.warn(
+                    f"engine sidecar {self._meta_path} was written beside state "
+                    f"generation {sidecar_gen}, but the loaded state is at "
+                    f"{self.state.generation} — the two files are out of step "
+                    "(a restore that touched only one of them?)",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+
             last_user_ts = data.get("last_user_ts") or None
             since_phrase_at_anchor = data.get("since_phrase_at_anchor") or None
             raw_imprints = data.get("imprints") or []
@@ -822,5 +841,13 @@ class Engine:
             "dream_residue": round(float(self._dream_residue), 6),
             "dream_residue_ts": self._dream_residue_ts,
             "tiredness": self.tiredness.to_dict(),
+            # The generation of state.json this sidecar was written alongside.
+            # AffectState.generation documents itself as letting operators
+            # detect cross-file skew — a sidecar restored from an older
+            # snapshot than the state file — but nothing wrote it here and
+            # nothing read it anywhere, so the skew it names could not be
+            # detected from library-provided data. Recorded here and checked in
+            # _load_meta.
+            "state_generation": int(self.state.generation or 0),
         }
         atomic_write_text(self._meta_path, json.dumps(payload, ensure_ascii=False, indent=2))

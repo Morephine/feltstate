@@ -30,16 +30,32 @@ def state_with(mid: float, labels: list[str] | None = None) -> AffectState:
     return s
 
 
+# The band each level must render, written out rather than recomputed. The
+# previous version re-ran render_agent_feeling's own band search inside the
+# assertion, so it agreed with whatever the implementation did: flipping the
+# production comparison from >= to > passed unnoticed. A table states the
+# expectation independently, and the boundary values are the ones that catch
+# an off-by-one.
+EXPECTED_BANDS: tuple[tuple[float, str], ...] = (
+    (0.00, "steady and settled"),
+    (0.05, "steady and settled"),
+    (0.10, "slightly uneasy"),  # exactly on a bound: inclusive
+    (0.12, "slightly uneasy"),
+    (0.17, "restless and frustrated — noticeably, more than a moment ago"),
+    (0.20, "restless and frustrated — noticeably, more than a moment ago"),
+    (0.42, "very frustrated and tense — strongly, and it has been building for a while"),
+    (0.50, "very frustrated and tense — strongly, and it has been building for a while"),
+    (0.70, "worn down and tense — heavily, and it has kept building"),
+    (0.80, "worn down and tense — heavily, and it has kept building"),
+)
+
+
 def test_bands_cover_all_grades():
-    seen = set()
-    for mid in (0.0, 0.12, 0.20, 0.50, 0.80):
+    for mid, expected in EXPECTED_BANDS:
         line = render_agent_feeling(state_with(mid))
-        for bound, phrase in AGENT_BANDS:
-            if mid >= bound:
-                assert phrase in line
-                seen.add(phrase)
-                break
-    assert len(seen) == len(AGENT_BANDS)  # every band reachable
+        assert expected in line, f"{mid} rendered {line!r}"
+    # every band is reachable
+    assert {phrase for _, phrase in EXPECTED_BANDS} == {phrase for _, phrase in AGENT_BANDS}
 
 
 def test_no_cognition_vocabulary_in_any_band():

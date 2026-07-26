@@ -428,3 +428,104 @@ def test_concurrent_engine_ticks_do_not_race_on_the_scratch_file(tmp_path):
 
     assert errors == []
     assert json.loads(state_path.read_text(encoding="utf-8"))  # and it still parses
+
+
+def test_a_low_confidence_reading_does_not_move_the_character(tmp_path):
+    """The confidence gate is live behaviour with no test — deleting it was green.
+
+    ``confidence`` used to be a published field nothing consumed, so a failed
+    or unsure reading changed the agent exactly as much as a certain one. The
+    gate neutralises the continuous signal below the floor. Replacing the
+    condition with ``if True:`` (i.e. no gate) passed the whole suite; this
+    pins it. Twenty turns of a dead endpoint's output — a confident-looking
+    valence with confidence 0.1 — must not sour a persisted temperament.
+    """
+
+    class _FailedEndpoint:
+        def read(self, messages, **_):
+            return AffectDelta(valence=-0.9, arousal=0.8, confidence=0.1)
+
+    eng = Engine(source=_FailedEndpoint(), state_path=tmp_path / "s.json")
+    for _ in range(20):
+        eng.tick([{"role": "user", "content": "hi"}])
+
+    assert eng.state.mood.valence == pytest.approx(0.0, abs=1e-6)
+    assert eng.state.mood.labels == []
+
+
+def test_a_confident_reading_still_moves_the_character(tmp_path):
+    """The other side of the gate: it must not be a blanket mute."""
+
+    class _Confident:
+        def read(self, messages, **_):
+            return AffectDelta(valence=-0.9, arousal=0.8, confidence=0.9)
+
+    eng = Engine(source=_Confident(), state_path=tmp_path / "s.json")
+    for _ in range(20):
+        eng.tick([{"role": "user", "content": "hi"}])
+
+    assert eng.state.mood.valence < -0.3
+
+
+def test_the_rendered_now_follows_the_local_clock(tmp_path):
+    """Regression for the 2026-07-18 timezone fix, which had no test.
+
+    ``inject`` rendered ``now_phrase(now)`` on a UTC-stamped datetime, so every
+    injected prompt carried a "now" from the wrong clock. Reverting
+    ``.astimezone()`` passed the entire suite — the block's own docstring says
+    it renders local time, and nothing observed it.
+    """
+    import os
+    import time
+
+    class _Steady:
+        def read(self, messages, **_):
+            return AffectDelta(valence=0.0, arousal=0.3, confidence=0.9)
+
+    # 09:00 UTC is a different clock hour in these two zones.
+    stamp = datetime(2030, 6, 1, 9, 0, tzinfo=timezone.utc)
+    seen = {}
+    for zone in ("Etc/GMT-9", "Etc/GMT+5"):  # UTC+9 and UTC-5
+        os.environ["TZ"] = zone
+        time.tzset()
+        eng = Engine(source=_Steady(), state_path=tmp_path / f"s_{zone.replace('/', '_')}.json")
+        eng.tick([{"role": "user", "content": "hi"}], now=stamp)
+        seen[zone] = eng.inject("hi", now=stamp)
+    os.environ.pop("TZ", None)
+    time.tzset()
+
+    assert seen["Etc/GMT-9"] != seen["Etc/GMT+5"], (
+        "the injected block renders the same 'now' in two different time zones"
+    )
+
+
+def test_cross_file_skew_between_state_and_sidecar_is_detected(tmp_path):
+    """``AffectState.generation`` documents itself as letting operators detect a
+    sidecar restored from an older snapshot than state.json.
+
+    Nothing wrote the stamp into the sidecar and nothing read it anywhere, so
+    the exact skew the field names could not be detected from library-provided
+    data — a write-only stamp. The sidecar now records the generation it was
+    written beside, and loading a mismatched pair warns instead of silently
+    resurrecting imprints and label streaks the restored state never had.
+    """
+
+    class _Steady:
+        def read(self, messages, **_):
+            return AffectDelta(valence=0.1, arousal=0.4, confidence=0.9)
+
+    state_path = tmp_path / "s.json"
+    eng = Engine(source=_Steady(), state_path=state_path)
+    for _ in range(3):
+        eng.tick([{"role": "user", "content": "x"}])
+
+    meta = json.loads((tmp_path / "s.meta.json").read_text(encoding="utf-8"))
+    assert meta["state_generation"] == eng.state.generation
+
+    # Restore only state.json from an older snapshot.
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["generation"] = 1
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+
+    with pytest.warns(RuntimeWarning, match="out of step"):
+        Engine(source=_Steady(), state_path=state_path)

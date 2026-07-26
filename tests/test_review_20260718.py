@@ -12,7 +12,11 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
+from feltstate import AffectDelta, PersonaDials, PressureState, Relationship, Traits
 from feltstate.affect import pressure as pressure_mod
+from feltstate.affect import step
 from feltstate.affect.pressure import _apply_milestone
 from feltstate.config import (
     MILESTONE_ALIASES,
@@ -84,25 +88,46 @@ def test_milestone_table_is_overridable(monkeypatch):
 #    formula bit-for-bit.                                                      #
 # --------------------------------------------------------------------------- #
 def test_anticipation_knobs_default_to_legacy_formula():
-    cfg = PressureConfig()
-    a_v, a_w, progress = 0.8, 0.6, 1.0
-    named = (
-        cfg.anticipation_gain * a_v * a_w * progress * cfg.idle_decay / cfg.anticipation_ref_decay
+    """The named knobs must actually drive the engine, not just exist.
+
+    This used to compute both sides of its own assertion from PressureConfig()
+    and never call production code: hardcoding 0.5 and 0.018 back into
+    pressure.py left it green. It pins the defaults, not the wiring. Now it
+    drives step() and checks the joy floor the engine actually applies, and
+    that turning the knob moves it.
+    """
+    a_v, a_w = 0.8, 0.6
+    ant = AffectDelta(
+        valence=0.0,
+        arousal=0.3,
+        confidence=0.05,  # below the trust floor: only the anticipation acts
+        anticipation={"valence": a_v, "weight": a_w},
     )
-    legacy = 0.5 * a_v * a_w * progress * cfg.idle_decay / 0.018
-    assert named == legacy
+
+    def floor_reached(cfg: PressureConfig) -> float:
+        p = PressureState()
+        step(
+            p,
+            delta=ant,
+            traits=Traits(),
+            relationship=Relationship(),
+            dials=PersonaDials(),
+            cfg=cfg,
+            ts="2030-01-01T00:00:00+00:00",
+        )
+        return p.bars.joy
+
+    cfg = PressureConfig()
+    expected = cfg.anticipation_gain * a_v * a_w * cfg.idle_decay / cfg.anticipation_ref_decay
+    assert floor_reached(cfg) == pytest.approx(expected, abs=1e-9)
+
+    # The gain knob is read, not decorative.
+    louder = PressureConfig(anticipation_gain=cfg.anticipation_gain * 2)
+    assert floor_reached(louder) == pytest.approx(expected * 2, abs=1e-9)
 
     # Setting ref = idle_decay pins the floor absolute under decay retuning.
     fast = PressureConfig(idle_decay=0.036, anticipation_ref_decay=0.036)
-    pinned = (
-        fast.anticipation_gain
-        * a_v
-        * a_w
-        * progress
-        * fast.idle_decay
-        / fast.anticipation_ref_decay
-    )
-    assert abs(pinned - 0.5 * a_v * a_w * progress) < 1e-12
+    assert floor_reached(fast) == pytest.approx(fast.anticipation_gain * a_v * a_w, abs=1e-9)
 
 
 # --------------------------------------------------------------------------- #

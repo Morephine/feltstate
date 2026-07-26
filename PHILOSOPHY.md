@@ -182,8 +182,11 @@ feltstate instead renders a compact first-person block in plain language:
 
 ```
 [how I feel right now]
-close · trusted · mostly safe · no friction
-curious, content | calm, mild energy
+now Sun morning 9:56
+with you: warming · mostly trusting · mostly safe
+mood: relieved | level, low energy
+inside: pressure clear | settled
+underneath: spirits steady · nerves even · moderately curious · even-keeled
 ```
 
 Paired with a framing instruction that the block is context rather than text to
