@@ -40,6 +40,7 @@ Quickstart::
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -316,21 +317,32 @@ class Engine:
 
         # (4) Evolve the bond with the user from this turn (its tension/safety
         #     feed the pressure tick), then run one full pressure-cooker tick.
-        relationship = update_relationship(self.state.relationship, eff, self.config.relationship)
         # update_relationship applies exactly one reference tick of tension decay
         # internally; make that decay elapsed-time-based too (finding #11) by
         # draining the remaining (elapsed_ticks - 1) ticks here. Tension decay is
-        # subtractive with a floor at 0, which composes exactly, so one tick inside
-        # plus (k-1) here equals k ticks of decay — and at k == 1 nothing extra is
-        # drained (identical to the pre-change behaviour). Done in the engine
-        # because the relationship dynamics module owns only the single-tick step.
+        # subtractive with a floor at 0, which composes exactly, so (k-1) here
+        # plus one tick inside equals k ticks of decay — and at k == 1 nothing
+        # extra is drained. Done in the engine because the relationship dynamics
+        # module owns only the single-tick step.
+        #
+        # The drain runs BEFORE update_relationship, not after. Draining
+        # afterwards charged this turn's milestone for the silence that preceded
+        # it: a conflict after ~16 minutes of quiet (0.15 tension per milestone
+        # against 0.01/min of decay) landed as exactly zero unresolved tension.
+        # Inside update_relationship the order is already decay-then-milestone
+        # (relationship.py steps 2 and 3); this keeps the elapsed-time portion on
+        # the same side of the event.
+        pre = self.state.relationship
         extra_ticks = max(0.0, elapsed_ticks - 1.0)
-        if extra_ticks > 0.0 and relationship.unresolved_tension > 0.0:
-            relationship.unresolved_tension = max(
-                0.0,
-                relationship.unresolved_tension
-                - self.config.relationship.tension_decay * extra_ticks,
+        if extra_ticks > 0.0 and pre.unresolved_tension > 0.0:
+            pre = replace(
+                pre,
+                unresolved_tension=max(
+                    0.0,
+                    pre.unresolved_tension - self.config.relationship.tension_decay * extra_ticks,
+                ),
             )
+        relationship = update_relationship(pre, eff, self.config.relationship)
         pressure = pressure_step(
             self.state.pressure,
             delta=eff,

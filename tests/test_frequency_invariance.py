@@ -466,3 +466,95 @@ def test_dream_residue_persists_across_reload(tmp_path):
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+# --------------------------------------------------------------------------- #
+# An event arriving after a lull must not be charged for that lull.           #
+# --------------------------------------------------------------------------- #
+def test_shock_after_a_long_quiet_lands_the_same_at_any_cadence():
+    """Same wall clock, same event at the same instant — only the tick cadence
+    during the preceding silence differs. The bar must land identically.
+
+    This used to fail badly: accumulate ran before decay, so the event was
+    retroactively cooled by the elapsed silence. A severity-1.0 shock after
+    ~22 minutes of quiet (0.40 inflow against 0.018/min of idle decay)
+    contributed exactly nothing when the lull was covered by a single long
+    tick, while the same shock landed at 0.41 when the lull had been ticked
+    minute by minute.
+    """
+    t0 = T0
+    quiet_minutes = 30
+    shock = AffectDelta(
+        valence=-0.9,
+        arousal=0.8,
+        milestones=[{"kind": "trauma_loss", "severity": 1.0}],
+    )
+
+    def run(cadence: int) -> float:
+        p = PressureState()
+        traits, rel, dials = Traits(), Relationship(), PersonaDials()
+        neutral = AffectDelta(valence=0.0, arousal=0.3)
+        for i in range(quiet_minutes // cadence):
+            ts = (t0 + timedelta(minutes=cadence * (i + 1))).isoformat()
+            step(
+                p,
+                delta=neutral,
+                traits=traits,
+                relationship=rel,
+                dials=dials,
+                cfg=DEFAULT_CONFIG.pressure,
+                ts=ts,
+                elapsed_ticks=float(cadence),
+            )
+        step(
+            p,
+            delta=shock,
+            traits=traits,
+            relationship=rel,
+            dials=dials,
+            cfg=DEFAULT_CONFIG.pressure,
+            ts=(t0 + timedelta(minutes=quiet_minutes)).isoformat(),
+            elapsed_ticks=1.0,
+        )
+        return p.bars.sadness
+
+    every_minute = run(1)
+    one_long_tick = run(30)
+    assert every_minute > 0.3  # the shock actually registered
+    assert one_long_tick == pytest.approx(every_minute, abs=1e-6)
+
+
+def test_conflict_after_a_long_quiet_still_raises_tension(tmp_path):
+    """Same shape on the relationship side: the elapsed-time tension drain must
+    settle before the milestone, not after it.
+
+    Draining afterwards meant a conflict arriving after ~16 minutes of quiet
+    (0.15 per milestone against 0.01/min of decay) landed as exactly zero
+    unresolved tension.
+    """
+
+    class _Conflict:
+        """Fires one severity-1.0 conflict, and only on the second turn."""
+
+        def __init__(self):
+            self.turns = 0
+
+        def read(self, messages, **_):
+            self.turns += 1
+            if self.turns < 2:
+                return AffectDelta(valence=0.0, arousal=0.3, confidence=0.9)
+            return AffectDelta(
+                valence=-0.8,
+                arousal=0.7,
+                confidence=0.9,
+                milestones=[{"kind": "conflict", "severity": 1.0}],
+            )
+
+    eng = Engine(source=_Conflict(), state_path=tmp_path / "s.json")
+    eng.state.relationship.unresolved_tension = 0.0
+    eng.tick([{"role": "user", "content": "hi"}], now=T0)
+    eng.tick(
+        [{"role": "user", "content": "that hurt"}],
+        now=T0 + timedelta(minutes=30),
+    )
+    assert eng.state.relationship.unresolved_tension > 0.0

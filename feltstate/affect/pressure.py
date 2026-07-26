@@ -741,7 +741,23 @@ def step(
     if cfg.plasticity:
         _plast_heal(pressure, relationship, cfg, ts)
 
-    # (1) accumulate — only outside the vent.
+    # (1) decay + trait floor, every tick (cooling scales with elapsed time).
+    #
+    # This must run BEFORE the accumulate gate. Cooling is charged for the
+    # elapsed time *since the last tick* — time that ran out before this turn's
+    # event happened. Accumulating first meant the event was retroactively
+    # decayed by that silence: a severity-1.0 shock arriving after ~22 minutes
+    # of quiet contributed exactly nothing (0.40 inflow minus 0.018/min of
+    # idle decay), and ordinary label inflow was erased by any gap over a
+    # minute. The frequency-invariance this method promises then held only for
+    # a silent tick; a tick that carried an event depended on how often step()
+    # had been called during the preceding lull.
+    #
+    # Same shape as the phase-expiry fix above (#13): settle the clock first,
+    # then apply what just happened.
+    _decay_and_floor(pressure, traits, cfg, ticks)
+
+    # (2) accumulate — only outside the vent.
     if pressure.phase not in ("releasing", "aftertaste"):
         _accumulate(
             pressure,
@@ -752,9 +768,6 @@ def step(
             ts=ts,
             ticks=ticks,
         )
-
-    # (2) decay + trait floor, every tick (cooling scales with elapsed time).
-    _decay_and_floor(pressure, traits, cfg, ticks)
 
     # (3) release selection — only when not already venting.
     if pressure.phase not in ("releasing", "aftertaste"):

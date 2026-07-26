@@ -17,6 +17,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from feltstate import DEFAULT_CONFIG, AffectDelta, PersonaDials, PressureState, Relationship, Traits
 from feltstate.affect import compute_power, step
 from feltstate.config import BAR_TO_RELEASE, BAR_TO_RELEASE_SUPPRESS
@@ -259,12 +261,30 @@ def test_step_mutates_and_returns_same_object():
 def test_label_scale_default_changes_nothing():
     """scale=1.0 must reproduce the historical companion-scale behaviour:
     per-label charge sits below idle_decay, so a label-only stream cannot
-    ratchet a bar above the trait floor (here zero)."""
+    ratchet a bar up — however long it runs.
+
+    What "cannot ratchet" looks like: each tick cools first and then charges,
+    so the bar carries at most the most recent tick's inflow (0.013) and the
+    next tick's decay (0.018) wipes it again. It plateaus there instead of
+    climbing. Twenty ticks and four hundred ticks land on the same value.
+
+    (This used to assert exactly 0.0, which held only because accumulate ran
+    before decay — the same ordering that let a long silence retroactively
+    erase a real event. The invariant under test is the plateau, not the zero.)
+    """
     traits, rel, dials = Traits(), Relationship(), PersonaDials()
-    p = PressureState()
     anxious = AffectDelta(valence=-0.2, arousal=0.6, labels=["anxious"])
-    _drive(p, delta=anxious, traits=traits, rel=rel, dials=dials, n=20)
-    assert p.bars.anxiety == 0.0  # 0.013 charge - 0.018 decay never accumulates
+
+    short = PressureState()
+    _drive(short, delta=anxious, traits=traits, rel=rel, dials=dials, n=20)
+    long = PressureState()
+    _drive(long, delta=anxious, traits=traits, rel=rel, dials=dials, n=400)
+
+    one_tick_charge = 0.013
+    assert short.bars.anxiety == pytest.approx(one_tick_charge, abs=1e-3)
+    # 20x the ticks must not mean a higher bar: no ratchet.
+    assert long.bars.anxiety == pytest.approx(short.bars.anxiety, abs=1e-3)
+    assert long.bars.anxiety < DEFAULT_CONFIG.pressure.idle_decay
 
 
 def test_agent_scale_makes_mid_layer_integrate():
