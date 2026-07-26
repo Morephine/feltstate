@@ -12,7 +12,7 @@ Times are constructed explicitly so nothing depends on the wall clock.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from feltstate.config import DEFAULT_CONFIG
 from feltstate.timeawareness import now_phrase, time_since_phrase
@@ -42,6 +42,20 @@ def test_gap_below_gate_returns_none():
 def test_gap_just_over_gate_starts_speaking():
     # 31 minutes is past the 30-minute gate -> a phrase appears.
     assert _phrase_for_gap(31) is not None
+
+
+def test_a_utc_z_stamp_reads_the_same_as_its_offset_form():
+    """A UTC stamp written with "Z" is the same instant as one written "+00:00".
+
+    ``datetime.fromisoformat`` only learned to accept the "Z" suffix in 3.11, and
+    the declared floor is 3.10 — where it raised and the raise was swallowed into
+    ``return None``, i.e. the long-term time sense silently switched off *forever*
+    for any caller whose stored stamps come from JS ``toISOString()`` or an HTTP
+    API. Both spellings must reach the ladder."""
+    now = datetime(2026, 7, 26, 12, 0, tzinfo=timezone.utc)
+    offset, zulu = "2026-07-01T12:00:00+00:00", "2026-07-01T12:00:00Z"
+    assert time_since_phrase(offset, now, TCFG) == "a few weeks"  # 25 days back
+    assert time_since_phrase(zulu, now, TCFG) == time_since_phrase(offset, now, TCFG)
 
 
 def test_unparseable_timestamp_returns_none():

@@ -67,7 +67,16 @@ def time_since_phrase(
     if not prev_iso:
         return None
     try:
-        prev = datetime.fromisoformat(prev_iso)
+        # The "Z" fixup every other parser in the library carries (canon._parse_ts,
+        # Engine._elapsed_ticks, pressure._parse): fromisoformat did not accept a
+        # "Z" suffix until 3.11, and 3.10 is the declared floor. Without it a UTC-Z
+        # stamp — what JS toISOString() and most HTTP APIs hand you — raised here
+        # and was swallowed into `return None`, which reads as "no prior contact":
+        # the long-term time sense went quiet permanently for that caller, with no
+        # error to notice. Measured: 2026-07-01T12:00:00+00:00 phrased "a few
+        # weeks"; the same instant written ...Z phrased None. str() so a stamp that
+        # is not even a string still lands on the ValueError path, not AttributeError.
+        prev = datetime.fromisoformat(str(prev_iso).replace("Z", "+00:00"))
     except (ValueError, TypeError):
         return None
 
