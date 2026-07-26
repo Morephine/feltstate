@@ -145,3 +145,29 @@ def test_engine_dream_on_empty_state_is_a_safe_noop(tmp_path):
     d = eng.dream()  # no history, no fragments -> nothing to dream
     assert d.text == ""
     assert (eng.state.mood.valence, eng.state.mood.arousal) == before
+
+
+def test_a_dream_that_nudges_nothing_is_not_remembered(tmp_path):
+    """A dream with text but *no* residue must not be kept forever.
+
+    Affect-neutral material (valence 0, arousal at the residue's 0.4 pivot) still
+    stitches into a dream, but its nudge is exactly zero — so nothing anchors a
+    decay clock, and the text was remembered with no path that could ever forget
+    it. Measured before the fix: 2000 minutes of ticks later, _last_dream was
+    still the dream text."""
+    from datetime import datetime, timedelta
+
+    eng = Engine(source=KeywordSource(), state_path=tmp_path / "s.json")
+    flat = [Fragment(t, valence=0.0, arousal=0.4) for t in ("the door", "a corridor", "grey light")]
+    now = datetime(2030, 6, 1, 8, 0, 0)
+
+    d = eng.dream(fragments=flat, rng=random.Random(0), now=now)
+    assert d.text != ""  # it did dream...
+    assert (d.valence, d.arousal) == (0.0, 0.0)  # ...but it left nothing behind
+    assert eng._last_dream == ""  # so there is nothing to remember
+    assert eng._dream_residue == 0.0
+
+    eng.tick(
+        [{"role": "user", "content": "the wooden table is brown"}], now=now + timedelta(days=1)
+    )
+    assert eng._last_dream == ""

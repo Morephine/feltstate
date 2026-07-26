@@ -564,15 +564,30 @@ class Engine:
         m = self.state.mood
         m.valence = max(-1.0, min(1.0, m.valence + d.valence))
         m.arousal = max(0.0, min(1.0, m.arousal + d.arousal))
-        self._last_dream = d.text
         # Seed the explicit, decaying residue magnitude with the size of the nudge
         # this dream just applied (finding #16), and anchor its decay clock to when
         # the dream happened. Subsequent ticks decay it over elapsed time; the dream
         # text is remembered exactly as long as the residue is, regardless of what
         # other moods come and go. A null dream (no text / no nudge) seeds nothing
         # and is not remembered.
-        self._dream_residue = abs(float(d.valence)) + abs(float(d.arousal))
-        self._dream_residue_ts = (now or datetime.now(timezone.utc)).isoformat()
+        #
+        # That last sentence used to be fiction: the text was stashed
+        # unconditionally, while _decay_dream_residue returns early on a
+        # non-positive residue — so a dream that nudged nothing was remembered with
+        # no clock that could ever forget it. Affect-neutral material reaches
+        # exactly zero residue (dream.residue returns (0.0, 0.0) at valence 0 /
+        # arousal 0.4), and one such dream stuck: 2000 minutes of ticks later the
+        # engine still held "the door again". Text and residue are now seeded (or
+        # cleared) together, which is what keeps the forget path reachable.
+        residue = abs(float(d.valence)) + abs(float(d.arousal))
+        if d.text and residue > 0.0:
+            self._last_dream = d.text
+            self._dream_residue = residue
+            self._dream_residue_ts = (now or datetime.now(timezone.utc)).isoformat()
+        else:
+            self._last_dream = ""
+            self._dream_residue = 0.0
+            self._dream_residue_ts = None
         self.save()
         return d
 
