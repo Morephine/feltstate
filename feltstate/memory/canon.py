@@ -1037,7 +1037,17 @@ class Canon:
                 if ot not in action.lower():
                     continue
             candidates.append(e)
-        candidates = candidates[: max(limit * 8, 40)]
+        # Bound the scoring work — but keep the *most salient* candidates, not
+        # whichever happened to be written first. Slicing the prefilter in file
+        # (append) order threw away the newest and strongest matches before
+        # scoring ever ran: with a few hundred weak keyword hits on file, an
+        # exact, high-intensity match added last could never be returned, while
+        # search() — which has no cap — found it. The two retrieval APIs
+        # disagreed on the same store.
+        cap = max(limit * 8, 40)
+        if len(candidates) > cap:
+            candidates.sort(key=lambda e: self._current_intensity(e, now), reverse=True)
+            candidates = candidates[:cap]
         if not candidates:
             return []
 

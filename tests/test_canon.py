@@ -404,3 +404,25 @@ def test_corrupt_and_non_object_jsonl_rows_are_quarantined_once(tmp_path, caplog
     assert len(records) == 2  # repeated loads do not duplicate evidence
     assert {r["reason"] for r in records} == {"invalid-json", "non-object-root"}
     assert all(r["raw"] for r in records)
+
+
+def test_recall_candidate_cap_keeps_the_strongest_not_the_oldest(tmp_path):
+    """Bounding the scoring work must not drop the best match before scoring.
+
+    The prefilter is capped so a large store cannot blow up scoring. That cap
+    used to slice in file (append) order, so a store carrying a few hundred
+    weak keyword hits could bury an exact, high-intensity match written later:
+    recall() never returned it while search() — which has no cap — did. The two
+    retrieval APIs disagreed about the same store.
+    """
+    canon = Canon(tmp_path / "c.jsonl")
+    for i in range(200):
+        canon.add("filler", f"catalog entry number {i}")
+    canon.add("alice", "cat", intensity=0.9)
+
+    got = canon.recall("cat", limit=5)
+    assert any(r["object"].strip() == "cat" for r in got), (
+        "the exact, most intense match was dropped by the candidate cap"
+    )
+    # And the two APIs agree that it exists.
+    assert any("cat" == (r.get("object") or "").strip() for r in canon.search("cat"))

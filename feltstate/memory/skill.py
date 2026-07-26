@@ -388,7 +388,16 @@ def recall_skills(
     # however large the library grows. With slow decay pruning unused skills, the
     # active set stays small (dozens, not thousands), so this rarely even bites —
     # which is exactly why the retrieval-scale collapse never reaches us.
-    pool = pool[: max(limit * 8, 40)]
+    #
+    # Keep the highest-weight candidates when it does bite. Slicing in file
+    # (append) order dropped the best skills before the draw: sixty unrated
+    # "deploy step N" entries could crowd out the one proven "deploy" skill
+    # simply by having been written earlier, and recall_skills would never
+    # return it.
+    cap = max(limit * 8, 40)
+    if len(pool) > cap:
+        pool.sort(key=lambda t: t[0], reverse=True)
+        pool = pool[:cap]
     if not pool:
         return []
 

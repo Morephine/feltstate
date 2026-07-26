@@ -369,3 +369,22 @@ def test_skills_never_leak_into_the_prompt(tmp_path):
     blk, inj = eng.render(), eng.inject("what next?")
     for needle in ("secret skill", "procedure", "utility", "rating"):
         assert needle not in blk and needle not in inj
+
+
+def test_skill_candidate_cap_keeps_the_best_not_the_oldest(tmp_path):
+    """Same cap, same failure mode, on the skill side.
+
+    Sixty unrated fillers written first could crowd out the one proven skill
+    purely by append order, and recall_skills would never return it.
+    """
+    canon = Canon(tmp_path / "c.jsonl")
+    for i in range(60):
+        add_skill(canon, "self", f"deploy filler {i}", how="...")
+    proven = add_skill(canon, "self", "deploy the release", how="the real one")
+    for _ in range(3):
+        record_rating(canon, proven["id"], 3)
+
+    got = recall_skills(canon, "deploy", limit=5)
+    assert any(s["object"] == "deploy the release" for s in got), (
+        "the proven skill was dropped by the candidate cap"
+    )
