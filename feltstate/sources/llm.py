@@ -32,7 +32,7 @@ import urllib.error
 import urllib.request
 from collections.abc import Sequence
 
-from .._net import require_http_url
+from .._net import open_url, require_http_url
 from ..config import DEFAULT_LABELS
 from ..state import AffectDelta, AffectState
 from .base import AffectSource, latest_user_text
@@ -197,7 +197,7 @@ class LLMSource(AffectSource):
             headers["Authorization"] = "Bearer " + self.api_key
 
         req = urllib.request.Request(self.url, data=data, headers=headers, method="POST")
-        with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+        with open_url(req, timeout=self.timeout) as resp:
             payload = resp.read().decode("utf-8", "replace")
         return json.loads(payload)
 

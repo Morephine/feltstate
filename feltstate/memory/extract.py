@@ -30,7 +30,7 @@ import urllib.request
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 
-from .._net import require_http_url
+from .._net import open_url, require_http_url
 from .canon import Canon
 
 
@@ -143,7 +143,7 @@ class LLMFactExtractor(FactExtractor):
         if self.api_key:
             headers["Authorization"] = "Bearer " + self.api_key
         req = urllib.request.Request(self.url, data=data, headers=headers, method="POST")
-        with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+        with open_url(req, timeout=self.timeout) as resp:
             payload = resp.read().decode("utf-8", "replace")
         return json.loads(payload)
 

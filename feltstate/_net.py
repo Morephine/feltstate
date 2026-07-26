@@ -48,3 +48,59 @@ def require_http_url(url: str) -> str:
     if not parts.hostname:
         raise ValueError(f"endpoint URL must include a host, got {url!r}")
     return url
+
+
+# --------------------------------------------------------------------------- #
+# Credential-safe redirects                                                    #
+# --------------------------------------------------------------------------- #
+#
+# ``urllib`` follows 301/302/303 by default, and its ``HTTPRedirectHandler``
+# strips only ``Content-Length`` and ``Content-Type`` when it rebuilds the
+# request. An ``Authorization: Bearer <api_key>`` header therefore survives the
+# hop and is re-sent, verbatim, to whatever host the redirect names — turning a
+# misconfigured or hijacked endpoint into a key disclosure. (``requests`` guards
+# this in ``Session.rebuild_auth``; ``httpx`` does not follow redirects at all
+# by default. Bare ``urllib`` is the one that leaks.)
+#
+# ``open_url`` below is a drop-in for ``urllib.request.urlopen`` that drops the
+# credential headers whenever the redirect crosses to a different origin
+# (scheme, host or port). Same-origin redirects keep them, so ordinary
+# path rewrites on your own endpoint still work. Exceptions are unchanged
+# (``HTTPError`` / ``URLError``), so callers need no other adjustment.
+
+import urllib.request as _urllib_request  # noqa: E402  (kept next to its use)
+
+_CREDENTIAL_HEADERS = ("authorization", "proxy-authorization", "cookie")
+
+
+class _StripCredentialsOnCrossOriginRedirect(_urllib_request.HTTPRedirectHandler):
+    """Redirect handler that does not carry credentials to another origin."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new_req = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new_req is None:
+            return None
+        old, new = urlsplit(req.full_url), urlsplit(newurl)
+        same_origin = (
+            old.scheme.lower() == new.scheme.lower()
+            and (old.hostname or "").lower() == (new.hostname or "").lower()
+            and old.port == new.port
+        )
+        if not same_origin:
+            for store in (new_req.headers, new_req.unredirected_hdrs):
+                for name in list(store):
+                    if name.lower() in _CREDENTIAL_HEADERS:
+                        del store[name]
+        return new_req
+
+
+_OPENER = _urllib_request.build_opener(_StripCredentialsOnCrossOriginRedirect)
+
+
+def open_url(req, timeout=None):
+    """``urlopen`` that will not hand your API key to a redirect target.
+
+    Use this instead of :func:`urllib.request.urlopen` for any request that
+    carries an ``Authorization`` header.
+    """
+    return _OPENER.open(req, timeout=timeout)

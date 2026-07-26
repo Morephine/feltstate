@@ -13,7 +13,7 @@ import json
 import urllib.error
 import urllib.request
 
-from .._net import require_http_url
+from .._net import open_url, require_http_url
 from .backend import LLMBackend
 
 
@@ -58,7 +58,7 @@ class OpenAICompatBackend(LLMBackend):
             method="POST",
         )
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+            with open_url(req, timeout=self.timeout) as resp:
                 payload = resp.read().decode("utf-8", "replace")
             raw = json.loads(payload)
         except (urllib.error.URLError, OSError, ValueError):
