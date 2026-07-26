@@ -184,6 +184,42 @@ def test_high_power_expresses_open_channel_for_sadness():
 
 
 # --------------------------------------------------------------------------- #
+# The release-duration knob means what it says                                #
+# --------------------------------------------------------------------------- #
+def test_release_duration_is_the_configured_number_of_minutes():
+    """One number per release type, and it is the length of the window.
+
+    The table used to hold ``(lo, hi)`` pairs and the code unpacked ``_lo, hi``:
+    only ``hi`` was ever read, so every release ran its maximum and the ``lo``
+    half of the documented range was fiction. Configuring a plain 7 raised
+    ``TypeError: cannot unpack non-iterable int``."""
+    from dataclasses import replace
+
+    cfg = replace(DEFAULT_CONFIG.pressure, release_duration_min={"tears": 7})
+    traits, rel = _high_power_state()
+    p = PressureState()
+    p.bars.sadness = 0.84
+    sad = AffectDelta(valence=-0.6, arousal=0.3, labels=["sad", "lonely"])
+
+    t = 0.0
+    while p.phase != "releasing" and t < 20:
+        step(
+            p, delta=sad, traits=traits, relationship=rel, dials=PersonaDials(), cfg=cfg, ts=_ts(t)
+        )
+        t += 1.0
+    assert p.release_type == "tears"
+    started = datetime.fromisoformat(p.release_started_ts)
+    assert datetime.fromisoformat(p.release_ends_ts) - started == timedelta(minutes=7)
+
+
+def test_default_release_durations_are_single_values():
+    """The shipped table is the same shape the code reads: minutes, not ranges."""
+    for name, minutes in DEFAULT_CONFIG.pressure.release_duration_min.items():
+        assert isinstance(minutes, (int, float)), f"{name} is not a plain minute count"
+        assert minutes > 0
+
+
+# --------------------------------------------------------------------------- #
 # Accumulation is suspended while venting; decay always runs                  #
 # --------------------------------------------------------------------------- #
 def test_no_accumulation_while_releasing():

@@ -538,7 +538,7 @@ def _select_release(
 
     # Too many bars high at once -> emotional flooding (collapse).
     if len(crossed) >= cfg.threshold_collapse:
-        _lo, hi = cfg.release_duration_min.get("collapse", (10, 20))
+        minutes = cfg.release_duration_min.get("collapse", 20)
         return {
             "primary_bar": crossed[0][0],
             "primary_release": "collapse",
@@ -549,7 +549,7 @@ def _select_release(
             "power": power,
             "power_band": power_band,
             "started_ts": started,
-            "ends_ts": (started_dt + timedelta(minutes=hi)).isoformat(),
+            "ends_ts": (started_dt + timedelta(minutes=minutes)).isoformat(),
             "all_bars_high": [c[0] for c in crossed],
         }
 
@@ -572,8 +572,16 @@ def _select_release(
             secondary_bar, secondary_release, is_hybrid = sec_bar, sec_release, True
 
     # Duration table is keyed by the open channel name; suppressed reuses it.
+    # One number per type: the length of the window. The table used to hold
+    # (lo, hi) pairs and both sites here unpacked `_lo, hi` — the lo end was
+    # never read by anything, so a release always ran its documented maximum and
+    # half of the advertised knob did nothing. Nothing here is stochastic (the
+    # cooker takes no rng and is deterministic by design) and no rule anywhere
+    # said where inside the range a given release should land, so the range was
+    # narrowed to the value the code was already using rather than inventing a
+    # mapping into it. Durations are unchanged.
     dur_key = primary_release.replace("_suppress", "")
-    _lo, hi = cfg.release_duration_min.get(dur_key, (5, 15))
+    minutes = cfg.release_duration_min.get(dur_key, 15)
     return {
         "primary_bar": primary_bar,
         "primary_release": primary_release,
@@ -584,7 +592,7 @@ def _select_release(
         "power": power,
         "power_band": power_band,
         "started_ts": started,
-        "ends_ts": (started_dt + timedelta(minutes=hi)).isoformat(),
+        "ends_ts": (started_dt + timedelta(minutes=minutes)).isoformat(),
     }
 
 

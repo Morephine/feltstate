@@ -158,16 +158,20 @@ class PressureConfig:
     )
     # valence-opposite mutual inhibition: you don't laugh while crying.
     inhibition: float = 0.60
-    # release duration (minutes, lo-hi) and lingering aftertaste (minutes) per type.
-    release_duration_min: Mapping[str, tuple[float, float]] = field(
+    # How long a release runs, and how long the aftertaste lingers after it —
+    # both in minutes, per type. One number each: these are the actual window
+    # lengths, not a range to sample inside. (They were written as (lo, hi) pairs
+    # and only the hi was ever read, so every release already ran exactly this
+    # long; the pairs promised a spread the deterministic cooker never had.)
+    release_duration_min: Mapping[str, float] = field(
         default_factory=lambda: MappingProxyType(
             {
-                "tears": (5, 15),
-                "anger": (1, 3),
-                "anxious": (5, 10),
-                "withdraw": (30, 60),
-                "burst_joy": (2, 5),
-                "collapse": (10, 20),
+                "tears": 15,
+                "anger": 3,
+                "anxious": 10,
+                "withdraw": 60,
+                "burst_joy": 5,
+                "collapse": 20,
             }
         )
     )
