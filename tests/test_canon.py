@@ -22,6 +22,8 @@ import json
 import logging
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from feltstate import Canon
 
 
@@ -632,3 +634,26 @@ def test_correct_onto_an_existing_fact_does_not_mint_a_duplicate_id(tmp_path):
     assert len(rows) == 1
     assert rows[0]["object"] == "likes tea"
     assert rows[0]["reinforced"] == 1  # the surviving row carried the belief forward
+
+
+def test_as_of_refuses_a_when_it_cannot_parse(tmp_path):
+    """A time the store cannot read is an error, not "no filter".
+
+    An unparseable ``when`` used to skip the temporal test entirely, so
+    ``as_of("kai", "last month")`` and ``as_of("kai", "")`` returned *both*
+    versions of a corrected belief — the superseded one and the one that
+    replaced it, rendered together as though both were held at once. That is a
+    wrong answer wearing the shape of a right one.
+    """
+    c = _canon(tmp_path)
+    c.add("kai", "works at company A")
+    c.correct("company A", object="works at company B")
+
+    # A real timestamp still filters: only the belief live now comes back.
+    now_iso = (datetime.now(timezone.utc) + timedelta(seconds=1)).isoformat()
+    assert [r["object"] for r in c.as_of("company", now_iso)] == ["works at company B"]
+
+    for bad in ("last month", "", "   ", "not a date", None):
+        with pytest.raises(ValueError) as exc:
+            c.as_of("company", bad)
+        assert "when" in str(exc.value)  # the error names the argument to fix

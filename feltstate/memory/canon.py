@@ -1077,9 +1077,25 @@ class Canon:
         each rendered. This answers "last month, what did you think my job was?":
         the belief that was active *then*, even if it has since been corrected.
         Bi-temporal, on a flat file, no graph.
+
+        ``when`` must be a parseable ISO-8601 timestamp; anything else — prose
+        like ``"last month"``, an empty string, ``None`` — raises
+        :class:`ValueError`. Converting a moment the caller cannot name into a
+        timestamp is the caller's job, not this method's.
         """
         target = str(keyword).lower()
+        # An unparseable `when` used to fall through as *no temporal filter*, and
+        # a query the store cannot answer came back looking answered: as_of("kai",
+        # "last month") and as_of("kai", "") returned every version of a belief —
+        # the superseded one and the one that replaced it, rendered side by side
+        # as though both held at once. That is the exact confusion this method
+        # exists to resolve, so silence here is not leniency, it is a wrong
+        # answer. Refuse instead, and name the argument that has to be fixed.
         w = _parse_ts(when)
+        if w is None:
+            raise ValueError(
+                f"as_of(): `when` must be a parseable ISO-8601 timestamp, got {when!r}"
+            )
         now = datetime.now(timezone.utc)
         out = []
         for e in self._load_confirmed():
@@ -1087,9 +1103,9 @@ class Canon:
                 continue
             va = _parse_ts(e.get("valid_at") or e.get("ts", ""))
             iv = _parse_ts(e["invalid_at"]) if e.get("invalid_at") else None
-            if va is None or (w is not None and va > w):
+            if va is None or va > w:
                 continue  # not yet true at `when`
-            if iv is not None and w is not None and iv <= w:
+            if iv is not None and iv <= w:
                 continue  # already invalidated by `when`
             out.append(self._render(e, now))
         out.sort(key=lambda r: _ts_key(r.get("valid_at"), r.get("ts")))
