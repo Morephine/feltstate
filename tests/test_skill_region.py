@@ -102,6 +102,45 @@ def test_utility_is_a_shrunk_mean_of_ratings():
 
 
 # --------------------------------------------------------------------------- #
+# add_skill: the view describes the record that was stored                    #
+# --------------------------------------------------------------------------- #
+def test_re_adding_a_known_skill_returns_its_real_track_record(tmp_path):
+    """Adding a skill that already exists reinforces it — and must say so.
+
+    The write path leaves the freshly-built entry unwritten in that case, but
+    the view was rendered from it anyway: a skill stored at {n3: 3, utility:
+    0.7} came back n1=n2=n3=0, ratings=0, utility=0.25 — the readout for a skill
+    that has never been tried.
+    """
+    c = _canon(tmp_path)
+    first = add_skill(c, "self", "rebuild the index", grey=False)
+    for _ in range(3):
+        record_rating(c, first["id"], 3, source="human")
+    on_disk = _meta_of(c, "rebuild the index")
+    assert on_disk["n3"] == 3  # the record we must be shown
+
+    again = add_skill(c, "self", "rebuild the index", grey=False)
+
+    assert len(_skills_in(c.path)) == 1  # reinforced, not duplicated
+    assert again["id"] == first["id"]
+    assert (again["n1"], again["n2"], again["n3"]) == (0, 0, 3)
+    assert again["ratings"] == 3
+    assert again["utility"] == pytest.approx(on_disk["utility"])
+    assert again["reinforced"] >= 1  # the stored record's bookkeeping, not a blank one
+
+
+def test_first_add_of_a_skill_still_describes_the_new_record(tmp_path):
+    """The other branch: nothing existed, so the view is of the row just appended."""
+    c = _canon(tmp_path)
+    s = add_skill(c, "self", "brand new craft", why="for the odd jobs", how="step one", grey=True)
+    assert s["object"] == "brand new craft"
+    assert s["why"] == "for the odd jobs"
+    assert s["how"] == "step one"
+    assert s["ratings"] == 0 and s["proven"] is False
+    assert s["utility"] == pytest.approx(c.cfg.skill_seed)
+
+
+# --------------------------------------------------------------------------- #
 # record_rating: counts, observed-source gate, create-on-miss                    #
 # --------------------------------------------------------------------------- #
 def test_rating_updates_counts_and_utility(tmp_path):

@@ -166,7 +166,9 @@ def add_skill(
     skill, but never permanent (base intensity hard-capped below ``permanent_above``
     so no skill becomes always-resident). ``why`` is what the skill is for; ``how``
     is the optional procedure body (kept on the entry and matchable). Returns the
-    rendered skill view.
+    rendered view of the skill that ended up on disk — which, when this capability
+    was already known, is the existing record carrying its real track record, not
+    the blank one this call proposed.
     """
     cfg = cfg or canon.cfg
     path = canon.pending_path if grey else canon.path
@@ -190,8 +192,23 @@ def add_skill(
         meta["last_rating_ts"] = ts
     meta["utility"] = _utility(meta, cfg)
     entry["skill"] = meta
-    canon._write_or_reinforce(path, entry)
-    return _skill_view(canon, entry, proven=not grey)
+    # Render what the store actually holds, not the draft above. Skills dedup by
+    # (region | actor | capability), so adding one that already exists reinforces
+    # the stored record and leaves `entry` — with its fresh, empty meta —
+    # unwritten. Rendering it anyway reported a proven skill as brand new: a
+    # record sitting at {n3: 3, utility: 0.7} came back n1=n2=n3=0, ratings=0,
+    # utility=0.25 (the prior seed), which is the readout for "never tried". A
+    # caller that re-registers its skills on startup would see its whole rated
+    # library reset to unrated and rate it all over again. Read back under the
+    # same lock the write took (reentrant) so nothing lands in between.
+    with _write_lock(path):
+        canon._write_or_reinforce(path, entry)
+        eid = _entry_id(entry)
+        stored = next(
+            (e for e in _load_jsonl(path) if _entry_id(e) == eid and canon._is_active(e)),
+            entry,
+        )
+    return _skill_view(canon, stored, proven=not grey)
 
 
 # --------------------------------------------------------------------------- #
