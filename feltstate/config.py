@@ -12,8 +12,18 @@ through :class:`PersonaDials` (passed in per agent), not through code.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import Any
+
+# Every table below is wrapped in a MappingProxyType. ``frozen=True`` only stops
+# the *attribute* being rebound — the dict behind it stayed writable, and
+# DEFAULT_CONFIG is the default argument of every Engine, so one line
+# (``DEFAULT_CONFIG.pressure.power_weights["safety"] = 99``) silently retuned the
+# power appraisal of every engine in the process, including ones already built.
+# The fields are typed as read-only Mappings; a caller may still pass an ordinary
+# dict of their own — it is only the *shared* defaults that must not be writable.
 
 
 # --------------------------------------------------------------------------- #
@@ -43,13 +53,15 @@ class TraitConfig:
     clamp_hi: float = 0.95  #   should always be able to nudge it
     # Asymmetric relaxation back to 0.5 baseline. This asymmetry *is* the model
     # of "good moods fade fast, bad moods linger" (hedonic adaptation + rumination).
-    baseline_pull: dict = field(
-        default_factory=lambda: {
-            "depression": 0.005,  # sticky — sadness lingers
-            "anxiety": 0.005,  # sticky
-            "optimism": 0.040,  # fades ~8x faster than depression lingers
-            "curiosity": 0.030,  # fades once the novelty is gone
-        }
+    baseline_pull: Mapping[str, float] = field(
+        default_factory=lambda: MappingProxyType(
+            {
+                "depression": 0.005,  # sticky — sadness lingers
+                "anxiety": 0.005,  # sticky
+                "optimism": 0.040,  # fades ~8x faster than depression lingers
+                "curiosity": 0.030,  # fades once the novelty is gone
+            }
+        )
     )
     baseline: float = 0.5
 
@@ -133,37 +145,43 @@ class PressureConfig:
     power_threshold: float = 0.50  # power above this -> express; below -> suppress
     # Power = perceived control / self-efficacy (Lazarus appraisal, Bandura).
     # Weights sum to 1.0. High power -> dares to express; low -> suppresses.
-    power_weights: dict = field(
-        default_factory=lambda: {
-            "optimism": 0.32,
-            "depression_inv": 0.27,
-            "anxiety_inv": 0.16,
-            "safety": 0.15,
-            "closeness": 0.10,
-        }
+    power_weights: Mapping[str, float] = field(
+        default_factory=lambda: MappingProxyType(
+            {
+                "optimism": 0.32,
+                "depression_inv": 0.27,
+                "anxiety_inv": 0.16,
+                "safety": 0.15,
+                "closeness": 0.10,
+            }
+        )
     )
     # valence-opposite mutual inhibition: you don't laugh while crying.
     inhibition: float = 0.60
     # release duration (minutes, lo-hi) and lingering aftertaste (minutes) per type.
-    release_duration_min: dict = field(
-        default_factory=lambda: {
-            "tears": (5, 15),
-            "anger": (1, 3),
-            "anxious": (5, 10),
-            "withdraw": (30, 60),
-            "burst_joy": (2, 5),
-            "collapse": (10, 20),
-        }
+    release_duration_min: Mapping[str, tuple[float, float]] = field(
+        default_factory=lambda: MappingProxyType(
+            {
+                "tears": (5, 15),
+                "anger": (1, 3),
+                "anxious": (5, 10),
+                "withdraw": (30, 60),
+                "burst_joy": (2, 5),
+                "collapse": (10, 20),
+            }
+        )
     )
-    aftertaste_duration_min: dict = field(
-        default_factory=lambda: {
-            "tears": 30,
-            "anger": 45,
-            "anxious": 20,
-            "withdraw": 60,
-            "burst_joy": 15,
-            "collapse": 90,
-        }
+    aftertaste_duration_min: Mapping[str, float] = field(
+        default_factory=lambda: MappingProxyType(
+            {
+                "tears": 30,
+                "anger": 45,
+                "anxious": 20,
+                "withdraw": 60,
+                "burst_joy": 15,
+                "collapse": 90,
+            }
+        )
     )
 
 
