@@ -313,3 +313,47 @@ def test_agent_scale_makes_mid_layer_integrate():
     assert DEFAULT_CONFIG.pressure.label_pressure_scale == 1.0
     custom = dc_replace(cfg, label_pressure_scale=2.0)
     assert custom.label_pressure_scale == 2.0
+
+
+def test_anticipation_is_a_floor_not_a_ratchet():
+    """A standing anticipation must hold joy up, not pump it to a release.
+
+    The anticipation term was max()-ed into the joy *inflow*, so it was added
+    again every tick: a live anticipation climbed monotonically to the release
+    threshold and fired burst_joy out of nothing. It was also the only
+    continuous inflow not scaled by elapsed time, so whether it fired at all
+    depended on the tick cadence.
+    """
+    t0 = datetime(2030, 1, 1, tzinfo=timezone.utc)
+    ant = AffectDelta(
+        valence=0.0,
+        arousal=0.3,
+        confidence=0.05,
+        anticipation={"valence": 0.6, "weight": 0.5},
+    )
+
+    def run(cadence: int, minutes: int = 60) -> tuple[float, str]:
+        p = PressureState()
+        traits, rel, dials = Traits(), Relationship(), PersonaDials()
+        for i in range(minutes // cadence):
+            step(
+                p,
+                delta=ant,
+                traits=traits,
+                relationship=rel,
+                dials=dials,
+                cfg=DEFAULT_CONFIG.pressure,
+                ts=(t0 + timedelta(minutes=cadence * (i + 1))).isoformat(),
+                elapsed_ticks=float(cadence),
+            )
+        return p.bars.joy, p.phase
+
+    at_1, phase_1 = run(1)
+    at_5, phase_5 = run(5)
+    at_30, phase_30 = run(30)
+
+    # It holds a floor, and an hour of anticipating does not become a release.
+    assert phase_1 == phase_5 == phase_30 == "calm"
+    # And the floor is the same however often we ticked.
+    assert at_1 == pytest.approx(at_5) == pytest.approx(at_30)
+    assert 0.0 < at_1 < 0.5

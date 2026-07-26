@@ -244,14 +244,15 @@ def _accumulate(
     # carries a schedule (``event_ts`` + ``since_ts``), the floor ramps from
     # registration up toward the event — excitement building as it nears. Optional.
     ant = delta.anticipation
+    joy_floor = 0.0
     if isinstance(ant, dict):
-        a_v = float(ant.get("valence", 0.0))
-        a_w = float(ant.get("weight", 0.0))
+        a_v = _finite(ant.get("valence", 0.0), 0.0)
+        a_w = _finite(ant.get("weight", 0.0), 0.0)
         if a_v > 0 and a_w > 0:
             progress = _anticipation_progress(ant, ts)
             # Floor scaled by idle_decay / ref so it outlasts the per-tick
             # cooling it competes with; both knobs are named in PressureConfig.
-            floor = (
+            joy_floor = (
                 cfg.anticipation_gain
                 * a_v
                 * a_w
@@ -259,7 +260,6 @@ def _accumulate(
                 * cfg.idle_decay
                 / cfg.anticipation_ref_decay
             )
-            inflow["joy"] = max(inflow["joy"], floor)
 
     # --- (3) milestone shocks ---
     for m in delta.milestones or []:
@@ -286,6 +286,23 @@ def _accumulate(
     for k in BAR_NAMES:
         gain = _plast_gain(pressure, k, cfg) if cfg.plasticity else 1.0
         setattr(pressure.bars, k, getattr(pressure.bars, k) + inflow[k] * gain)
+
+    # An anticipated good thing keeps a little joy in the tank — a FLOOR under
+    # the bar, applied after the commit, not an inflow added to it.
+    #
+    # It used to be max()-ed into inflow["joy"], which meant it was added again
+    # on every tick: a standing anticipation ratcheted the bar monotonically up
+    # to the release threshold and fired burst_joy out of nothing (measured:
+    # calm -> building in five minutes, releasing in six). It was also the only
+    # continuous inflow not scaled by `ticks`, so the climb depended on how
+    # often step() happened to be called — the same anticipation reached
+    # releasing at a 1-minute cadence and stayed at zero at 5 minutes. And via
+    # mutual inhibition below it silently drained sadness and anger every tick.
+    #
+    # As a floor it does what the docstring says: while the anticipation is
+    # live the joy bar cannot fall below it, and it cannot push it any higher.
+    if joy_floor > 0.0:
+        pressure.bars.joy = max(pressure.bars.joy, min(1.0, joy_floor))
 
 
 # --------------------------------------------------------------------------- #
