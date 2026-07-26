@@ -400,8 +400,13 @@ class Canon:
         )
         return derive(prof)
 
-    def _current_intensity(self, entry: dict, now: datetime) -> float:
+    def _current_intensity(self, entry: dict, now: datetime, *, damp_flat: bool = True) -> float:
         """Salience an entry should be shown at *now*, after decay and boosts.
+
+        ``damp_flat`` applies ``cfg.salience_charge_weight``, which dampens the
+        *shown* salience of emotionally flat facts. Pass ``False`` where the
+        number decides whether a fact is **kept on disk** rather than how
+        prominently it is displayed — see :meth:`compact`.
 
         Permanent entries (``base >= permanent_above``) hold their base intensity.
         The decay curve is ``cfg.decay_curve``: ``"linear"`` is the additive
@@ -447,7 +452,7 @@ class Canon:
             current = base - age_days * dpd + reinforce * cfg.reinforce_boost + recall_boost
 
         scw = cfg.salience_charge_weight
-        if scw > 0.0:
+        if damp_flat and scw > 0.0:
             current *= 1.0 - scw * (1.0 - sig["charge"])
         return max(0.0, current)
 
@@ -1144,7 +1149,17 @@ class Canon:
                     # Keep it in the main file, verbatim, so those methods still work.
                     kept.append(e)
                     continue
-                tier = self._tier(self._current_intensity(e, now))
+                # Retention, not presentation: do NOT apply
+                # salience_charge_weight here. That knob is documented as
+                # dampening the *shown* salience of emotionally flat facts, but
+                # it multiplies into _current_intensity, which feeds _tier, which
+                # decides what this method physically drops. Canon.add() without
+                # emotion= writes no affect field (nor does extract.commit_to_
+                # canon), so those facts carry charge 0 and were scaled by
+                # (1 - scw) — at scw=0.9 an entire ordinary store tiered to
+                # "forgotten" and compact() deleted it. A display dial must not
+                # be able to erase memories.
+                tier = self._tier(self._current_intensity(e, now, damp_flat=False))
                 if tier == "visible":
                     kept.append(e)
                 elif tier == "archived":

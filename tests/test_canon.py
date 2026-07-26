@@ -426,3 +426,40 @@ def test_recall_candidate_cap_keeps_the_strongest_not_the_oldest(tmp_path):
     )
     # And the two APIs agree that it exists.
     assert any("cat" == (r.get("object") or "").strip() for r in canon.search("cat"))
+
+
+def test_display_dial_cannot_delete_memories(tmp_path):
+    """``salience_charge_weight`` dampens what is SHOWN. It must not decide what
+    is KEPT.
+
+    The knob multiplies into ``_current_intensity``, which feeds ``_tier``,
+    which is what ``compact()`` uses to physically drop facts. ``Canon.add()``
+    without ``emotion=`` writes no affect field (nor does
+    ``extract.commit_to_canon``), so ordinary facts carry charge 0 and were
+    scaled by ``(1 - scw)``: at 0.9 an entire everyday store tiered to
+    "forgotten" and compaction deleted it — main file *and* archive.
+    """
+    from dataclasses import replace as _replace
+
+    from feltstate.config import DEFAULT_CONFIG
+
+    for scw in (0.0, 0.5, 0.9):
+        cfg = _replace(DEFAULT_CONFIG.memory, salience_charge_weight=scw)
+        path = tmp_path / f"c_{scw}.jsonl"
+        canon = Canon(path, cfg=cfg)
+        canon.add("kai", "likes tea")
+        canon.add("kai", "works late")
+
+        canon.compact()
+
+        rows = [ln for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+        archived = tmp_path / f"c_{scw}.archived.jsonl"
+        arch_rows = (
+            [ln for ln in archived.read_text(encoding="utf-8").splitlines() if ln.strip()]
+            if archived.exists()
+            else []
+        )
+        assert len(rows) + len(arch_rows) == 2, (
+            f"salience_charge_weight={scw} deleted stored facts "
+            f"(main={len(rows)}, archived={len(arch_rows)})"
+        )
