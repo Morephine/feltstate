@@ -2,6 +2,8 @@
 plus committing them to a Canon. Mirrors the affect-source contract: separate
 pass, never raises."""
 
+import json
+
 import pytest
 
 from feltstate.memory import Canon, LLMFactExtractor, commit_to_canon
@@ -236,3 +238,34 @@ def test_commit_to_canon_default_intensity_used_when_missing(tmp_path):
     stored = commit_to_canon([{"object": "a fact"}], canon, grey_zone=False, default_intensity=0.7)
     assert len(stored) == 1
     assert stored[0]["base_intensity"] == pytest.approx(0.7, abs=1e-3)
+
+
+def test_commit_to_canon_sanitises_model_supplied_intensity(tmp_path):
+    """``commit_to_canon`` takes any extractor's output, so it must clamp too.
+
+    ``_clean_facts`` guards the ``LLMFactExtractor`` path, but this entry point
+    wrote the model's number straight through: 42.0 cleared ``permanent_above``
+    and minted a memory that could never decay, and NaN reached the jsonl as a
+    bare ``NaN`` token that no strict JSON reader accepts.
+    """
+
+    def reject(constant):  # what a non-Python JSON reader does with NaN/Infinity
+        raise ValueError(f"not portable JSON: {constant}")
+
+    canon = Canon(tmp_path / "canon.jsonl")
+    stored = commit_to_canon(
+        [
+            {"object": "wildly over the top", "intensity": 42.0},
+            {"object": "under the floor", "intensity": -5.0},
+            {"object": "not a number at all", "intensity": float("nan")},
+            {"object": "infinite", "intensity": float("inf")},
+        ],
+        canon,
+        grey_zone=False,
+        default_intensity=0.5,
+    )
+    assert [s["base_intensity"] for s in stored] == [1.0, 0.0, 0.5, 0.5]
+
+    raw = (tmp_path / "canon.jsonl").read_text(encoding="utf-8")
+    for line in raw.splitlines():
+        json.loads(line, parse_constant=reject)  # strict JSON, no Python dialect

@@ -25,6 +25,7 @@ its back.
 from __future__ import annotations
 
 import json
+import math
 import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
@@ -163,7 +164,9 @@ def commit_to_canon(
     behind its back). Pass ``grey_zone=False`` to add directly to the confirmed
     store when you trust the extractor.
 
-    Facts missing an ``object`` are skipped.
+    Facts missing an ``object`` are skipped. ``intensity`` is whatever a model
+    said it was, so it is clamped to [0, 1] and a non-finite value falls back to
+    ``default_intensity``.
     """
     stored: list[dict] = []
     for f in facts or []:
@@ -173,8 +176,18 @@ def commit_to_canon(
         actor = str(f.get("actor", "") or "user").strip() or "user"
         why = str(f.get("why", "") or "")
         when = str(f.get("when", "") or "")
+        # Sanitise the number before it reaches the store. _clean_facts clamps
+        # for the LLMFactExtractor path, but this function is exported and takes
+        # *any* FactExtractor's output, so a raw model number came through here
+        # unchecked: intensity=42.0 clears permanent_above (0.85) and mints a
+        # memory that can never decay or be compacted away, and intensity=NaN
+        # serialised to a bare `NaN` token — a jsonl row Python's json will read
+        # back and a strict JSON reader will not. NaN has no honest place on a
+        # 0..1 scale, so it is treated as "the model said nothing".
         intensity = f.get("intensity")
-        intensity = float(intensity) if isinstance(intensity, (int, float)) else default_intensity
+        if not isinstance(intensity, (int, float)) or not math.isfinite(intensity):
+            intensity = default_intensity
+        intensity = max(0.0, min(1.0, float(intensity)))
         write = canon.ask if grey_zone else canon.add
         stored.append(write(actor, obj, why=why, when=when, intensity=intensity))
     return stored
