@@ -134,6 +134,27 @@ def _parse_ts(ts_iso: str) -> datetime | None:
     return ts
 
 
+_EPOCH = datetime(1, 1, 1, tzinfo=timezone.utc)
+
+
+def _ts_key(*candidates: str | None) -> datetime:
+    """Sort key for a record's time: the first parseable stamp, as an instant.
+
+    Ordering on the raw ISO *string* compares text, not time. ``_now_iso`` uses
+    ``.astimezone()`` (the local offset), so a machine that observes DST writes
+    mixed offsets into one file, and then ``2026-10-25T02:30:00+02:00`` (00:30
+    UTC) sorts *after* ``2026-10-25T02:15:00+01:00`` (01:15 UTC, 45 minutes
+    later) — newest-first and oldest-first both come out inverted. An
+    unparseable stamp sorts oldest rather than by its text.
+    """
+    for c in candidates:
+        if c:
+            parsed = _parse_ts(c)
+            if parsed is not None:
+                return parsed
+    return _EPOCH
+
+
 def _entry_id(entry: dict) -> str:
     """Stable id derived from ``(actor | object)``.
 
@@ -647,7 +668,16 @@ class Canon:
     ) -> dict:
         new_id = _entry_id(entry)
         existing = _load_jsonl(path)
-        for e in existing:
+        # Dedup has to see the archived sidecar too, not just the main store.
+        # Compaction moves a dim fact out to `archived_path`; mentioning it again
+        # then found no match here and appended a *second* row with the same id,
+        # forking the memory: its reinforce count and affect history restarted at
+        # zero while the older row sat in the archive holding the real history.
+        # confirm() already unions the two files for exactly this reason.
+        archived: list[dict] = []
+        if path == self.path and self.archived_path.is_file():
+            archived = _load_jsonl(self.archived_path)
+        for e in existing + archived:
             if not self._is_active(e):
                 continue
             if _entry_id(e) == new_id:
@@ -667,7 +697,18 @@ class Canon:
                         prof, w = neutral_profile(), self.cfg.sentiment_prior_weight
                     prof, w = blend(prof, w, observe(emotion), confidence)
                     e["affect"] = _affect_field(prof, w)
-                _rewrite_jsonl(path, existing)
+                if e in existing:
+                    _rewrite_jsonl(path, existing)
+                else:
+                    # The match lived in the archive: recalling it back into use
+                    # promotes it to the main store (main wins in _load_confirmed)
+                    # and drops the stale archived copy, so exactly one row holds
+                    # the fact.
+                    _rewrite_jsonl(path, existing + [e])
+                    _rewrite_jsonl(
+                        self.archived_path,
+                        [a for a in archived if _entry_id(a) != new_id],
+                    )
                 return self._render(e, datetime.now(timezone.utc))
         _append_jsonl(path, entry)
         return self._render(entry, datetime.now(timezone.utc))
@@ -928,9 +969,31 @@ class Canon:
                 new_entry["confidence"] = float(confidence)
 
             new_id = _entry_id(new_entry)
+
+            # Correcting a fact onto wording that another ACTIVE fact already
+            # holds would leave two live rows sharing an id — the exact state
+            # confirm()'s contract promises never to produce, and which makes
+            # every later search / correct / retract on that id ambiguous
+            # (retract would hide only one of them). Fold into the existing row
+            # instead: supersede the corrected fact and let the row that already
+            # says this carry the belief forward, reinforced.
+            collision = next(
+                (
+                    e
+                    for e in entries
+                    if e is not old and self._is_active(e) and _entry_id(e) == new_id
+                ),
+                None,
+            )
             old["_superseded_by"] = new_id
             old["_superseded_at"] = now_iso
             old["invalid_at"] = now_iso  # M3: the old belief stopped being true now
+            if collision is not None:
+                collision["_reinforce_count"] = int(collision.get("_reinforce_count", 0)) + 1
+                collision["_last_reinforced"] = now_iso
+                collision["ts"] = now_iso
+                _rewrite_jsonl(self.path, entries)
+                return self._render(collision, datetime.now(timezone.utc))
             entries.append(new_entry)
             _rewrite_jsonl(self.path, entries)
             return self._render(new_entry, datetime.now(timezone.utc))
@@ -979,7 +1042,7 @@ class Canon:
                 else:
                     r["status"] = "active"
                 out.append(r)
-        out.sort(key=lambda r: r.get("valid_at") or r.get("ts") or "")
+        out.sort(key=lambda r: _ts_key(r.get("valid_at"), r.get("ts")))
         return out
 
     def as_of(self, keyword: str, when: str) -> list[dict]:
@@ -1005,7 +1068,7 @@ class Canon:
             if iv is not None and w is not None and iv <= w:
                 continue  # already invalidated by `when`
             out.append(self._render(e, now))
-        out.sort(key=lambda r: r.get("valid_at") or r.get("ts") or "")
+        out.sort(key=lambda r: _ts_key(r.get("valid_at"), r.get("ts")))
         return out
 
     # ------------------------------------------------------------------ #
@@ -1052,7 +1115,7 @@ class Canon:
 
         rendered = [self._render(e, now) for e in hits]
         # Most salient first; ties broken by recency (newer ts first).
-        rendered.sort(key=lambda r: (r["intensity"], r["ts"]), reverse=True)
+        rendered.sort(key=lambda r: (r["intensity"], _ts_key(r["ts"])), reverse=True)
         return rendered
 
     def recall(
@@ -1170,7 +1233,7 @@ class Canon:
             if self._tier(current) in wanted:
                 out.append(self._render(e, now))
         # Most vivid first; ties broken by recency (newer ts first).
-        out.sort(key=lambda r: (r["intensity"], r["ts"]), reverse=True)
+        out.sort(key=lambda r: (r["intensity"], _ts_key(r["ts"])), reverse=True)
         return out
 
     # ------------------------------------------------------------------ #

@@ -500,3 +500,101 @@ def test_confirm_by_a_schema_word_does_not_promote_the_whole_grey_zone(tmp_path)
 
     still_pending = canon.view(include_archived=True)
     assert not any(r["object"].startswith("might ") for r in still_pending)
+
+
+def test_mentioning_an_archived_fact_again_does_not_fork_it(tmp_path):
+    """Dedup has to see the archived sidecar, not just the main store.
+
+    Compaction moves a dim fact out to ``canon.archived.jsonl``. Mentioning it
+    again found no match in the main file and appended a *second* row carrying
+    the same id: the memory forked, its reinforce count and affect history
+    restarting at zero while the older row sat in the archive holding the real
+    history. ``confirm()`` already unions both files for exactly this reason.
+    """
+    import json as _json
+    from datetime import timedelta
+
+    path = tmp_path / "c.jsonl"
+    archived = tmp_path / "c.archived.jsonl"
+
+    canon = Canon(path)
+    canon.add("kai", "likes tea", intensity=0.6)
+    canon.add("kai", "likes tea", intensity=0.6)  # reinforce -> count 1
+
+    # Age it into the archived band and compact it out of the main store.
+    rows = [_json.loads(ln) for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    old = (datetime.now(timezone.utc) - timedelta(days=40)).isoformat()
+    for r in rows:
+        r["ts"] = old
+    path.write_text(
+        "\n".join(_json.dumps(r, ensure_ascii=False) for r in rows) + "\n", encoding="utf-8"
+    )
+    Canon(path).compact()
+    assert archived.is_file()
+
+    rendered = Canon(path).add("kai", "likes tea", intensity=0.6)
+
+    main_rows = [
+        _json.loads(ln) for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()
+    ]
+    arch_rows = [
+        _json.loads(ln) for ln in archived.read_text(encoding="utf-8").splitlines() if ln.strip()
+    ]
+    # Exactly one row holds the fact, and it kept its history.
+    assert len(main_rows) + len(arch_rows) == 1
+    assert rendered["reinforced"] == 2
+
+
+def test_ordering_is_by_instant_not_by_timestamp_text(tmp_path):
+    """Mixed UTC offsets in one file must still sort by real time.
+
+    ``_now_iso`` stamps with the local offset, so a machine that observes DST
+    writes both ``+02:00`` and ``+01:00`` into the same store across the
+    changeover. Sorting on the raw ISO string then compares text: 02:30+02:00
+    (00:30 UTC) sorted after 02:15+01:00 (01:15 UTC, 45 minutes later), which
+    inverted both ``view()``'s newest-first tie-break and ``history()``'s
+    oldest-first order.
+    """
+    import json as _json
+
+    path = tmp_path / "c.jsonl"
+    canon = Canon(path)
+    canon.add("kai", "before the change")
+    canon.add("kai", "after the change")
+
+    rows = [_json.loads(ln) for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    # Same intensity; only the stamps differ. Text order is the reverse of time order.
+    earlier = "2026-10-25T02:30:00+02:00"  # 00:30 UTC
+    later = "2026-10-25T02:15:00+01:00"  # 01:15 UTC — 45 minutes AFTER
+    rows[0]["ts"] = rows[0]["valid_at"] = earlier
+    rows[1]["ts"] = rows[1]["valid_at"] = later
+    path.write_text(
+        "\n".join(_json.dumps(r, ensure_ascii=False) for r in rows) + "\n", encoding="utf-8"
+    )
+
+    hist = Canon(path).history("kai")
+    stamps = [h.get("valid_at") or h.get("ts") for h in hist]
+    assert stamps == [earlier, later], "history() must run oldest -> newest by instant"
+
+
+def test_correct_onto_an_existing_fact_does_not_mint_a_duplicate_id(tmp_path):
+    """Correcting onto wording another active fact already holds must fold, not fork.
+
+    Ids derive from ``(actor | object)``, so correcting "likes coffee" to
+    "likes tea" when "likes tea" is already on file produced two ACTIVE rows
+    sharing one id — the state ``confirm()``'s contract says never to leave,
+    because it makes every later search / correct / retract on that id
+    ambiguous (``retract`` hid only one of them).
+    """
+    canon = Canon(tmp_path / "c.jsonl")
+    canon.add("kai", "likes tea")
+    coffee = canon.add("kai", "likes coffee")
+
+    canon.correct(coffee["id"], object="likes tea")
+
+    rows = canon.view()
+    ids = [r["id"] for r in rows]
+    assert len(ids) == len(set(ids)), "correct() left two active rows with the same id"
+    assert len(rows) == 1
+    assert rows[0]["object"] == "likes tea"
+    assert rows[0]["reinforced"] == 1  # the surviving row carried the belief forward
