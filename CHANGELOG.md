@@ -23,8 +23,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   setting beats a cheap one at full tilt, while kinship judging is many tiny
   votes on pre-narrowed candidates, exactly what small fast models are for
   (`extract.LLMFactExtractor`); and *the digest stays in-process* — a digest
-  that shells out loses the transaction, because the write lock does not
-  cross the process boundary (`keyweb.digest_canon`).
+  that shells out loses the transaction: the re-entrant in-process lock is
+  the guarantee, and the file lock underneath it is best-effort (absent
+  where `fcntl` is unavailable), so the only footing that always holds is
+  inside the process that owns the store (`keyweb.digest_canon`).
 - **Provenance and birth affect on the ledger row** (`Canon.add` / `Canon.ask`
   / `extract`): facts can now carry `sources` — opaque provenance pointers the
   store saves verbatim and never interprets — and `birth_affect`, the felt

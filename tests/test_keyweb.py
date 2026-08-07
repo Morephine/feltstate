@@ -85,10 +85,10 @@ def test_admission_floor_rises_with_age_gap():
 
 
 def test_collide_looks_backward_and_prices_birth_intensity():
-    old_strong = _entry("kai", "the rent dispute", intensity=0.8, days_ago=400, keys=["rent", "dispute"])
-    old_faint = _entry("kai", "rent passing mention", intensity=0.15, days_ago=400, keys=["rent", "dispute"])
-    newer = _entry("kai", "tomorrow's fact", intensity=0.9, days_ago=-2, keys=["rent"])
-    nb = _entry("kai", "rent came up again", intensity=0.5, keys=["rent", "dispute"])
+    old_strong = _entry("ash", "the rent dispute", intensity=0.8, days_ago=400, keys=["rent", "dispute"])
+    old_faint = _entry("ash", "rent passing mention", intensity=0.15, days_ago=400, keys=["rent", "dispute"])
+    newer = _entry("ash", "tomorrow's fact", intensity=0.9, days_ago=-2, keys=["rent"])
+    nb = _entry("ash", "rent came up again", intensity=0.5, keys=["rent", "dispute"])
     ledger = [old_strong, old_faint, newer, nb]
 
     reports = collide(nb, ledger)
@@ -102,8 +102,8 @@ def test_collide_looks_backward_and_prices_birth_intensity():
 
 
 def test_day_digest_writes_edges_on_both_rows_only_with_a_judge():
-    old = _entry("kai", "the rent dispute", intensity=0.8, days_ago=30, keys=["rent", "dispute"])
-    nb = _entry("kai", "rent resolved at last", intensity=0.7, keys=["rent", "dispute"])
+    old = _entry("ash", "the rent dispute", intensity=0.8, days_ago=30, keys=["rent", "dispute"])
+    nb = _entry("ash", "rent resolved at last", intensity=0.7, keys=["rent", "dispute"])
     ledger = [old, nb]
 
     dry = day_digest([nb], ledger, judge=None)
@@ -123,8 +123,8 @@ def test_day_digest_writes_edges_on_both_rows_only_with_a_judge():
 def test_digest_canon_persists_edges_transactionally(tmp_path):
     path = tmp_path / "canon.jsonl"
     c = Canon(path)
-    old = _entry("kai", "the rent dispute", intensity=0.8, days_ago=30, keys=["rent", "dispute"])
-    nb = _entry("kai", "rent resolved at last", intensity=0.7, keys=["rent", "dispute"])
+    old = _entry("ash", "the rent dispute", intensity=0.8, days_ago=30, keys=["rent", "dispute"])
+    nb = _entry("ash", "rent resolved at last", intensity=0.7, keys=["rent", "dispute"])
     path.write_text(json.dumps(old) + "\n" + json.dumps(nb) + "\n", encoding="utf-8")
 
     from feltstate.memory.canon import _entry_id
@@ -136,3 +136,78 @@ def test_digest_canon_persists_edges_transactionally(tmp_path):
     by_obj = {r["what"]["object"]: r for r in rows}
     assert by_obj["rent resolved at last"]["relates"][0]["to"] == _entry_id(old)
     assert by_obj["the rent dispute"]["relates"][0]["to"] == _entry_id(nb)
+
+
+def test_retracted_rows_neither_collide_nor_take_keys(tmp_path):
+    """Dead rows are history, not memory (review fix): a retracted fact is no
+    candidate, gains no edges, and refuses key imprinting via imprint_into."""
+    import json
+
+    from feltstate import Canon
+    from feltstate.memory.keyweb import SharedKeyJudge, digest_canon, imprint_into
+
+    c = Canon(tmp_path / "canon.jsonl")
+    c.add("ash", "keeps a garden", intensity=0.6)
+    c.retract("keeps a garden")
+    c.add("ash", "waters the roses", intensity=0.6)
+
+    rows = [json.loads(l) for l in (tmp_path / "canon.jsonl").read_text(encoding="utf-8").splitlines()]
+    retracted_id = next(r for r in rows if r.get("_retracted"))
+    live = [r for r in rows if not r.get("_retracted")]
+
+    # Seed keys: the retracted row would share both keys if it were a candidate.
+    assert imprint_into(c, retracted_id["id"] if "id" in retracted_id else __import__("feltstate.memory.keyweb", fromlist=["_entry_id"])._entry_id(retracted_id), ["garden", "roses"]) is None
+
+    from feltstate.memory.keyweb import _entry_id, imprint_keys
+
+    raw = [json.loads(l) for l in (tmp_path / "canon.jsonl").read_text(encoding="utf-8").splitlines()]
+    for r in raw:
+        imprint_keys(r, ["garden", "roses"])
+    (tmp_path / "canon.jsonl").write_text(
+        "\n".join(json.dumps(r, ensure_ascii=False) for r in raw) + "\n", encoding="utf-8"
+    )
+
+    newcomer_id = _entry_id(next(r for r in raw if not (r.get("_retracted") or r.get("_superseded_by")) and "roses" in str(r.get("what"))))
+    report = digest_canon(c, [newcomer_id], SharedKeyJudge())
+    final = [json.loads(l) for l in (tmp_path / "canon.jsonl").read_text(encoding="utf-8").splitlines()]
+    dead = next(r for r in final if r.get("_retracted"))
+    assert not dead.get("relates"), "retracted row must gain no edges"
+    for e in final:
+        tos = [x["to"] for x in e.get("relates", [])]
+        assert _entry_id(dead) not in tos, "no edge may point at a retracted row"
+
+
+def test_no_duplicate_edges_when_ledger_holds_same_id_twice():
+    """Review fix: two same-id rows in the pool yield one edge, not two."""
+    from feltstate.memory.keyweb import SharedKeyJudge, _entry_id, day_digest, imprint_keys
+
+    old_a = {"who": {"actor": "ash"}, "what": {"object": "likes rain"}, "intensity": 0.9,
+             "ts": "2026-01-01T10:00:00+00:00", "valid_at": "2026-01-01T10:00:00+00:00"}
+    old_b = dict(old_a)  # same (actor|object) -> same id
+    nb = {"who": {"actor": "ash"}, "what": {"object": "bought an umbrella"}, "intensity": 0.8,
+          "ts": "2026-01-02T10:00:00+00:00", "valid_at": "2026-01-02T10:00:00+00:00"}
+    for r in (old_a, old_b, nb):
+        imprint_keys(r, ["rain", "umbrella"])
+    day_digest([nb], [old_a, old_b, nb], SharedKeyJudge())
+    tos = [e["to"] for e in nb.get("relates", [])]
+    assert tos.count(_entry_id(old_a)) == 1
+
+
+def test_imprint_into_is_the_locked_write_path(tmp_path):
+    """Review fix: keys reach a live Canon row through a supported, locked
+    helper — validated as words, persisted, visible in the rendered view."""
+    import json
+
+    from feltstate import Canon
+    from feltstate.memory.keyweb import imprint_into
+
+    c = Canon(tmp_path / "canon.jsonl")
+    view = c.add("ash", "keeps a garden")
+    row = imprint_into(c, view["id"], ["garden", "not a key", "roses"])
+    assert row is not None and row["keys"] == ["garden", "roses"]
+
+    disk = json.loads((tmp_path / "canon.jsonl").read_text(encoding="utf-8").splitlines()[0])
+    assert disk["keys"] == ["garden", "roses"]
+    assert c.search("garden")[0]["keys"] == ["garden", "roses"]  # view passthrough
+
+    assert imprint_into(c, "no-such-id", ["x"]) is None

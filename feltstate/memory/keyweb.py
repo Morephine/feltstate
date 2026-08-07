@@ -190,6 +190,14 @@ def _age_years_between(newer: Mapping, older: Mapping) -> float:
 # --------------------------------------------------------------------------- #
 # The collision pass                                                          #
 # --------------------------------------------------------------------------- #
+def _is_live(row: Mapping) -> bool:
+    """A row that has been retracted or superseded is history, not memory —
+    it stays on disk for the audit trail, but it neither collides nor gains
+    edges. Dead rows in the web would resurrect beliefs the agent explicitly
+    took back."""
+    return not (row.get("_retracted") or row.get("_superseded_by"))
+
+
 def collide(
     newcomer: Mapping,
     ledger: Sequence[Mapping],
@@ -218,6 +226,8 @@ def collide(
     if not my_keys:
         return out
     for cand in ledger:
+        if not _is_live(cand):
+            continue  # retracted/superseded: history, not a candidate
         if _entry_id(dict(cand)) == my_id:
             continue
         if _age_years_between(cand, newcomer) > 0.0:
@@ -315,6 +325,7 @@ def day_digest(
                 cand_id = _entry_id(dict(cand))
                 if cand_id in existing:
                     continue
+                existing.add(cand_id)  # two same-id rows in one pass -> one edge
                 ts = _now_iso()
                 edge_out = {"to": cand_id, "why": str(why), "ts": ts}
                 edge_back = {"to": nb_id, "why": str(why), "ts": ts}
@@ -340,6 +351,34 @@ def day_digest(
     return {"passes": len(new_entries), "candidates": n_cand, "edges": edges, "detail": detail}
 
 
+def imprint_into(
+    canon: Canon,
+    entry_id: str,
+    keys: Iterable[str],
+    cfg: KeyWebConfig | None = None,
+) -> dict | None:
+    """Imprint word keys onto a live row of a :class:`Canon`, under its lock.
+
+    This is the supported write path for keys. It validates exactly as
+    :func:`imprint_keys` (words only, deduplicated) and performs the whole
+    load → find → imprint → rewrite inside the canon's own write lock —
+    hand-rolling this against the raw file would be an unlocked
+    read-modify-write, the precise stale-snapshot bug the rest of this module
+    goes out of its way to avoid. Returns a copy of the updated row, or
+    ``None`` if no live row carries ``entry_id`` (retracted and superseded
+    rows do not take keys: history, not memory).
+    """
+    with _write_lock(canon.path):
+        rows = _load_jsonl(canon.path)
+        for e in rows:
+            if _entry_id(e) == str(entry_id) and _is_live(e):
+                accepted = imprint_keys(e, keys, cfg)
+                if accepted:
+                    _rewrite_jsonl(canon.path, rows)
+                return dict(e)
+    return None
+
+
 def digest_canon(
     canon: Canon,
     new_ids: Sequence[str],
@@ -349,19 +388,32 @@ def digest_canon(
     """Day-scope digest over a live :class:`Canon`, transactionally.
 
     Loads the confirmed store under its own write lock, runs :func:`day_digest`
-    with the rows whose ids are in ``new_ids`` as protagonists, and rewrites the
-    file only if edges were actually made — the whole read-modify-write happens
-    inside one lock so a concurrent append cannot be erased by a stale
-    snapshot. Rows living in the archived sidecar are candidates too, read-only
-    (their reciprocal edges are written when *they* are protagonists; an
-    archived fact never is).
+    with the live rows whose ids are in ``new_ids`` as protagonists, and
+    rewrites the file only if edges were actually made — the whole
+    read-modify-write happens inside one lock so a concurrent append cannot be
+    erased by a stale snapshot.
+
+    Rows living in the archived sidecar are candidates too, but **the web is
+    one-directional toward the archive**: an archived candidate's reciprocal
+    edge exists in the returned report, and is not persisted — only the main
+    store is rewritten here. Forward edges (newcomer → archived fact) are on
+    the newcomer's row and fully queryable; a fact dim enough to be compacted
+    out does not get its file rewritten every time something new brushes it.
+
+    In-process on purpose: a digest that shells out to a subprocess loses the
+    transaction. The in-process re-entrant lock is what makes the RMW atomic
+    against other writers *in this process*; the file lock underneath it is
+    best-effort (absent where ``fcntl`` is unavailable), so the only footing
+    that always holds is the one inside the process that owns the store. The
+    judge may of course *call* anything it likes; the digest itself stays in
+    the process that holds the lock.
     """
     wanted = {str(i) for i in new_ids}
     with _write_lock(canon.path):
         main = _load_jsonl(canon.path)
         archived = _load_jsonl(canon.archived_path)
         ledger = main + [a for a in archived if _entry_id(a) not in {_entry_id(m) for m in main}]
-        news = [e for e in main if _entry_id(e) in wanted]
+        news = [e for e in main if _entry_id(e) in wanted and _is_live(e)]
         report = day_digest(news, ledger, judge, cfg)
         if report["edges"]:
             _rewrite_jsonl(canon.path, main)

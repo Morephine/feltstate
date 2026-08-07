@@ -199,7 +199,7 @@ def commit_to_canon(
         sources = [
             (source_of(int(n)) if source_of is not None else f"turn:{int(n)}")
             for n in cited
-            if isinstance(n, (int, float))
+            if isinstance(n, (int, float)) and not isinstance(n, bool)
         ]
         write = canon.ask if grey_zone else canon.add
         stored.append(
@@ -296,7 +296,13 @@ def _clean_facts(facts: list, actor_hint: str, max_facts: int) -> list[dict]:
         intensity = float(intensity) if isinstance(intensity, (int, float)) else 0.5
         raw_sources = f.get("sources")
         sources = (
-            sorted({int(s) for s in raw_sources if isinstance(s, (int, float)) and int(s) >= 0})
+            sorted(
+                {
+                    int(s)
+                    for s in raw_sources
+                    if isinstance(s, (int, float)) and not isinstance(s, bool) and int(s) >= 0
+                }
+            )
             if isinstance(raw_sources, list)
             else []
         )

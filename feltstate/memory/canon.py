@@ -143,7 +143,10 @@ def _parse_ts(ts_iso: str) -> datetime | None:
     except (ValueError, AttributeError, TypeError):
         return None
     if ts.tzinfo is None:
-        ts = ts.replace(tzinfo=datetime.now().astimezone().tzinfo)
+        # astimezone() on a naive datetime interprets it as host-local *at that
+        # date* — so a winter stamp read in summer still gets the winter offset
+        # (DST-correct), where pinning today's tzinfo would shift it an hour.
+        ts = ts.astimezone()
     return ts
 
 
@@ -512,6 +515,12 @@ class Canon:
             "entropy": sig["entropy"],  # M1: ambivalence / uncertainty
             "age_days": round((now - ts).total_seconds() / 86400.0, 1) if ts else None,
         }
+        # Saved verbatim, returned verbatim: provenance and web fields pass
+        # through the view untouched (absent keys stay absent — a fact with no
+        # citations should not sprout an empty list in every render).
+        for passthrough in ("sources", "birth_affect", "keys", "relates"):
+            if entry.get(passthrough):
+                out[passthrough] = entry[passthrough]
         return out
 
     # ------------------------------------------------------------------ #
@@ -619,6 +628,16 @@ class Canon:
                 e["_reinforce_count"] = int(e.get("_reinforce_count", 0)) + 1
                 e["_last_reinforced"] = _now_iso()
                 e["ts"] = _now_iso()
+                # Provenance accumulates: a repeat observation cites new turns,
+                # and those citations join the row (deduplicated, order kept) —
+                # dropping them would silently orphan every sighting after the
+                # first. birth_affect does not merge: birth happens once.
+                new_src = entry.get("sources") or []
+                if new_src:
+                    seen = list(e.get("sources") or [])
+                    e["sources"] = seen + [s for s in new_src if s not in seen]
+                if entry.get("birth_affect") and not e.get("birth_affect"):
+                    e["birth_affect"] = entry["birth_affect"]
                 if emotion is not None:
                     aff = e.get("affect")
                     if isinstance(aff, dict):
@@ -873,6 +892,10 @@ class Canon:
                 "_last_reinforced",
                 "_superseded_by",
                 "_superseded_at",
+                "sources",       # provenance belongs to the observation, not the belief
+                "birth_affect",  # birth happens once; a corrected belief is born now
+                "keys",          # the new belief re-earns its keys and edges
+                "relates",
                 "_retracted",
                 "_retracted_at",
                 "invalid_at",

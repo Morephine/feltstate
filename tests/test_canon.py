@@ -431,3 +431,64 @@ def test_naked_timestamp_reads_as_host_local_not_utc(tmp_path):
     assert explicit is not None and explicit.utcoffset() == timedelta(hours=5)
     zulu = _parse_ts("2026-01-01T00:00:00Z")
     assert zulu is not None and zulu.utcoffset() == timedelta(0)
+
+
+def test_naked_ts_gets_the_offset_of_its_own_date(monkeypatch):
+    """DST review fix: a winter naked stamp read in summer gets the *winter*
+    offset — astimezone() interprets at the stamp's date, not today's."""
+    import os
+    import time as _time
+
+    from feltstate.memory.canon import _parse_ts
+
+    if not hasattr(_time, "tzset"):
+        return  # platform without tzset: rule still holds, just not probeable
+    old = os.environ.get("TZ")
+    os.environ["TZ"] = "America/New_York"
+    _time.tzset()
+    try:
+        w = _parse_ts("2026-01-15T12:00:00")
+        s = _parse_ts("2026-08-15T12:00:00")
+        assert w is not None and s is not None
+        assert w.utcoffset().total_seconds() == -5 * 3600  # EST
+        assert s.utcoffset().total_seconds() == -4 * 3600  # EDT
+    finally:
+        if old is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = old
+        _time.tzset()
+
+
+def test_reinforce_merges_sources_and_keeps_first_birth_affect(tmp_path):
+    """Review fix: repeat observations accumulate citations (deduped, order
+    kept); birth_affect never changes after birth."""
+    import json
+
+    from feltstate import Canon
+
+    c = Canon(tmp_path / "canon.jsonl")
+    c.add("ash", "likes tea", sources=["turn:1"], birth_affect={"v": 0.2})
+    c.add("ash", "likes tea", sources=["turn:1", "turn:7"], birth_affect={"v": -0.9})
+
+    row = json.loads((tmp_path / "canon.jsonl").read_text(encoding="utf-8").splitlines()[0])
+    assert row["sources"] == ["turn:1", "turn:7"]
+    assert row["birth_affect"] == {"v": 0.2}  # birth happens once
+
+
+def test_render_passes_web_fields_through_and_correct_does_not_inherit(tmp_path):
+    """Review fixes: saved verbatim means *returned* verbatim (view carries
+    sources/birth_affect/keys/relates when present, sprouts nothing when
+    absent), and a corrected belief starts clean of all four."""
+    from feltstate import Canon
+
+    c = Canon(tmp_path / "canon.jsonl")
+    view = c.add("ash", "likes tea", sources=["turn:3"], birth_affect={"v": 0.1})
+    assert view["sources"] == ["turn:3"]
+    assert view["birth_affect"] == {"v": 0.1}
+
+    bare = c.add("ash", "waters roses")
+    assert "sources" not in bare and "birth_affect" not in bare
+
+    fixed = c.correct("likes tea", object="prefers oolong")
+    assert fixed and all(k not in fixed for k in ("sources", "birth_affect", "keys", "relates"))
