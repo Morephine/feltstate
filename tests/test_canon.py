@@ -404,3 +404,30 @@ def test_corrupt_and_non_object_jsonl_rows_are_quarantined_once(tmp_path, caplog
     assert len(records) == 2  # repeated loads do not duplicate evidence
     assert {r["reason"] for r in records} == {"invalid-json", "non-object-root"}
     assert all(r["raw"] for r in records)
+
+
+def test_naked_timestamp_reads_as_host_local_not_utc(tmp_path):
+    """The naked-timestamp rule: a tz-less ``ts`` is the host's wall clock.
+
+    Regression pin for the rule documented on ``_parse_ts``. A record stamped
+    "an hour ago, host local, no offset" must age ~1 hour — under the old
+    naive-as-UTC reading, a host east of Greenwich would see it as hours
+    *younger* (negative age clamps to 0) and a host west of it as hours older,
+    shifting every decay curve by the UTC offset.
+    """
+    from feltstate.memory.canon import _parse_ts
+
+    local_tz = datetime.now().astimezone().tzinfo
+    an_hour_ago_local = datetime.now(local_tz) - timedelta(hours=1)
+    naked = an_hour_ago_local.replace(tzinfo=None).isoformat()
+
+    parsed = _parse_ts(naked)
+    assert parsed is not None and parsed.tzinfo is not None
+    age_s = (datetime.now(local_tz) - parsed).total_seconds()
+    assert 3500 < age_s < 3800  # ~1 hour, not 1 hour ± the host's UTC offset
+
+    # Explicit offsets and Z-suffixed stamps are honoured verbatim.
+    explicit = _parse_ts("2026-01-01T00:00:00+05:00")
+    assert explicit is not None and explicit.utcoffset() == timedelta(hours=5)
+    zulu = _parse_ts("2026-01-01T00:00:00Z")
+    assert zulu is not None and zulu.utcoffset() == timedelta(0)

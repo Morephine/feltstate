@@ -70,6 +70,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The naked-timestamp rule** (`memory.canon._parse_ts`): a timezone-naive
+  `ts` is now read as the **host's local clock**, no longer silently
+  relabelled as UTC. Naked stamps come from humans and host-local writers
+  (chat logs, notes, older tooling) whose clocks are wall clocks; the old
+  reading shifted every age computation — and therefore every decay curve —
+  by the host's UTC offset. Explicit offsets and `Z` stamps are honoured
+  verbatim, and the fingerprint core keeps the opposite, stricter rule
+  (explicit UTC or rejected): records meant for humans speak local, seals
+  meant for audit speak UTC. Regression-pinned in `tests/test_canon.py`.
 - **Positioning: feltstate is a character engine for AI agents.** The README
   intro (both languages), the package description, and the repo description
   now lead with what the thing *is* — an engine that keeps a persistent,

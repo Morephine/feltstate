@@ -124,13 +124,25 @@ def _now_iso() -> str:
 
 
 def _parse_ts(ts_iso: str) -> datetime | None:
-    """Parse an ISO timestamp to an aware ``datetime``; ``None`` if unparseable."""
+    """Parse an ISO timestamp to an aware ``datetime``; ``None`` if unparseable.
+
+    **The naked-timestamp rule.** A timestamp without a timezone is read as the
+    *host's local clock*, never as UTC. Naked stamps come from humans and from
+    host-local writers (chat logs, notes, older tooling), and those clocks are
+    wall clocks; silently relabelling one as UTC shifts every age computation by
+    the host's UTC offset — memories look hours younger or older than they are,
+    and every decay curve in :mod:`.lifecycle` inherits the error. The one place
+    the opposite rule holds is the fingerprint core
+    (:mod:`feltstate.memory.lifecycle.fingerprint`), where ``ts`` must be
+    explicit UTC and is *rejected*, not reinterpreted, otherwise — records meant
+    for humans speak local; seals meant for audit speak UTC.
+    """
     try:
         ts = datetime.fromisoformat(str(ts_iso).replace("Z", "+00:00"))
     except (ValueError, AttributeError, TypeError):
         return None
     if ts.tzinfo is None:
-        ts = ts.replace(tzinfo=timezone.utc)
+        ts = ts.replace(tzinfo=datetime.now().astimezone().tzinfo)
     return ts
 
 
