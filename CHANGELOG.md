@@ -8,6 +8,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Provenance and birth affect on the ledger row** (`Canon.add` / `Canon.ask`
+  / `extract`): facts can now carry `sources` — opaque provenance pointers the
+  store saves verbatim and never interprets — and `birth_affect`, the felt
+  state *measured at the moment of recording* (the answer to "what was I
+  feeling when this happened?", distinct from the fact's own evidence-weighted
+  feeling). The extraction pass feeds both ends: transcripts are numbered
+  (`[n] role: ...`), the extractor cites the turns each fact is drawn from,
+  `_clean_facts` keeps only well-formed citations, and `commit_to_canon`
+  resolves them to durable pointers via a caller-supplied `source_of` (or an
+  honest `turn:n` without one) while imprinting the caller's measured affect
+  snapshot on the whole batch. The discipline, both directions: a fact that
+  cannot point back at its turns is a rumour, and the model that proposes a
+  fact does not get to declare what you felt — birth affect comes from the
+  affect pipeline, never self-reported by the extraction model.
 - **`memory.keyweb` — memory as a web: word keys and judged edges, on the
   row.** Two new ledger-borne fields turn the fact list into a memory web:
   `keys` (single-word retrieval keys — phrases are rejected mechanically,

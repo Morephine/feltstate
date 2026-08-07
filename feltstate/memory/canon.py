@@ -71,6 +71,7 @@ import json
 import logging
 import math
 import threading
+from collections.abc import Mapping, Sequence
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -530,12 +531,27 @@ class Canon:
         default_intensity: float | None = None,
         emotion: float | None = None,
         region: str = "",
+        sources: Sequence[str] | None = None,
+        birth_affect: Mapping | None = None,
     ) -> dict:
         """Assemble a fresh 5W1H record from keyword fields.
 
         ``emotion`` (a valence in [-1, 1], optional) seeds the fact's
         evidence-weighted affect (M1): a young feeling starting from neutral, moved
         by this first reading in proportion to ``confidence``.
+
+        ``sources`` are opaque provenance pointers — turn ids, ``file#line``,
+        URLs, whatever the caller's storage understands. The store saves and
+        returns them verbatim and never interprets them: provenance is the
+        caller's vocabulary, auditability is the ledger's job.
+
+        ``birth_affect`` is the felt state *measured at the moment of
+        recording* (e.g. ``{"v": 0.3, "a": 0.6}`` from your affect source) —
+        the answer to "what was I feeling when this happened?". It is distinct
+        from ``emotion``, which feeds the fact's own evidence-weighted feeling
+        ("how does this fact feel?"). The discipline: birth affect comes from
+        the affect pipeline, never self-reported by an extraction model — the
+        model that proposes a fact does not get to declare what you felt.
         """
         if default_intensity is None:
             default_intensity = self.cfg.default_intensity
@@ -554,6 +570,14 @@ class Canon:
         }
         if region:
             entry["region"] = region
+        if sources:
+            entry["sources"] = [str(s) for s in sources if str(s).strip()]
+        if birth_affect:
+            entry["birth_affect"] = {
+                k: float(v)
+                for k, v in birth_affect.items()
+                if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+            }
         if emotion is not None:
             prof, w = blend(
                 neutral_profile(), self.cfg.sentiment_prior_weight, observe(emotion), confidence
@@ -682,6 +706,8 @@ class Canon:
         intensity: float | None = None,
         confidence: float = 0.9,
         emotion: float | None = None,
+        sources: Sequence[str] | None = None,
+        birth_affect: Mapping | None = None,
     ) -> dict:
         """Record a confirmed fact, or reinforce it if it already exists.
 
@@ -701,6 +727,8 @@ class Canon:
             confidence=confidence,
             default_intensity=self.cfg.default_intensity,
             emotion=emotion,
+            sources=sources,
+            birth_affect=birth_affect,
         )
         return self._write_or_reinforce(self.path, entry, emotion=emotion, confidence=confidence)
 
@@ -715,6 +743,8 @@ class Canon:
         intensity: float | None = None,
         confidence: float = 0.9,
         emotion: float | None = None,
+        sources: Sequence[str] | None = None,
+        birth_affect: Mapping | None = None,
     ) -> dict:
         """Record a *grey-zone* fact — something not yet decided or only half-believed.
 
@@ -733,6 +763,8 @@ class Canon:
             confidence=confidence,
             default_intensity=self.cfg.pending_intensity,
             emotion=emotion,
+            sources=sources,
+            birth_affect=birth_affect,
         )
         return self._write_or_reinforce(
             self.pending_path, entry, emotion=emotion, confidence=confidence

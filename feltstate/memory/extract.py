@@ -28,7 +28,7 @@ import json
 import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
+from collections.abc import Callable, Mapping, Sequence
 
 from .._net import require_http_url
 from .canon import Canon
@@ -72,6 +72,8 @@ _SYSTEM_PROMPT = (
     '- "why": why it matters — the meaning or feeling behind it.\n'
     '- "intensity": 0..1, how important/durable (use 0.5 if unsure; >0.85 only for '
     "core, permanent things).\n"
+    '- "sources": the [n] turn numbers this fact is drawn from, e.g. [3, 5]. '
+    "Cite only turns you actually read; never invent numbers.\n"
     "Return [] if nothing is worth keeping. No prose, no code fences — just the JSON array."
 )
 
@@ -154,6 +156,8 @@ def commit_to_canon(
     *,
     grey_zone: bool = True,
     default_intensity: float = 0.5,
+    birth_affect: "Mapping | None" = None,
+    source_of: "Callable[[int], str] | None" = None,
 ) -> list[dict]:
     """Write proposed ``facts`` into a :class:`Canon` and return the stored entries.
 
@@ -163,6 +167,15 @@ def commit_to_canon(
     behind its back). Pass ``grey_zone=False`` to add directly to the confirmed
     store when you trust the extractor.
 
+    ``birth_affect`` is the felt state *measured at commit time* (e.g.
+    ``{"v": 0.3, "a": 0.6}`` read from your affect source or engine) and is
+    imprinted on every fact of this batch — one moment, one reading. The
+    extraction model never supplies it: the model that proposes a fact does not
+    get to declare what you felt when it happened.
+
+    ``source_of`` maps a cited turn number to a durable pointer in *your*
+    storage (``"chat/2026-01-05.jsonl#12"``, a message id, a URL). Without it,
+    citations are kept as ``"turn:n"`` — honest about being slice-relative.
     Facts missing an ``object`` are skipped.
     """
     stored: list[dict] = []
@@ -175,8 +188,24 @@ def commit_to_canon(
         when = str(f.get("when", "") or "")
         intensity = f.get("intensity")
         intensity = float(intensity) if isinstance(intensity, (int, float)) else default_intensity
+        cited = f.get("sources") if isinstance(f.get("sources"), list) else []
+        sources = [
+            (source_of(int(n)) if source_of is not None else f"turn:{int(n)}")
+            for n in cited
+            if isinstance(n, (int, float))
+        ]
         write = canon.ask if grey_zone else canon.add
-        stored.append(write(actor, obj, why=why, when=when, intensity=intensity))
+        stored.append(
+            write(
+                actor,
+                obj,
+                why=why,
+                when=when,
+                intensity=intensity,
+                sources=sources or None,
+                birth_affect=birth_affect,
+            )
+        )
     return stored
 
 
@@ -184,21 +213,28 @@ def commit_to_canon(
 # Helpers (parse / sanitise) — shared shape with sources.llm                  #
 # --------------------------------------------------------------------------- #
 def _format_transcript(messages: Sequence[dict], max_turns: int = 20) -> str:
-    """Flatten the last ``max_turns`` messages into a plain-text transcript.
+    """Flatten the last ``max_turns`` messages into a numbered transcript.
 
-    Each turn becomes ``{role}: {content}``. Messages with empty content are
-    skipped. Long content is truncated at 800 characters so the context sent to
-    the extraction call stays within a sensible token budget.
+    Each turn becomes ``[n] {role}: {content}`` — the ``[n]`` marker is the
+    turn's index within the **original** ``messages`` sequence, and it is what a
+    proposed fact's ``sources`` cite. Provenance must survive the extraction
+    hop: a fact that cannot point back at the turns it came from cannot be
+    audited, and an unauditable memory is a rumour. Messages with empty content
+    are skipped (their index is still consumed, keeping citations stable). Long
+    content is truncated at 800 characters so the context sent to the
+    extraction call stays within a sensible token budget.
     """
+    msgs = list(messages)
+    offset = max(0, len(msgs) - max_turns)
     lines = []
-    for m in list(messages)[-max_turns:]:
+    for i, m in enumerate(msgs[offset:], start=offset):
         role = (m.get("role") or "").strip() or "user"
         content = str(m.get("content") or "").strip()
         if not content:
             continue
         if len(content) > 800:
             content = content[:800] + " ..."
-        lines.append(f"{role}: {content}")
+        lines.append(f"[{i}] {role}: {content}")
     return "\n".join(lines)
 
 
@@ -251,12 +287,19 @@ def _clean_facts(facts: list, actor_hint: str, max_facts: int) -> list[dict]:
             continue
         intensity = f.get("intensity")
         intensity = float(intensity) if isinstance(intensity, (int, float)) else 0.5
+        raw_sources = f.get("sources")
+        sources = (
+            sorted({int(s) for s in raw_sources if isinstance(s, (int, float)) and int(s) >= 0})
+            if isinstance(raw_sources, list)
+            else []
+        )
         out.append(
             {
                 "actor": str(f.get("actor", "") or actor_hint).strip() or actor_hint,
                 "object": obj,
                 "why": str(f.get("why", "") or "").strip(),
                 "when": str(f.get("when", "") or "").strip(),
+                "sources": sources,
                 "intensity": max(0.0, min(1.0, intensity)),
             }
         )

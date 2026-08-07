@@ -236,3 +236,59 @@ def test_commit_to_canon_default_intensity_used_when_missing(tmp_path):
     stored = commit_to_canon([{"object": "a fact"}], canon, grey_zone=False, default_intensity=0.7)
     assert len(stored) == 1
     assert stored[0]["base_intensity"] == pytest.approx(0.7, abs=1e-3)
+
+
+def test_transcript_is_numbered_and_facts_keep_cited_sources():
+    """Provenance survives the extraction hop (the sources discipline).
+
+    Turns carry ``[n]`` markers indexed against the *original* sequence, and
+    ``_clean_facts`` keeps only well-formed, non-negative, deduplicated turn
+    citations — a fact that cannot point back at its turns is a rumour.
+    """
+    from feltstate.memory.extract import _clean_facts, _format_transcript
+
+    msgs = [{"role": "user", "content": f"turn {i}"} for i in range(30)]
+    text = _format_transcript(msgs, max_turns=20)
+    assert "[10] user: turn 10" in text  # offset indexing against the original list
+    assert "[29] user: turn 29" in text
+    assert "[9]" not in text  # outside the slice
+
+    facts = [
+        {"object": "cited", "sources": [5, 5, 3.0, -1, "junk"]},
+        {"object": "uncited"},
+    ]
+    cleaned = _clean_facts(facts, "user", 8)
+    assert cleaned[0]["sources"] == [3, 5]  # deduped, sorted, junk dropped
+    assert cleaned[1]["sources"] == []
+
+
+def test_commit_imprints_sources_and_birth_affect(tmp_path):
+    """The commit hop: citations become durable pointers, birth affect is the
+    caller's measured snapshot — never the extraction model's claim."""
+    from feltstate import Canon
+    from feltstate.memory.extract import commit_to_canon
+
+    c = Canon(tmp_path / "canon.jsonl")
+    facts = [{"object": "likes tea", "actor": "sam", "sources": [3], "intensity": 0.6}]
+
+    stored = commit_to_canon(
+        facts,
+        c,
+        grey_zone=False,
+        birth_affect={"v": 0.31, "a": 0.62, "bogus": "dropped"},
+        source_of=lambda n: f"chat/day.jsonl#{n}",
+    )
+    assert stored
+
+    import json
+
+    row = json.loads((tmp_path / "canon.jsonl").read_text(encoding="utf-8").splitlines()[0])
+    assert row["sources"] == ["chat/day.jsonl#3"]
+    assert row["birth_affect"] == {"v": 0.31, "a": 0.62}  # non-numeric keys dropped
+
+    # Without a resolver, citations stay honest about being slice-relative.
+    c2 = Canon(tmp_path / "canon2.jsonl")
+    commit_to_canon(facts, c2, grey_zone=False)
+    row2 = json.loads((tmp_path / "canon2.jsonl").read_text(encoding="utf-8").splitlines()[0])
+    assert row2["sources"] == ["turn:3"]
+    assert "birth_affect" not in row2
