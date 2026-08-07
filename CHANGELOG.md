@@ -8,6 +8,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`memory.keyweb` — memory as a web: word keys and judged edges, on the
+  row.** Two new ledger-borne fields turn the fact list into a memory web:
+  `keys` (single-word retrieval keys — phrases are rejected mechanically,
+  because a phrase never collides) and `relates` (edges to other facts, each
+  carrying *why* they are kin). One-ledger principle: both live on the record
+  itself, never in a sidecar registry. Each newborn fact plays protagonist in
+  exactly **one** collision pass against the whole ledger — every older fact
+  is a candidate forever, no recency window — then sinks into the pool as a
+  candidate for future newcomers. Admission is earned, not aged out:
+  `birth_intensity x relevance_mult(shared_keys)` must clear a floor that
+  rises with the age gap (`1 - exp(-k*years)`, calibrated so ten years ≈
+  0.95); relevance approaches — never reaches — a 2.0 ceiling, so shared keys
+  can at most *double* a memory's reach, and candidacy always prices birth
+  intensity, never the decayed present value. The library computes candidacy;
+  a pluggable judge decides kinship (`SharedKeyJudge` ships as the
+  zero-dependency reference; with no judge the digest reports candidates and
+  writes nothing). `digest_canon` runs the whole day-scope pass inside the
+  canon's own write lock. Tests in `tests/test_keyweb.py`.
+
 - `examples/maze_game/`: the director shape as a **complete playable game** —
   fully original to this project, pure stdlib. `world.py` (the single source
   of truth: grid/walls/exit, stuck & circling tracking, the director's verbs

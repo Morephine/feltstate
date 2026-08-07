@@ -8,6 +8,14 @@ automatically injected into a prompt.
 from .canon import Canon
 from .context import get_turn_context, get_turn_range_context, load_turns
 from .extract import FactExtractor, LLMFactExtractor, commit_to_canon
+from .keyweb import (
+    KeyWebConfig,
+    SharedKeyJudge,
+    collide,
+    day_digest,
+    digest_canon,
+    imprint_keys,
+)
 from .skill import (
     RatingGate,
     SkillRatifier,
@@ -28,6 +36,12 @@ __all__ = [
     "FactExtractor",
     "LLMFactExtractor",
     "commit_to_canon",
+    "KeyWebConfig",
+    "SharedKeyJudge",
+    "collide",
+    "day_digest",
+    "digest_canon",
+    "imprint_keys",
     "add_skill",
     "record_rating",
     "record_task_rating",
