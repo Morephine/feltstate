@@ -12,7 +12,19 @@ back cache-safely.
 """
 
 from .agent import render_agent_feeling
+from .channels import CHANNELS, EMERGENT, FLASHBACK, RESIDENT, RESONANT, parse, tag
 from .felt import render_felt_block
 from .inject import build_injection
 
-__all__ = ["render_felt_block", "render_agent_feeling", "build_injection"]
+__all__ = [
+    "render_felt_block",
+    "render_agent_feeling",
+    "build_injection",
+    "CHANNELS",
+    "RESIDENT",
+    "EMERGENT",
+    "FLASHBACK",
+    "RESONANT",
+    "tag",
+    "parse",
+]

@@ -82,8 +82,15 @@ class LLMFactExtractor(FactExtractor):
     """Extract facts with a second LLM call against an OpenAI-compatible endpoint.
 
     Talks to any ``POST {base_url}/chat/completions`` server (local or hosted).
-    Using a smaller/cheaper model than the reply model for this job is common and
-    sensible, but not required — feltstate is model-agnostic here.
+    feltstate is model-agnostic here, but one economy is worth naming: **spend
+    intelligence where it reads, spend pennies where it votes.** Extraction is
+    the read-everything job — one pass over a whole conversation, where a more
+    capable model at a *low* reasoning setting reads circles around a cheap one
+    at full tilt, for one call a day. Judging (e.g. a
+    :mod:`~feltstate.memory.keyweb` kinship judge) is the opposite shape:
+    many tiny yes/no votes on pre-narrowed candidates — exactly what small,
+    fast models are for. Splitting the two jobs across two models is how the
+    pipeline stays both smart and affordable.
 
     Parameters
     ----------

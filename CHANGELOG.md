@@ -8,6 +8,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`render.channels` — machine-readable channel tags for surfaced
+  memories.** Four closed channels (`RES` resident, `EMG` emergent, `SPK`
+  flashback, `RSN` resonant) with `tag`/`parse` as the whole protocol:
+  producers speak the prefix, pipes filter on it strictly (known prefix at
+  position zero — no case drift, no spacing leniency), and humans get pretty
+  text at the last hop only. Prevents the quiet failure where a pipeline that
+  filters on pretty formatting dies the day the formatting gets prettier —
+  no error, cooldowns still burning, every downstream mouth silent. Tests in
+  `tests/test_channels.py`.
+- **Two operating disciplines, written where they apply**: *spend
+  intelligence where it reads, spend pennies where it votes* — extraction is
+  one read-everything pass a day where a capable model at a low reasoning
+  setting beats a cheap one at full tilt, while kinship judging is many tiny
+  votes on pre-narrowed candidates, exactly what small fast models are for
+  (`extract.LLMFactExtractor`); and *the digest stays in-process* — a digest
+  that shells out loses the transaction, because the write lock does not
+  cross the process boundary (`keyweb.digest_canon`).
 - **Provenance and birth affect on the ledger row** (`Canon.add` / `Canon.ask`
   / `extract`): facts can now carry `sources` — opaque provenance pointers the
   store saves verbatim and never interprets — and `birth_affect`, the felt
