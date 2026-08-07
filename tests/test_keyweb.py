@@ -20,7 +20,6 @@ from datetime import datetime, timedelta, timezone
 
 from feltstate import Canon
 from feltstate.memory.keyweb import (
-    KeyWebConfig,
     SharedKeyJudge,
     admission_floor,
     collide,
@@ -85,8 +84,12 @@ def test_admission_floor_rises_with_age_gap():
 
 
 def test_collide_looks_backward_and_prices_birth_intensity():
-    old_strong = _entry("ash", "the rent dispute", intensity=0.8, days_ago=400, keys=["rent", "dispute"])
-    old_faint = _entry("ash", "rent passing mention", intensity=0.15, days_ago=400, keys=["rent", "dispute"])
+    old_strong = _entry(
+        "ash", "the rent dispute", intensity=0.8, days_ago=400, keys=["rent", "dispute"]
+    )
+    old_faint = _entry(
+        "ash", "rent passing mention", intensity=0.15, days_ago=400, keys=["rent", "dispute"]
+    )
     newer = _entry("ash", "tomorrow's fact", intensity=0.9, days_ago=-2, keys=["rent"])
     nb = _entry("ash", "rent came up again", intensity=0.5, keys=["rent", "dispute"])
     ledger = [old_strong, old_faint, newer, nb]
@@ -144,48 +147,67 @@ def test_retracted_rows_neither_collide_nor_take_keys(tmp_path):
     import json
 
     from feltstate import Canon
-    from feltstate.memory.keyweb import SharedKeyJudge, digest_canon, imprint_into
+    from feltstate.memory.keyweb import (
+        SharedKeyJudge,
+        _entry_id,
+        digest_canon,
+        imprint_into,
+        imprint_keys,
+    )
 
     c = Canon(tmp_path / "canon.jsonl")
     c.add("ash", "keeps a garden", intensity=0.6)
     c.retract("keeps a garden")
     c.add("ash", "waters the roses", intensity=0.6)
 
-    rows = [json.loads(l) for l in (tmp_path / "canon.jsonl").read_text(encoding="utf-8").splitlines()]
-    retracted_id = next(r for r in rows if r.get("_retracted"))
-    live = [r for r in rows if not r.get("_retracted")]
+    def rows():
+        text = (tmp_path / "canon.jsonl").read_text(encoding="utf-8")
+        return [json.loads(line) for line in text.splitlines() if line.strip()]
 
-    # Seed keys: the retracted row would share both keys if it were a candidate.
-    assert imprint_into(c, retracted_id["id"] if "id" in retracted_id else __import__("feltstate.memory.keyweb", fromlist=["_entry_id"])._entry_id(retracted_id), ["garden", "roses"]) is None
+    dead_id = _entry_id(next(r for r in rows() if r.get("_retracted")))
+    assert imprint_into(c, dead_id, ["garden", "roses"]) is None  # dead rows take no keys
 
-    from feltstate.memory.keyweb import _entry_id, imprint_keys
-
-    raw = [json.loads(l) for l in (tmp_path / "canon.jsonl").read_text(encoding="utf-8").splitlines()]
-    for r in raw:
+    # Seed keys on every raw row so the dead one *would* collide if it could.
+    seeded = rows()
+    for r in seeded:
         imprint_keys(r, ["garden", "roses"])
     (tmp_path / "canon.jsonl").write_text(
-        "\n".join(json.dumps(r, ensure_ascii=False) for r in raw) + "\n", encoding="utf-8"
+        "\n".join(json.dumps(r, ensure_ascii=False) for r in seeded) + "\n", encoding="utf-8"
     )
 
-    newcomer_id = _entry_id(next(r for r in raw if not (r.get("_retracted") or r.get("_superseded_by")) and "roses" in str(r.get("what"))))
-    report = digest_canon(c, [newcomer_id], SharedKeyJudge())
-    final = [json.loads(l) for l in (tmp_path / "canon.jsonl").read_text(encoding="utf-8").splitlines()]
+    newcomer_id = _entry_id(
+        next(r for r in seeded if not r.get("_retracted") and "roses" in str(r.get("what")))
+    )
+    digest_canon(c, [newcomer_id], SharedKeyJudge())
+
+    final = rows()
     dead = next(r for r in final if r.get("_retracted"))
     assert not dead.get("relates"), "retracted row must gain no edges"
-    for e in final:
-        tos = [x["to"] for x in e.get("relates", [])]
-        assert _entry_id(dead) not in tos, "no edge may point at a retracted row"
+    for r in final:
+        assert dead_id not in [e["to"] for e in r.get("relates", [])], (
+            "no edge may point at a retracted row"
+        )
 
 
 def test_no_duplicate_edges_when_ledger_holds_same_id_twice():
     """Review fix: two same-id rows in the pool yield one edge, not two."""
     from feltstate.memory.keyweb import SharedKeyJudge, _entry_id, day_digest, imprint_keys
 
-    old_a = {"who": {"actor": "ash"}, "what": {"object": "likes rain"}, "intensity": 0.9,
-             "ts": "2026-01-01T10:00:00+00:00", "valid_at": "2026-01-01T10:00:00+00:00"}
+    old_a = {
+        "who": {"actor": "ash"},
+        "what": {"object": "likes rain"},
+        "intensity": 0.9,
+        "ts": "2026-01-01T10:00:00+00:00",
+        "valid_at": "2026-01-01T10:00:00+00:00",
+    }
     old_b = dict(old_a)  # same (actor|object) -> same id
-    nb = {"who": {"actor": "ash"}, "what": {"object": "bought an umbrella"}, "intensity": 0.8,
-          "ts": "2026-01-02T10:00:00+00:00", "valid_at": "2026-01-02T10:00:00+00:00"}
+    nb = {
+        "who": {"actor": "ash"},
+        "what": {"object": "bought an umbrella"},
+        "intensity": 0.8,
+        "ts": "2026-01-02T10:00:00+00:00",
+        "valid_at": "2026-01-02T10:00:00+00:00",
+    }
     for r in (old_a, old_b, nb):
         imprint_keys(r, ["rain", "umbrella"])
     day_digest([nb], [old_a, old_b, nb], SharedKeyJudge())

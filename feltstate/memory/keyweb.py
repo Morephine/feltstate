@@ -61,7 +61,6 @@ import math
 import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timezone
 
 from .canon import Canon, _entry_id, _load_jsonl, _now_iso, _parse_ts, _rewrite_jsonl, _write_lock
 
@@ -72,6 +71,7 @@ __all__ = [
     "collide",
     "day_digest",
     "digest_canon",
+    "imprint_into",
     "imprint_keys",
     "relevance_mult",
 ]

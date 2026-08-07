@@ -140,13 +140,16 @@ def _parse_ts(ts_iso: str) -> datetime | None:
     """
     try:
         ts = datetime.fromisoformat(str(ts_iso).replace("Z", "+00:00"))
-    except (ValueError, AttributeError, TypeError):
+        if ts.tzinfo is None:
+            # astimezone() on a naive datetime interprets it as host-local *at
+            # that date* — a winter stamp read in summer still gets the winter
+            # offset (DST-correct), where pinning today's tzinfo would shift it
+            # an hour. Kept inside the try: at the calendar's margins (year 1,
+            # year 9999, pre-epoch on some platforms) the conversion itself can
+            # raise, and this function's contract is None, never an exception.
+            ts = ts.astimezone()
+    except (ValueError, AttributeError, TypeError, OverflowError, OSError):
         return None
-    if ts.tzinfo is None:
-        # astimezone() on a naive datetime interprets it as host-local *at that
-        # date* — so a winter stamp read in summer still gets the winter offset
-        # (DST-correct), where pinning today's tzinfo would shift it an hour.
-        ts = ts.astimezone()
     return ts
 
 
@@ -631,7 +634,9 @@ class Canon:
                 # Provenance accumulates: a repeat observation cites new turns,
                 # and those citations join the row (deduplicated, order kept) —
                 # dropping them would silently orphan every sighting after the
-                # first. birth_affect does not merge: birth happens once.
+                # first. birth_affect is first-write-wins: never overwritten
+                # once present, though a fact born without one may still gain
+                # its snapshot from the first observation that carries one.
                 new_src = entry.get("sources") or []
                 if new_src:
                     seen = list(e.get("sources") or [])
@@ -892,9 +897,9 @@ class Canon:
                 "_last_reinforced",
                 "_superseded_by",
                 "_superseded_at",
-                "sources",       # provenance belongs to the observation, not the belief
+                "sources",  # provenance belongs to the observation, not the belief
                 "birth_affect",  # birth happens once; a corrected belief is born now
-                "keys",          # the new belief re-earns its keys and edges
+                "keys",  # the new belief re-earns its keys and edges
                 "relates",
                 "_retracted",
                 "_retracted_at",

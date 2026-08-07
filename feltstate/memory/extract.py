@@ -163,8 +163,8 @@ def commit_to_canon(
     *,
     grey_zone: bool = True,
     default_intensity: float = 0.5,
-    birth_affect: "Mapping | None" = None,
-    source_of: "Callable[[int], str] | None" = None,
+    birth_affect: Mapping | None = None,
+    source_of: Callable[[int], str] | None = None,
 ) -> list[dict]:
     """Write proposed ``facts`` into a :class:`Canon` and return the stored entries.
 

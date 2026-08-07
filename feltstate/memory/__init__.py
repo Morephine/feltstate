@@ -14,6 +14,7 @@ from .keyweb import (
     collide,
     day_digest,
     digest_canon,
+    imprint_into,
     imprint_keys,
 )
 from .skill import (
@@ -41,6 +42,7 @@ __all__ = [
     "collide",
     "day_digest",
     "digest_canon",
+    "imprint_into",
     "imprint_keys",
     "add_skill",
     "record_rating",
