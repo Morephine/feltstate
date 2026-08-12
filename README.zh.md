@@ -95,8 +95,9 @@ from feltstate import Engine, KeywordSource
 
 # KeywordSource 是零依赖、基于规则的参考信号源——看清循环怎么转足够了。
 # 实际使用换成 LLMSource (任意 OpenAI 兼容端点) 或你自己微调的分类器。
-eng = Engine(source=KeywordSource(), state_path="state.json",
-             persona="a dry-humoured, loyal friend")
+eng = Engine(
+    source=KeywordSource(), state_path="state.json", persona="a dry-humoured, loyal friend"
+)
 
 eng.tick([{"role": "user", "content": "I finally shipped it!! couldn't have done it without you"}])
 

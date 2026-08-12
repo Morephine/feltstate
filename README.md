@@ -124,8 +124,9 @@ from feltstate import Engine, KeywordSource
 # KeywordSource is a zero-dependency, rule-based reference source — good enough
 # to see the loop work. Swap in LLMSource (any OpenAI-compatible endpoint) or
 # your own fine-tuned classifier for real use.
-eng = Engine(source=KeywordSource(), state_path="state.json",
-             persona="a dry-humoured, loyal friend")
+eng = Engine(
+    source=KeywordSource(), state_path="state.json", persona="a dry-humoured, loyal friend"
+)
 
 eng.tick([{"role": "user", "content": "I finally shipped it!! couldn't have done it without you"}])
 
