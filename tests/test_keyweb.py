@@ -233,3 +233,33 @@ def test_imprint_into_is_the_locked_write_path(tmp_path):
     assert c.search("garden")[0]["keys"] == ["garden", "roses"]  # view passthrough
 
     assert imprint_into(c, "no-such-id", ["x"]) is None
+
+
+def test_key_vocab_ranks_by_use_then_first_appearance():
+    from feltstate.memory.keyweb import key_vocab
+
+    ledger = [
+        _entry("ash", "rent dispute opens", keys=("rent", "landlord")),
+        _entry("ash", "rent dispute drags on", keys=("rent", "letter")),
+        _entry("ash", "letter arrives", keys=("letter",)),
+        _entry("ash", "one-off remark", keys=("garden",)),
+    ]
+    # rent and letter both appear twice; rent was seen first and stays ahead.
+    assert key_vocab(ledger) == ["rent", "letter", "landlord", "garden"]
+    assert key_vocab(ledger, n=2) == ["rent", "letter"]
+    assert key_vocab(ledger, n=0) == []
+    assert key_vocab([]) == []
+
+
+def test_key_vocab_folds_case_and_ignores_dead_rows():
+    from feltstate.memory.keyweb import key_vocab
+
+    a = _entry("ash", "notes the Garden", keys=("Garden",))
+    b = _entry("ash", "notes the garden again", keys=("garden", "gate"))
+    dead = _entry("ash", "retracted belief", keys=("gate", "gate-key"))
+    dead["_retracted"] = True
+
+    vocab = key_vocab([a, b, dead])
+    # counting is case-folded, the first spelling is what gets reported;
+    # the retracted row's keys never vote, so "gate" holds one use, not two.
+    assert vocab == ["Garden", "gate"]

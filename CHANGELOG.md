@@ -8,6 +8,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`keyweb.key_vocab` — the ledger's working vocabulary, for reuse at
+  naming time.** Keys only collide when different facts choose the same
+  word, and an extractor left alone mints a bespoke word per fact — unique,
+  therefore silent. `key_vocab(ledger, n=40)` returns the most-used keys of
+  the live rows (ties by first appearance, case-folded counting, first
+  spelling reported) to feed into the extractor's prompt so it prefers
+  words the ledger already speaks. Reuse happens at naming time or not at
+  all. In the reference deployment this single step moved new-to-old key
+  collision from ~2% to 40-60% within a week. Tests in
+  `tests/test_keyweb.py`.
 - **`render.channels` — machine-readable channel tags for surfaced
   memories.** Four closed channels (`RES` resident, `EMG` emergent, `SPK`
   flashback, `RSN` resonant) with `tag`/`parse` as the whole protocol:
