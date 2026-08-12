@@ -195,7 +195,8 @@ def commit_to_canon(
         when = str(f.get("when", "") or "")
         intensity = f.get("intensity")
         intensity = float(intensity) if isinstance(intensity, (int, float)) else default_intensity
-        cited = f.get("sources") if isinstance(f.get("sources"), list) else []
+        raw_sources = f.get("sources")
+        cited = raw_sources if isinstance(raw_sources, list) else []
         sources = [
             (source_of(int(n)) if source_of is not None else f"turn:{int(n)}")
             for n in cited
