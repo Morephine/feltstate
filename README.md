@@ -13,6 +13,14 @@
 &nbsp;![License: MIT](https://img.shields.io/badge/license-MIT-green)
 &nbsp;[English](README.md) | [中文](README.zh.md)
 
+<p align="center">
+  <img src="docs/architecture.svg" alt="feltstate architecture — memory pipeline, affect engine, time discipline, and the key web" width="920">
+</p>
+
+```bash
+pip install feltstate        # → jump to the Quickstart below
+```
+
 feltstate is a **character engine for AI agents** — a small, opinionated
 reference library that gives a long-running agent a persistent, *tunable*
 character: affect appraised outside the reply model, structured memories that

@@ -11,6 +11,14 @@
 &nbsp;![License: MIT](https://img.shields.io/badge/license-MIT-green)
 &nbsp;[English](README.md) | [中文](README.zh.md)
 
+<p align="center">
+  <img src="docs/architecture.svg" alt="feltstate 架构 — 记忆生产线、情感引擎、时间纪律与键网" width="920">
+</p>
+
+```bash
+pip install feltstate        # → 直接跳到下方 Quickstart
+```
+
 feltstate 是给 **AI agent 的角色引擎** (character engine)——一个小而有主张的
 参考库, 给长期运行的 agent 一副持久且*可调*的性格: 感情在回复模型之外判读,
 结构化记忆会淡忘、强化、修正、合并、退役, 紧凑的状态作为上下文交回——

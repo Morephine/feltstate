@@ -1,0 +1,155 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="900" viewBox="0 0 1280 900" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <rect width="1280" height="900" fill="#ffffff"/>
+
+  <!-- header -->
+  <rect x="48" y="40" width="18" height="18" rx="4" fill="#8250df"/>
+  <text x="78" y="55" font-size="22" font-weight="700" fill="#1f2328">feltstate — how the pieces bite together</text>
+  <text x="78" y="78" font-size="13" fill="#656d76">three systems, one discipline: affect is appraised, memory is earned, time is the program's job</text>
+
+  <!-- ===== Column 1: Memory pipeline ===== -->
+  <g>
+    <rect x="48" y="108" width="368" height="556" rx="10" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1"/>
+    <rect x="48" y="108" width="368" height="6" rx="3" fill="#0969da"/>
+    <text x="76" y="146" font-size="16" font-weight="700" fill="#0969da">MEMORY PIPELINE</text>
+    <text x="76" y="166" font-size="12" fill="#656d76">transcript → extract → crystallise → recall</text>
+
+    <g font-size="13.5">
+      <rect x="72" y="184" width="320" height="66" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+      <text x="88" y="211" font-weight="600" fill="#1f2328">transcript — immutable raw dialogue</text>
+      <text x="88" y="232" font-size="12" fill="#656d76">every sentence keeps its original clock</text>
+      <path d="M 232 258 l -5 -8 h 10 z" fill="#8c959f"/>
+
+      <rect x="72" y="266" width="320" height="66" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+      <text x="88" y="293" font-weight="600" fill="#1f2328">nightly pass — read everything once</text>
+      <text x="88" y="314" font-size="12" fill="#656d76">capable model, low effort · events, not summaries</text>
+      <path d="M 232 340 l -5 -8 h 10 z" fill="#8c959f"/>
+
+      <rect x="72" y="348" width="320" height="66" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+      <text x="88" y="375" font-weight="600" fill="#1f2328">canon — 5W1H rows with provenance</text>
+      <text x="88" y="396" font-size="12" fill="#656d76">birth affect + intensity live on the row</text>
+      <path d="M 232 422 l -5 -8 h 10 z" fill="#8c959f"/>
+
+      <rect x="72" y="430" width="320" height="66" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+      <text x="88" y="457" font-weight="600" fill="#1f2328">crystal ladder — day → week → month → year</text>
+      <text x="88" y="478" font-size="12" fill="#656d76">each rung cites the one below, down to the sentence</text>
+      <path d="M 232 504 l -5 -8 h 10 z" fill="#8c959f"/>
+
+      <rect x="72" y="512" width="320" height="66" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+      <text x="88" y="539" font-weight="600" fill="#1f2328">lifecycle — decay, tombstones, real deletion</text>
+      <text x="88" y="560" font-size="12" fill="#656d76">memories age, cool, and die with an audit trail</text>
+    </g>
+    <text x="232" y="628" text-anchor="middle" font-size="11" fill="#8c959f" font-style="italic">the data plane</text>
+  </g>
+
+  <!-- ===== Column 2: Affect engine ===== -->
+  <g>
+    <rect x="456" y="108" width="368" height="556" rx="10" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1"/>
+    <rect x="456" y="108" width="368" height="6" rx="3" fill="#bf3989"/>
+    <text x="484" y="146" font-size="16" font-weight="700" fill="#bf3989">AFFECT ENGINE</text>
+    <text x="484" y="166" font-size="12" fill="#656d76">appraised outside the reply model</text>
+
+    <g font-size="13.5">
+      <rect x="480" y="184" width="320" height="66" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+      <text x="496" y="211" font-weight="600" fill="#1f2328">a separate appraiser reads the dialogue</text>
+      <text x="496" y="232" font-size="12" fill="#656d76">the agent cannot author its own mood</text>
+
+      <rect x="480" y="266" width="320" height="66" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+      <text x="496" y="293" font-weight="600" fill="#1f2328">periodic sampling — even in silence</text>
+      <text x="496" y="314" font-size="12" fill="#656d76">no conversation → natural decay, mood still flows</text>
+
+      <rect x="480" y="348" width="320" height="66" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+      <text x="496" y="375" font-weight="600" fill="#1f2328">three timescales on one reading</text>
+      <text x="496" y="396" font-size="12" fill="#656d76">moment · mood · temperament</text>
+
+      <rect x="480" y="430" width="320" height="66" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+      <text x="496" y="457" font-weight="600" fill="#1f2328">per-turn state block — ephemeral</text>
+      <text x="496" y="478" font-size="12" fill="#656d76">returned as context, not behavioural instruction</text>
+
+      <rect x="480" y="512" width="320" height="66" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+      <text x="496" y="539" font-weight="600" fill="#1f2328">snapshots into the ledger, short window</text>
+      <text x="496" y="560" font-size="12" fill="#656d76">memories are stamped with measured affect</text>
+    </g>
+    <text x="640" y="628" text-anchor="middle" font-size="11" fill="#8c959f" font-style="italic">the control plane</text>
+  </g>
+
+  <!-- ===== Column 3: Time discipline ===== -->
+  <g>
+    <rect x="864" y="108" width="368" height="556" rx="10" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1"/>
+    <rect x="864" y="108" width="368" height="6" rx="3" fill="#1a7f37"/>
+    <text x="892" y="146" font-size="16" font-weight="700" fill="#1a7f37">TIME DISCIPLINE</text>
+    <text x="892" y="166" font-size="12" fill="#656d76">who stamps time, and which time</text>
+
+    <g font-size="13.5">
+      <rect x="888" y="184" width="320" height="66" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+      <text x="904" y="211" font-weight="600" fill="#1f2328">timestamps come from the program</text>
+      <text x="904" y="232" font-size="12" fill="#656d76">the model's clock is never trusted</text>
+
+      <rect x="888" y="266" width="320" height="66" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+      <text x="904" y="293" font-weight="600" fill="#1f2328">naked timestamps are host-local</text>
+      <text x="904" y="314" font-size="12" fill="#656d76">cores and seals carry true UTC</text>
+
+      <rect x="888" y="348" width="320" height="66" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+      <text x="904" y="375" font-weight="600" fill="#1f2328">event time ≠ merge time</text>
+      <text x="904" y="396" font-size="12" fill="#656d76">every fused memory keeps both, never mixed</text>
+
+      <rect x="888" y="430" width="320" height="66" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+      <text x="904" y="457" font-weight="600" fill="#1f2328">raw lands by event day</text>
+      <text x="904" y="478" font-size="12" fill="#656d76">catch-up runs can't disguise old material as today</text>
+
+      <rect x="888" y="512" width="320" height="66" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+      <text x="904" y="539" font-weight="600" fill="#1f2328">merged once, never re-cooked</text>
+      <text x="904" y="560" font-size="12" fill="#656d76">idempotent by design — no double memories</text>
+    </g>
+    <text x="1048" y="628" text-anchor="middle" font-size="11" fill="#8c959f" font-style="italic">the bedrock</text>
+  </g>
+
+  <!-- inter-column arrows -->
+  <g stroke="#8c959f" stroke-width="1.5" fill="none">
+    <path d="M 418 386 L 452 386"/>
+    <path d="M 826 386 L 860 386"/>
+  </g>
+  <g fill="#8c959f">
+    <path d="M 454 386 l -8 -4.5 v 9 z"/>
+    <path d="M 862 386 l -8 -4.5 v 9 z"/>
+  </g>
+
+  <!-- connectors down to keyweb -->
+  <g stroke="#8c959f" stroke-width="1.5" fill="none">
+    <path d="M 232 664 L 232 692"/>
+    <path d="M 640 664 L 640 692"/>
+    <path d="M 1048 664 L 1048 692"/>
+  </g>
+  <g fill="#8c959f">
+    <path d="M 232 694 l -4.5 -8 h 9 z"/>
+    <path d="M 640 694 l -4.5 -8 h 9 z"/>
+    <path d="M 1048 694 l -4.5 -8 h 9 z"/>
+  </g>
+
+  <!-- ===== Bottom band: key web ===== -->
+  <g>
+    <rect x="48" y="696" width="1184" height="148" rx="10" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1"/>
+    <rect x="48" y="696" width="1184" height="6" rx="3" fill="#8250df"/>
+    <text x="76" y="732" font-size="16" font-weight="700" fill="#8250df">THE KEY WEB</text>
+    <text x="248" y="732" font-size="12" fill="#656d76">a ledger is a list; a memory is a web</text>
+
+    <g font-size="13">
+      <rect x="72" y="750" width="270" height="70" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+      <text x="88" y="777" font-weight="600" fill="#1f2328">word keys, born on the row</text>
+      <text x="88" y="798" font-size="12" fill="#656d76">single words that exist to collide</text>
+
+      <rect x="366" y="750" width="270" height="70" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+      <text x="382" y="777" font-weight="600" fill="#1f2328">one collision pass per fact</text>
+      <text x="382" y="798" font-size="12" fill="#656d76">whole-history candidates, no recency cut-off</text>
+
+      <rect x="660" y="750" width="270" height="70" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+      <text x="676" y="777" font-weight="600" fill="#1f2328">judged edges, on both rows</text>
+      <text x="676" y="798" font-size="12" fill="#656d76">candidacy is arithmetic, kinship is an opinion</text>
+
+      <rect x="954" y="750" width="254" height="70" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+      <text x="970" y="777" font-weight="600" fill="#1f2328">surfaced on four channels</text>
+      <text x="970" y="798" font-size="12" font-family="Consolas, monospace" fill="#656d76">RES · EMG · SPK · RSN</text>
+    </g>
+  </g>
+
+  <text x="48" y="876" font-size="12" font-family="Consolas, 'Courier New', monospace" fill="#8c959f"># state is returned as context, never as instruction — the reply model authors nothing but the reply</text>
+</svg>
