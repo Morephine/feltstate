@@ -1,6 +1,6 @@
 # feltstate
 
-**Give an LLM agent a mood it can carry forward—and memories that can age, change, and die.**
+**Give an LLM agent a mood it can carry forward—and memories that can age, change, die, and find each other.**
 
 > Mechanism: persistent affect is estimated by a component separate from the
 > reply model, while structured memory is managed through explicit storage,
@@ -18,26 +18,52 @@
 </p>
 
 ```bash
-pip install feltstate        # → jump to the Quickstart below
+git clone https://github.com/Morephine/feltstate && pip install -e feltstate
+# core is pure standard library — then jump to the Quickstart below.
+# (Not yet published to PyPI.)
 ```
 
 feltstate is a **character engine for AI agents** — a small, opinionated
 reference library that gives a long-running agent a persistent, *tunable*
-character: affect appraised outside the reply model, structured memories that
-can fade, strengthen, change, merge, or be retired, and compact state returned
-as context rather than behavioural instruction. Around the engine sits an [integration
-handbook](#the-integration-handbook) — fifteen chapters on how the pieces
-assemble into a companion that speaks, shows a face, works, fails, and stays
-itself — with every quoted transcript reproducible from a runnable example.
+character. It is built as **three systems that interlock, plus a web that
+ties memory together**:
+
+- **A memory production line.** Verbatim transcript at the bottom, never
+  edited; distillation into compact 5W1H facts whose salience decays,
+  strengthens with repetition, and lasts longer when recalled; an auditable
+  birth-to-death lifecycle (fingerprints, fusion lineage, tombstone-first
+  deletion, a hash-linked audit chain); and recall as explicit doors the agent
+  opens, never a hidden injection.
+- **An affect engine.** Appraised *outside* the reply model — the model cannot
+  author its own persisted feelings — and integrated across timescales: fast
+  mood, releasing pressure bars, slow temperament, permanent imprints, and a
+  ~180-day plasticity layer. It keeps ticking when nobody is talking.
+- **Time discipline.** Timestamps come from the program, never from a model's
+  prose; facts carry bi-temporal stamps (when a thing *happened* versus when
+  it was *believed or revised*), and queries can ask what was believed as-of a
+  past moment.
+- **The key web.** Word keys imprinted on each fact at birth and kinship edges
+  judged one pair at a time turn the flat ledger into a web. A query enters by
+  colliding words with keys, gathers kin along judged edges, and reads the
+  chain's tail as the present — no vector index, no invalidation machine
+  (see [the key web](#the-key-web-memorys-horizontal-dimension)).
+
+One stance up front: the dynamics constants that drive all of this — decay
+rates, pressure thresholds, the plasticity curve — are **character and
+resilience parameters, deliberately plastic**. Retuning them is how you write
+a *different* character. They are not scientific measurements, and no such
+claim is made (see [Where the numbers come from](#where-the-numbers-come-from)).
+
+Around the engine sits an [integration handbook](#the-integration-handbook) —
+fifteen chapters on how the pieces assemble into a companion that speaks, shows
+a face, works, fails, and stays itself — with every quoted transcript
+reproducible from a runnable example.
 
 It draws on affective computing, agent memory, appraisal, and selective
-forgetting, but the architecture is its own: affect is appraised outside the
-reply model and cannot be authored by it, structured memory carries provenance
-through an auditable birth-to-death lifecycle, persisted state moves across
-several timescales, and dynamic context is injected without rewriting the static
-prompt. Several of these are uncommon in agent libraries — memory that can *die*
-with a traceable lineage, a hard ownership boundary on persisted affect, and
-off-path zero-LLM dreaming — and they are built that way on purpose, not
+forgetting, but the architecture is its own. Several of its parts are uncommon
+in agent libraries — memory that can *die* with a traceable lineage, a hard
+ownership boundary on persisted affect, a judged (not embedded) relation web,
+and off-path zero-LLM dreaming — and they are built that way on purpose, not
 reassembled from off-the-shelf parts.
 
 > Distilled and rewritten as a clean, general library, adapted from mechanisms
@@ -63,10 +89,20 @@ Its main design choices are:
    fusion lineage, per-kind ageing clocks, pure death plans, tombstone-first
    deletion, snapshot cleanup, and a hash-linked audit trail for detecting
    unexplained mutation or disappearance.
-2. **Affect is estimated separately, not self-reported.** A configured
+2. **Memory is a web, not only a ledger.** Word keys are imprinted on each
+   fact at birth; a digest gives every new fact one collision pass against the
+   whole ledger and a judge decides kinship, writing `relates` edges on both
+   rows with the *why*. The query leg (`Canon.reach`) enters by key collision,
+   walks judged edges, and answers with an event-time chain whose **tail is
+   the present** — recency wins by standing last, not by an invalidation flag.
+3. **Time is disciplined, not decorative.** Timestamps are program-stamped;
+   facts are bi-temporal (`valid_at` versus record time, `invalid_at` when a
+   belief ends), history can be queried as-of a past moment, and the key web
+   prices candidacy by the gap between when things *happened*.
+4. **Affect is estimated separately, not self-reported.** A configured
    `AffectSource` produces the affect signal, so the reply model cannot freely
    author its own persisted state.
-3. **State changes across several timescales.** Fast mood, slow temperament,
+5. **State changes across several timescales.** Fast mood, slow temperament,
    relationship, pressure, aftertaste, anticipation, and optional imprints are
    integrated with configurable human-inspired asymmetric dynamics — every
    rate a personality dial rather than a fitted constant (see
@@ -75,19 +111,19 @@ Its main design choices are:
    lived charge, amplifying future inflow, healing toward baseline at a
    safety-paced daily percentage — character change on a ~180-day scale
    (`examples/plasticity.py`).
-4. **Capability is judged separately from mood.** An optional skill-memory
+6. **Capability is judged separately from mood.** An optional skill-memory
    region uses human 1/2/3 ratings, promotion, retirement, and bounded
    exploration rather than letting the reply model declare its own competence.
-5. **Proactive behaviour is gated, not merely scheduled.** The reference
+7. **Proactive behaviour is gated, not merely scheduled.** The reference
    scheduler combines idle time, presence, cooldowns, daily quotas, pending
    topics, time windows, dreams, introspection, and diary behaviours through a
    propose/dispatch/commit flow.
-6. **Persistent state is context, never a command.** The reply model receives a
+8. **Persistent state is context, never a command.** The reply model receives a
    compact first-person description rather than numeric controls or an
    instruction such as “respond sadly.”
-7. **The injection path is cache-aware.** Static persona text can remain a stable
+9. **The injection path is cache-aware.** Static persona text can remain a stable
    prefix while dynamic state rides on the latest user message.
-8. **Dreaming is an optional state experiment.** Zero-LLM recombination of
+10. **Dreaming is an optional state experiment.** Zero-LLM recombination of
    affect-tagged fragments can leave a temporary mood residue without supplying
    the reply model with an explicit causal narrative.
 
@@ -227,6 +263,57 @@ python examples/memory_lifecycle.py
 
 ---
 
+## The key web: memory's horizontal dimension
+
+The lifecycle above is memory's *vertical* axis — one fact's whole life, from
+sealed birth to audited death. The key web is the *horizontal* one: how facts
+scattered along the timeline find each other, without a vector database.
+
+Two small facts live **on the row itself**, never in a sidecar index:
+
+- `keys` — a handful of **single words** naming what the fact is about. A key
+  exists to *collide*: two facts that share a word have met. Phrases are
+  rejected mechanically (a phrase never matches anything else), and
+  `key_vocab` shows your extractor which words the ledger already speaks, so
+  new facts prefer old words and actually meet.
+- `relates` — edges to other facts, each carrying the *why* a judge bound
+  them. Shared words only make *candidates*; an edge is written when a judge
+  (an LLM pass, a rules engine, a human — any callable) says the two are kin,
+  and it lands on **both** rows. Candidacy is arithmetic; kinship is an
+  opinion; the library does not fake opinions.
+
+Admission into a newcomer's candidate pool is earned, not aged out: a
+candidate's *birth* intensity, multiplied by a relevance factor that can at
+most double it, must clear a floor that rises with the age gap. Every older
+fact is a candidate forever — an old memory is not less of a candidate for
+being old, it just has to have mattered.
+
+Reading is the same web backwards. `Canon.reach` enters by colliding query
+words with keys, gathers kin along judged edges, and orders everything by
+event time — **the chain's tail is the present**. No invalidation flags, no
+judgement machine: a newer first-hand fact outranks an older one by standing
+after it, and every fact in the answer carries how it entered. From
+`python examples/key_web.py` (offline, deterministic):
+
+```text
+== reach("rent") — the chain, oldest to newest ==
+   [2026-03-02] the rent went up   <- key hit (rent)
+   [2026-03-09] dispute opened with the landlord   <- kin via edge: shared keys: money
+   [2026-03-28] landlord agreed to freeze the rent   <- key hit (rent)
+
+   current (the tail): landlord agreed to freeze the rent
+   — nothing was marked invalid; the newer fact simply stands last.
+```
+
+Pair the chain with lifecycle drilling and any fact in it can descend to the
+transcript context that produced it.
+
+```bash
+python examples/key_web.py
+```
+
+---
+
 ## How affect works
 
 ```
@@ -305,7 +392,7 @@ hours like any feeling. See §5 of
 | `feltstate/config.py` | Every tunable in one place (EWMA rates, decay, pressure thresholds, label maps) + `PersonaDials`. |
 | `feltstate/sources/` | `AffectSource` interface + `KeywordSource` (rules, zero-dep) + `LLMSource` (any OpenAI-compatible endpoint). The pluggable affect-estimation seam. |
 | `feltstate/affect/` | The dynamics: `pressure` (multi-bar release), `traits` (asymmetric adaptation), `imprint` (permanent marks), `relationship` (the bond evolving), `tide` (mood's rise & fall), `smooth` (label hysteresis). |
-| `feltstate/memory/` | `Canon` — a decaying 5W1H fact store; `feeling` — optional evidence-weighted affect per fact; `recall` and bi-temporal history; `extract` and `context`; `skill` — a human-rated capability region; `lifecycle` — optional provenance fingerprints, lineage, ageing clocks, death planning, tombstone-first deletion, snapshot cleanup, and a hash-linked audit ledger. |
+| `feltstate/memory/` | `Canon` — a decaying 5W1H fact store; `feeling` — optional evidence-weighted affect per fact; `recall` and bi-temporal history; `extract` and `context`; `skill` — a human-rated capability region; `lifecycle` — optional provenance fingerprints, lineage, ageing clocks, death planning, tombstone-first deletion, snapshot cleanup, and a hash-linked audit ledger; `keyweb` — word keys and judged edges born on the row, the one-pass collision digest, and the chain query leg behind `Canon.reach`. |
 | `feltstate/dream.py` | Off-path, zero-LLM: recombines the agent's charged material (`Fragment`s) into an *illogical* dream that leaves a faint mood residue not surfaced to the reply model as an explicit cause. Swap the `Phrasebook` for another language. |
 | `feltstate/sleep.py` | The single sleep-pressure accumulator (`Tiredness`) that decides *when* to dream: rises with arousal, gated by threshold + idle + a hard refractory floor, discharged by a dream. Homeostatic, not clock-driven. |
 | `feltstate/timeawareness/` | Fuzzy "how long since we last talked" + precise "now". |
@@ -369,6 +456,7 @@ The matching runnable examples, all deterministic or offline:
 ```bash
 python examples/prompt_shapes.py    # the three moments, full message arrays
 python examples/memory_tools.py     # the five tools + dispatcher, end to end
+python examples/key_web.py          # keys collide, edges judged, the tail is the present
 python examples/agent_narration.py  # voicebank pools, throttle, failure lines
 python examples/style_spectrum.py   # state bands → delivery notes
 python examples/companion_live.py   # the interactive loop (FELTSTATE_LIVE_FAST=1 to hurry it)
