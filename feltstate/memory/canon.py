@@ -1136,6 +1136,85 @@ class Canon:
         out.sort(key=lambda r: order.get(r["id"], 999))  # preserve the scored ranking
         return out
 
+    def reach(
+        self,
+        *words: str,
+        hops: int = 1,
+        limit: int = 12,
+        region: str | None = None,
+    ) -> dict:
+        """The key web's query leg: collide, walk, and let time decide.
+
+        Where :meth:`search` matches substrings and :meth:`recall` scores text,
+        ``reach`` reads the web that was written onto the rows: query *words*
+        collide with imprinted ``keys`` to enter (a phrase never collides),
+        judged ``relates`` edges gather kin up to ``hops`` steps out, and the
+        gathered facts are ordered by event time — **the chain's tail is what
+        currently holds**. No semantic index, no invalidation flags: a newer
+        first-hand fact outranks an older one by standing after it, and every
+        fact in the answer carries how it entered (its shared keys, or the
+        edge's judged *why*).
+
+        Keeps recall feedback consistent with the other read paths: returned
+        facts get their ``recalls`` bumped ("used memory sticks"). If the
+        chain outgrows ``limit``, the *oldest* rows are dropped — the tail is
+        the answer; the head is background. Returns::
+
+            {"hits": n_entered_by_key, "kin": n_gathered_by_edge,
+             "chain": [ {..rendered fact.., "entered": "key"|"edge",
+                         "shared": [...] | None, "via": why | None}, ... ],
+             "current": chain[-1] | None}
+
+        Pair with ``feltstate.memory.lifecycle`` drilling to descend from any
+        fact in the chain to the source context that produced it.
+        """
+        from .keyweb import chain as _kw_chain
+        from .keyweb import key_hits as _kw_hits
+        from .keyweb import walk_edges as _kw_walk
+
+        now = datetime.now(timezone.utc)
+        rows = [
+            e
+            for e in self._load_confirmed()
+            if self._is_active(e)
+            and (e.get("region") or "fact") == (region or "fact")
+            and self._tier(self._current_intensity(e, now)) != "forgotten"
+        ]
+
+        hit_reports = _kw_hits(words, rows)
+        seeds = [r["entry"] for r in hit_reports]
+        kin_reports = _kw_walk(seeds, rows, hops=hops)
+
+        entered: dict[str, dict] = {}
+        for r in hit_reports:
+            entered[_entry_id(r["entry"])] = {"entered": "key", "shared": r["shared"], "via": None}
+        for r in kin_reports:
+            eid = _entry_id(r["entry"])
+            if eid not in entered:
+                entered[eid] = {"entered": "edge", "shared": None, "via": r["via"]}
+
+        ordered = _kw_chain(seeds + [r["entry"] for r in kin_reports])
+        if limit and len(ordered) > max(1, int(limit)):
+            ordered = ordered[-max(1, int(limit)) :]  # keep the tail: the present
+        kept_ids = [_entry_id(e) for e in ordered]
+
+        # Recall feedback, same contract as search/recall: used memory sticks.
+        bumped = {_entry_id(e): e for e in self._bump_recalls(set(kept_ids), now)}
+        out: list[dict] = []
+        for eid in kept_ids:
+            row = bumped.get(eid)
+            if row is None:
+                continue
+            view = self._render(row, now)
+            view.update(entered.get(eid) or {"entered": "key", "shared": None, "via": None})
+            out.append(view)
+        return {
+            "hits": sum(1 for v in entered.values() if v["entered"] == "key"),
+            "kin": sum(1 for v in entered.values() if v["entered"] == "edge"),
+            "chain": out,
+            "current": out[-1] if out else None,
+        }
+
     def view(self, *, include_archived: bool = False, region: str | None = None) -> list[dict]:
         """Return the agent's currently-felt memories, decayed and sorted.
 

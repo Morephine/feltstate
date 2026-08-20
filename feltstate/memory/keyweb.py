@@ -50,6 +50,12 @@ reference judge for tests and offline use. With no judge, a digest returns the
 candidate report and writes nothing: candidacy is arithmetic, kinship is an
 opinion, and the library does not fake opinions.
 
+**Reading the web is the same three facts in reverse.** The query leg —
+:func:`key_hits` to enter, :func:`walk_edges` to gather kin, :func:`chain` to
+let event time decide — never consults a semantic index or an invalidation
+flag: the newest first-hand row *is* the present, because it stands at the
+tail. ``Canon.reach`` composes the three over a live store.
+
 Everything here is pure functions over plain dicts plus one convenience bridge
 (:func:`digest_canon`) that runs the whole day-scope pass inside the canon's
 own write lock. No network, no index files, no daemon.
@@ -68,13 +74,16 @@ __all__ = [
     "KeyWebConfig",
     "SharedKeyJudge",
     "admission_floor",
+    "chain",
     "collide",
     "day_digest",
     "digest_canon",
     "imprint_into",
     "imprint_keys",
+    "key_hits",
     "key_vocab",
     "relevance_mult",
+    "walk_edges",
 ]
 
 
@@ -455,3 +464,109 @@ def digest_canon(
         if report["edges"]:
             _rewrite_jsonl(canon.path, main)
     return report
+
+
+# --------------------------------------------------------------------------- #
+# The query leg — reading the web                                             #
+# --------------------------------------------------------------------------- #
+# Writing built the web (keys at birth, judged edges at digest time); these
+# three functions read it back, and they are deliberately the *whole* read
+# path: collide words with keys to enter, walk judged edges to gather kin,
+# then let event time decide — the chain's tail is the present. There is no
+# semantic index and no invalidation machine behind them: if the answer looks
+# wrong, the keys, the edges, or the timestamps are wrong, and each of those
+# is a fact on a row that can be read and fixed.
+
+
+def key_hits(
+    words: Iterable[str],
+    ledger: Sequence[Mapping],
+    cfg: KeyWebConfig | None = None,
+) -> list[dict]:
+    """Enter the web: collide query *words* against the ledger's keys.
+
+    The query side is validated exactly like :func:`imprint_keys` — words
+    only; a phrase never collides — and matching is case-folded. Only live
+    rows answer. Returns one report per touched row, most-collided first::
+
+        {"entry": row, "shared": [keys], "hits": n}
+
+    Nothing is written and no salience is bumped: this is arithmetic over
+    rows, usable on any ledger snapshot. Recall feedback belongs to the
+    store that owns the rows (see ``Canon.reach``).
+    """
+    probe: dict = {}
+    accepted = imprint_keys(probe, words, cfg)
+    wanted = {k.lower() for k in accepted}
+    out: list[dict] = []
+    if not wanted:
+        return out
+    for row in ledger:
+        if not _is_live(row):
+            continue
+        shared = [k for k in _keys_of(row) if k.lower() in wanted]
+        if not shared:
+            continue
+        out.append({"entry": row, "shared": shared, "hits": len(shared)})
+    out.sort(key=lambda r: -r["hits"])
+    return out
+
+
+def walk_edges(
+    seeds: Sequence[Mapping],
+    ledger: Sequence[Mapping],
+    hops: int = 1,
+) -> list[dict]:
+    """Gather kin: follow judged ``relates`` edges outward from ``seeds``.
+
+    Breadth-first, up to ``hops`` steps (edges were judged one pair at a
+    time, so every extra hop dilutes the judgement — the default of one hop
+    reaches exactly what a judge once said was kin). Rows already in
+    ``seeds`` are not re-reported. Only live rows are followed or returned:
+    a retracted row's edges died with it. Returns discovery-ordered reports::
+
+        {"entry": row, "via": <the edge's why>, "hop": 1..hops}
+    """
+    by_id = {_entry_id(dict(r)): r for r in ledger}
+    seen = {_entry_id(dict(s)) for s in seeds}
+    frontier = list(seeds)
+    out: list[dict] = []
+    for hop in range(1, max(0, int(hops)) + 1):
+        nxt: list[Mapping] = []
+        for row in frontier:
+            if not _is_live(row):
+                continue
+            for edge in row.get("relates") or []:
+                if not isinstance(edge, Mapping):
+                    continue
+                to = str(edge.get("to") or "")
+                if not to or to in seen:
+                    continue
+                seen.add(to)
+                target = by_id.get(to)
+                if target is None or not _is_live(target):
+                    continue  # edge into the archive or into history: noted, not followed
+                out.append({"entry": target, "via": str(edge.get("why") or ""), "hop": hop})
+                nxt.append(target)
+        frontier = nxt
+        if not frontier:
+            break
+    return out
+
+
+def chain(rows: Sequence[Mapping]) -> list[dict]:
+    """Let time decide: order rows by event time; the tail is the present.
+
+    Sorts by ``valid_at`` (falling back to ``ts``) ascending — the same two
+    stamps candidacy prices in :func:`collide`. Rows with no parseable stamp
+    sort first, oldest-unknown: they can provide background, never the
+    verdict. This is the whole invalidation story on purpose: no row is
+    marked wrong, the newer first-hand row simply stands behind it in time,
+    and whoever reads the chain reads the tail as what currently holds.
+    """
+    stamped = []
+    for i, row in enumerate(rows):
+        t = _parse_ts(str(row.get("valid_at") or row.get("ts") or ""))
+        stamped.append((t is not None, t.isoformat() if t is not None else "", i, row))
+    stamped.sort(key=lambda x: (x[0], x[1], x[2]))
+    return [dict(r) if not isinstance(r, dict) else r for *_, r in stamped]

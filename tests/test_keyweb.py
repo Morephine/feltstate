@@ -263,3 +263,108 @@ def test_key_vocab_folds_case_and_ignores_dead_rows():
     # counting is case-folded, the first spelling is what gets reported;
     # the retracted row's keys never vote, so "gate" holds one use, not two.
     assert vocab == ["Garden", "gate"]
+
+
+# --------------------------------------------------------------------------- #
+# The query leg — key_hits / walk_edges / chain / Canon.reach                 #
+# --------------------------------------------------------------------------- #
+def test_key_hits_validates_words_and_ranks_by_collisions():
+    from feltstate.memory.keyweb import key_hits
+
+    a = _entry("ash", "the rent dispute", keys=["rent", "dispute"])
+    b = _entry("ash", "rent paid", keys=["rent"])
+    dead = _entry("ash", "old rent gripe", keys=["rent"])
+    dead["_retracted"] = True
+    ledger = [b, a, dead]
+
+    hits = key_hits(["RENT", "dispute", "not a key"], ledger)
+    objs = [h["entry"]["what"]["object"] for h in hits]
+    assert objs == ["the rent dispute", "rent paid"]  # most-collided first, dead excluded
+    assert hits[0]["hits"] == 2 and hits[0]["shared"] == ["rent", "dispute"]
+    assert key_hits(["a phrase never collides"], ledger) == []
+
+
+def test_walk_edges_follows_judged_kin_and_stops_at_dead_rows():
+    from feltstate.memory.keyweb import walk_edges
+
+    seed = _entry("ash", "dispute starts", keys=["dispute", "landlord"])
+    kin = _entry("ash", "landlord relents", keys=["landlord"], days_ago=10)
+    far = _entry("ash", "movers booked", keys=["boxes"], days_ago=5)
+    dead = _entry("ash", "retracted rumour", keys=["landlord"], days_ago=20)
+    dead["_retracted"] = True
+    ledger = [seed, kin, far, dead]
+
+    from feltstate.memory.keyweb import _entry_id
+
+    ts = "2026-01-01T00:00:00+00:00"
+    seed["relates"] = [
+        {"to": _entry_id(kin), "why": "same landlord", "ts": ts},
+        {"to": _entry_id(dead), "why": "was kin once", "ts": ts},
+    ]
+    kin["relates"] = [
+        {"to": _entry_id(seed), "why": "same landlord", "ts": ts},
+        {"to": _entry_id(far), "why": "the move it forced", "ts": ts},
+    ]
+
+    one_hop = walk_edges([seed], ledger, hops=1)
+    assert [r["entry"]["what"]["object"] for r in one_hop] == ["landlord relents"]
+    assert one_hop[0]["via"] == "same landlord" and one_hop[0]["hop"] == 1
+
+    two_hops = walk_edges([seed], ledger, hops=2)
+    assert [r["entry"]["what"]["object"] for r in two_hops] == [
+        "landlord relents",
+        "movers booked",
+    ]
+    assert two_hops[1]["hop"] == 2  # judged one pair at a time; hop 2 is dilution, opt-in
+
+
+def test_chain_orders_by_event_time_with_unstamped_first():
+    from feltstate.memory.keyweb import chain
+
+    newest = _entry("ash", "resolved", days_ago=1)
+    oldest = _entry("ash", "raised", days_ago=40)
+    unstamped = {"who": {"actor": "ash"}, "what": {"object": "background"}, "intensity": 0.5}
+
+    ordered = chain([newest, unstamped, oldest])
+    assert [r["what"]["object"] for r in ordered] == ["background", "raised", "resolved"]
+
+
+def test_canon_reach_walks_the_web_and_tail_is_the_present(tmp_path):
+    from feltstate.memory.keyweb import SharedKeyJudge, _entry_id, digest_canon
+
+    path = tmp_path / "canon.jsonl"
+    raised = _entry("ash", "rent raised", intensity=0.8, days_ago=40, keys=["rent", "landlord"])
+    dispute = _entry(
+        "ash", "dispute with landlord", intensity=0.8, days_ago=30, keys=["dispute", "landlord"]
+    )
+    resolved = _entry("ash", "rent resolved at last", intensity=0.7, days_ago=1, keys=["rent"])
+    noise = _entry("ash", "bought a kettle", intensity=0.6, days_ago=15, keys=["kettle"])
+    path.write_text(
+        "\n".join(json.dumps(e, ensure_ascii=False) for e in (raised, dispute, resolved, noise))
+        + "\n",
+        encoding="utf-8",
+    )
+    c = Canon(path)
+    # Judge binds raised <-> dispute (shared landlord... needs 2 shared keys, so use 1).
+    digest_canon(c, [_entry_id(dispute)], judge=SharedKeyJudge(min_shared=1))
+
+    report = c.reach("rent")
+    objs = [f["object"] for f in report["chain"]]
+    # Entered by key: raised + resolved. Gathered by edge: dispute. Noise stays out.
+    assert objs == ["rent raised", "dispute with landlord", "rent resolved at last"]
+    assert report["current"]["object"] == "rent resolved at last"  # the tail is the present
+    assert report["hits"] == 2 and report["kin"] == 1
+
+    by_obj = {f["object"]: f for f in report["chain"]}
+    assert by_obj["rent raised"]["entered"] == "key" and "rent" in by_obj["rent raised"]["shared"]
+    assert by_obj["dispute with landlord"]["entered"] == "edge"
+    assert by_obj["dispute with landlord"]["via"]  # carries the judge's why
+    assert all(f["recalls"] >= 1 for f in report["chain"])  # used memory sticks
+
+    # limit drops the head, never the tail.
+    short = c.reach("rent", limit=2)
+    assert [f["object"] for f in short["chain"]] == [
+        "dispute with landlord",
+        "rent resolved at last",
+    ]
+    assert short["current"]["object"] == "rent resolved at last"
