@@ -64,19 +64,19 @@ def main() -> None:
         # A month of one small drama, plus unrelated noise. Keys are words —
         # note "the rent went up" would be rejected; "rent" collides.
         rows = [
-            fact("ash", "the rent went up", "2026-03-02T19:40:00+08:00", 0.9, ["rent", "money"]),
+            fact("ash", "the rent went up", "2026-03-02T19:40:00+00:00", 0.9, ["rent", "money"]),
             fact(
                 "ash",
                 "dispute opened with the landlord",
-                "2026-03-09T21:05:00+08:00",
+                "2026-03-09T21:05:00+00:00",
                 0.9,
                 ["dispute", "landlord", "money"],
             ),
-            fact("ash", "bought a kettle", "2026-03-11T15:00:00+08:00", 0.5, ["kettle"]),
+            fact("ash", "bought a kettle", "2026-03-11T15:00:00+00:00", 0.5, ["kettle"]),
             fact(
                 "ash",
                 "landlord agreed to freeze the rent",
-                "2026-03-28T20:30:00+08:00",
+                "2026-03-28T20:30:00+00:00",
                 0.9,
                 ["rent", "landlord"],
             ),
