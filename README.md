@@ -203,7 +203,9 @@ tools? Start at [docs/INTEGRATION.md](docs/INTEGRATION.md).
 The default `Canon` is a flat-file, structured memory store rather than a vector
 database. Facts are represented as compact 5W1H records and can be reinforced,
 corrected, retracted, queried as-of a past time, recalled through a pluggable
-scorer, and expanded back to the transcript context that produced them.
+scorer, and expanded back to the transcript context that produced them. (The
+default scorer is whitespace-tokenized lexical overlap — for Chinese and other
+non-space-delimited languages, plug a tokenizing scorer into that seam.)
 
 The optional `feltstate.memory.lifecycle` package models a longer path:
 
