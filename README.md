@@ -55,7 +55,7 @@ a *different* character. They are not scientific measurements, and no such
 claim is made (see [Where the numbers come from](#where-the-numbers-come-from)).
 
 Around the engine sits an [integration handbook](#the-integration-handbook) —
-fifteen chapters on how the pieces assemble into a companion that speaks, shows
+sixteen chapters on how the pieces assemble into a companion that speaks, shows
 a face, works, fails, and stays itself — with every quoted transcript
 reproducible from a runnable example.
 
