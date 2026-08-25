@@ -260,6 +260,14 @@ python examples/memory_lifecycle.py
 python examples/key_web.py
 ```
 
+而且这张网是看得见的: 一个单文件只读视窗把你的存储画成可行走的力导图——
+判过票的边悬停可见*为什么*, 点开事实有侧卡和亲缘, 搜词点亮整条链,
+引擎的持久状态渲染成条。
+
+```bash
+python -m feltstate.dashboard --canon canon.jsonl --state state.json
+```
+
 ---
 
 ## 感情如何运转
@@ -338,6 +346,7 @@ eng = Engine(source=VheartSource("kaishuiji/vheart-affect-v9"))
 | `feltstate/timeawareness/` | 模糊的"我们多久没说话了" + 精确的"现在"。 |
 | `feltstate/render/` | `render_felt_block` (状态 → 第一人称块) + `build_injection` (缓存安全)。 |
 | `feltstate/engine.py` | `Engine`——收拢一切的门面: `tick()`、`render()`、`inject()`、`dream()`、`maybe_dream()`。 |
+| `feltstate/dashboard.py` | 对着 `Canon` 开的只读浏览窗: 键网画成可行走的力导图、事实侧卡带亲缘、搜键点亮、可选持久状态条。`python -m feltstate.dashboard --canon …`。 |
 | `feltstate/companion/` | 参考编排层: `LLMBackend` / `FrontendAdapter` / `VoiceAdapter` / `UserPresenceAdapter` 四道缝, `companion_turn` 走完一轮估计→回复→表情→出声, `CompanionScheduler` 负责可选的主动行为。 |
 
 ---

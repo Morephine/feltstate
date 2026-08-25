@@ -322,6 +322,15 @@ transcript context that produced it.
 python examples/key_web.py
 ```
 
+And the web is watchable: a single-file, read-only viewer serves your store as
+a walkable force graph — judged edges with their *why* on hover, per-fact side
+cards, key search that lights up the chain, and your engine's persisted state
+as bars.
+
+```bash
+python -m feltstate.dashboard --canon canon.jsonl --state state.json
+```
+
 ---
 
 ## How affect works
@@ -408,6 +417,7 @@ hours like any feeling. See §5 of
 | `feltstate/timeawareness/` | Fuzzy "how long since we last talked" + precise "now". |
 | `feltstate/render/` | `render_felt_block` (state → first-person block) + `build_injection` (cache-safe). |
 | `feltstate/engine.py` | `Engine` — the façade that ties it together: `tick()`, `render()`, `inject()`, `dream()`, `maybe_dream()`. |
+| `feltstate/dashboard.py` | A read-only browser window onto a `Canon`: the key web as a walkable force graph, per-fact cards with kin, key search, optional persisted-state bars. `python -m feltstate.dashboard --canon …`. |
 | `feltstate/companion/` | A reference orchestration layer: `LLMBackend` / `FrontendAdapter` / `VoiceAdapter` / `UserPresenceAdapter` seams, `companion_turn` for one estimate→reply→express→speak round, and `CompanionScheduler` for optional proactive behaviours. |
 
 ---
