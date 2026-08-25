@@ -290,6 +290,14 @@ most double it, must clear a floor that rises with the age gap. Every older
 fact is a candidate forever — an old memory is not less of a candidate for
 being old, it just has to have mattered.
 
+That "candidates forever" bill is priced, and it is small: candidacy is paid
+**once per newborn fact, at digest time** — roughly a dozen facts a day, each
+making one pass over the ledger, off the hot path. Even a pathological ledger
+that never forgets — seventy years at that rate is ~400k rows — is seconds of
+nightly batch; and with decay, compaction, and real deletion running (as they
+do by default), the live set plateaus instead of growing linearly. Nothing on
+the conversational path ever pays this cost.
+
 Reading is the same web backwards. `Canon.reach` enters by colliding query
 words with keys, gathers kin along judged edges, and orders everything by
 event time — **the chain's tail is the present**. No invalidation flags, no
@@ -459,6 +467,8 @@ The matching runnable examples, all deterministic or offline:
 python examples/prompt_shapes.py    # the three moments, full message arrays
 python examples/memory_tools.py     # the five tools + dispatcher, end to end
 python examples/key_web.py          # keys collide, edges judged, the tail is the present
+python examples/nightly.py          # one whole day distilled, keyed, judged, aged — the loop
+python examples/emergence.py        # RES / EMG / SPK: memory that surfaces uninvited
 python examples/agent_narration.py  # voicebank pools, throttle, failure lines
 python examples/style_spectrum.py   # state bands → delivery notes
 python examples/companion_live.py   # the interactive loop (FELTSTATE_LIVE_FAST=1 to hurry it)

@@ -233,6 +233,11 @@ python examples/memory_lifecycle.py
 翻倍的相关系数, 必须越过随年龄差抬升的门槛。每条更老的事实永远是候选——记忆
 不因为老就不配被想起, 它只需要当年确实重要过。
 
+"终身候选"这笔账是算过价的, 而且很便宜: 候选只在**每条新事实入账消化时付一次**
+——一天十来条, 各扫一遍账本, 全程不在热路径上。哪怕一本从不遗忘的病态账本,
+七十年也就四十万行, 是夜里批处理几秒钟的事; 而衰减、压实与真删除默认都在运
+转, 活账其实会收敛到平台而不是线性长胖。对话路径上没有任何一步为它买单。
+
 读, 就是同一张网倒着走。`Canon.reach` 拿查询词跟键相撞入场, 顺判过的边拢来
 亲戚, 全部按事发时间排开——**链尾即当下**。没有作废标记, 没有判决机: 更新的
 第一手事实靠站在后面胜出, 答案里的每条事实都带着自己的入场方式。以下来自
@@ -387,6 +392,8 @@ python examples/companion_live.py  # 交互式: 真实心跳、主动起话头�
 python examples/prompt_shapes.py    # 三个时刻, 完整消息数组
 python examples/memory_tools.py     # 五个工具 + 分发器, 端到端
 python examples/key_web.py          # 键相撞, 边判票, 链尾即当下
+python examples/nightly.py          # 一整天的蒸馏、配键、判亲、老化——那个循环
+python examples/emergence.py        # RES / EMG / SPK: 不请自来的记忆
 python examples/agent_narration.py  # 罐头声带池、限流、故障台词
 python examples/style_spectrum.py   # 状态波段 → 表达注记
 python examples/companion_live.py   # 交互循环 (FELTSTATE_LIVE_FAST=1 加速)

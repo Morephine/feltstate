@@ -207,6 +207,7 @@ def commit_to_canon(
             write(
                 actor,
                 obj,
+                action=str(f.get("action", "") or ""),
                 why=why,
                 when=when,
                 intensity=intensity,
