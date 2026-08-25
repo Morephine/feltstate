@@ -468,6 +468,7 @@ runnable examples.
 | [INNER_LIFE](docs/INNER_LIFE.md) | the silent thinking channel, the face that moves between turns, and the self-correction round |
 | [MULTI_PERSON](docs/MULTI_PERSON.md) | one soul, many people: per-speaker relationship keying and the zero-pollution rule |
 | [GAME_SHELL](docs/GAME_SHELL.md) | the game as a third surface: minute-scale director intents vs second-scale engines, the sight gate, and driving It Takes Two |
+| [PROMPTS](docs/PROMPTS.md) | contracts for the model seats — namer, judge, summariser (plus retuning the shipped extractor and estimator): words are yours, numbers and time are never |
 | [MEMORY_TOOLS](docs/MEMORY_TOOLS.md) | Canon as five function-calling tools, with a real bi-temporal trace |
 | [PHILOSOPHY](PHILOSOPHY.md) | why persisted state is described to the model and never commanded |
 

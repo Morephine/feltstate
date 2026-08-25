@@ -392,6 +392,7 @@ python examples/companion_live.py  # 交互式: 真实心跳、主动起话头�
 | [INNER_LIFE](docs/INNER_LIFE.md) | 静默思考通道、轮与轮之间自己会动的脸, 与自纠轮 |
 | [MULTI_PERSON](docs/MULTI_PERSON.md) | 一魂多人: 按说话人分键的关系账本与零污染规则 |
 | [GAME_SHELL](docs/GAME_SHELL.md) | 游戏作为第三面: 分钟级导演意图对秒级引擎、视线门, 以及实机驱动 It Takes Two |
+| [PROMPTS](docs/PROMPTS.md) | 模型座位的合同——命名器、裁判、总结器 (外加两个自带座位的改法): 文字归你, 数字和时间永远归程序 |
 | [MEMORY_TOOLS](docs/MEMORY_TOOLS.md) | 把 Canon 暴露成五个 function-calling 工具, 附真实的 bi-temporal 追溯 |
 | [PHILOSOPHY](PHILOSOPHY.md) | 为什么持久状态只对模型描述、从不命令 |
 
