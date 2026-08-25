@@ -402,7 +402,7 @@ hours like any feeling. See §5 of
 | `feltstate/config.py` | Every tunable in one place (EWMA rates, decay, pressure thresholds, label maps) + `PersonaDials`. |
 | `feltstate/sources/` | `AffectSource` interface + `KeywordSource` (rules, zero-dep) + `LLMSource` (any OpenAI-compatible endpoint). The pluggable affect-estimation seam. |
 | `feltstate/affect/` | The dynamics: `pressure` (multi-bar release), `traits` (asymmetric adaptation), `imprint` (permanent marks), `relationship` (the bond evolving), `tide` (mood's rise & fall), `smooth` (label hysteresis). |
-| `feltstate/memory/` | `Canon` — a decaying 5W1H fact store; `feeling` — optional evidence-weighted affect per fact; `recall` and bi-temporal history; `extract` and `context`; `skill` — a human-rated capability region; `lifecycle` — optional provenance fingerprints, lineage, ageing clocks, death planning, tombstone-first deletion, snapshot cleanup, and a hash-linked audit ledger; `keyweb` — word keys and judged edges born on the row, the one-pass collision digest, and the chain query leg behind `Canon.reach`. |
+| `feltstate/memory/` | `Canon` — a decaying 5W1H fact store; `feeling` — optional evidence-weighted affect per fact; `recall` and bi-temporal history; `extract` and `context`; `skill` — a human-rated capability region; `lifecycle` — optional provenance fingerprints, lineage, ageing clocks, death planning, tombstone-first deletion, snapshot cleanup, and a hash-linked audit ledger; `keyweb` — word keys and judged edges born on the row, the one-pass collision digest, and the chain query leg behind `Canon.reach`; `ladder` — the crystallisation ladder (day → week → month → year): casting, key-clustered melts, climb bonus, absorption derived from lineage rather than marked. |
 | `feltstate/dream.py` | Off-path, zero-LLM: recombines the agent's charged material (`Fragment`s) into an *illogical* dream that leaves a faint mood residue not surfaced to the reply model as an explicit cause. Swap the `Phrasebook` for another language. |
 | `feltstate/sleep.py` | The single sleep-pressure accumulator (`Tiredness`) that decides *when* to dream: rises with arousal, gated by threshold + idle + a hard refractory floor, discharged by a dream. Homeostatic, not clock-driven. |
 | `feltstate/timeawareness/` | Fuzzy "how long since we last talked" + precise "now". |
@@ -469,6 +469,7 @@ python examples/memory_tools.py     # the five tools + dispatcher, end to end
 python examples/key_web.py          # keys collide, edges judged, the tail is the present
 python examples/nightly.py          # one whole day distilled, keyed, judged, aged — the loop
 python examples/emergence.py        # RES / EMG / SPK: memory that surfaces uninvited
+python examples/ladder.py           # days melt to weeks melt to months — the lifetime stays scannable
 python examples/agent_narration.py  # voicebank pools, throttle, failure lines
 python examples/style_spectrum.py   # state bands → delivery notes
 python examples/companion_live.py   # the interactive loop (FELTSTATE_LIVE_FAST=1 to hurry it)

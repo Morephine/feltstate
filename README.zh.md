@@ -332,7 +332,7 @@ eng = Engine(source=VheartSource("kaishuiji/vheart-affect-v9"))
 | `feltstate/config.py` | 所有可调参数集中一处 (EWMA 速率、衰减、压力阈值、标签映射) + `PersonaDials`。 |
 | `feltstate/sources/` | `AffectSource` 接口 + `KeywordSource` (规则, 零依赖) + `LLMSource` (任意 OpenAI 兼容端点)。可插拔的感情估计缝。 |
 | `feltstate/affect/` | 动力学: `pressure` (多条释放)、`traits` (不对称适应)、`imprint` (永久印痕)、`relationship` (纽带演化)、`tide` (心情涨落)、`smooth` (标签滞回)。 |
-| `feltstate/memory/` | `Canon`——会衰减的 5W1H 事实存储; `feeling`——可选的按事实证据加权感情; `recall` 与 bi-temporal 历史; `extract` 与 `context`; `skill`——人工评分的能力区; `lifecycle`——可选的溯源指纹、谱系、老化时钟、死亡规划、墓碑先行删除、快照清理与哈希链审计账本; `keyweb`——长在行上的单词键与判过票的边、一遍过的碰撞消化, 以及 `Canon.reach` 背后的链式查询腿。 |
+| `feltstate/memory/` | `Canon`——会衰减的 5W1H 事实存储; `feeling`——可选的按事实证据加权感情; `recall` 与 bi-temporal 历史; `extract` 与 `context`; `skill`——人工评分的能力区; `lifecycle`——可选的溯源指纹、谱系、老化时钟、死亡规划、墓碑先行删除、快照清理与哈希链审计账本; `keyweb`——长在行上的单词键与判过票的边、一遍过的碰撞消化, 以及 `Canon.reach` 背后的链式查询腿; `ladder`——结晶梯 (日→周→月→年): 铸晶、按键成簇熔升、爬级加热, 吸收由谱系推导而非打标。 |
 | `feltstate/dream.py` | 离线、零 LLM: 把 agent 的带电材料 (`Fragment`) 重组成*不合逻辑*的梦, 留下不向回复模型显式归因的微弱心情余味。换掉 `Phrasebook` 即换语言。 |
 | `feltstate/sleep.py` | 单一睡眠压力累积器 (`Tiredness`), 决定*何时*做梦: 随 arousal 上升, 由阈值 + 空闲 + 硬不应期地板门控, 由一个梦泄放。稳态驱动, 不是钟表驱动。 |
 | `feltstate/timeawareness/` | 模糊的"我们多久没说话了" + 精确的"现在"。 |
@@ -394,6 +394,7 @@ python examples/memory_tools.py     # 五个工具 + 分发器, 端到端
 python examples/key_web.py          # 键相撞, 边判票, 链尾即当下
 python examples/nightly.py          # 一整天的蒸馏、配键、判亲、老化——那个循环
 python examples/emergence.py        # RES / EMG / SPK: 不请自来的记忆
+python examples/ladder.py           # 日熔成周, 周熔成月——一辈子也扫得动
 python examples/agent_narration.py  # 罐头声带池、限流、故障台词
 python examples/style_spectrum.py   # 状态波段 → 表达注记
 python examples/companion_live.py   # 交互循环 (FELTSTATE_LIVE_FAST=1 加速)
