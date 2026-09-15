@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0a4] - 2026-09-15
+
+### Fixed
+
+- **`feltstate.__version__` reported `0.2.0a1`** on every release since a1 —
+  `pyproject` was bumped, the hardcoded string never followed. The a3 wheel
+  on PyPI still carries the stale value; this release corrects it and the two
+  are checked together going forward.
+
 ## [0.2.0a3] - 2026-09-15
 
 First release on PyPI: `pip install feltstate`.
