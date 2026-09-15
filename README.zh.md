@@ -16,8 +16,9 @@
 </p>
 
 ```bash
-git clone https://github.com/Morephine/feltstate && pip install -e feltstate
-# 核心是纯标准库——装完直接跳到下方 Quickstart。(尚未发布到 PyPI。)
+pip install feltstate
+# 核心是纯标准库——装完直接跳到下方 Quickstart。
+# (从源码装: git clone https://github.com/Morephine/feltstate && pip install -e feltstate)
 ```
 
 feltstate 是给 **AI agent 的角色引擎** (character engine)——一个小而有主张的

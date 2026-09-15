@@ -6,6 +6,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0a3] - 2026-09-15
+
+First release on PyPI: `pip install feltstate`.
+
 ### Added
 
 - **`keyweb.key_vocab` — the ledger's working vocabulary, for reuse at

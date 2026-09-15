@@ -18,9 +18,9 @@
 </p>
 
 ```bash
-git clone https://github.com/Morephine/feltstate && pip install -e feltstate
+pip install feltstate
 # core is pure standard library — then jump to the Quickstart below.
-# (Not yet published to PyPI.)
+# (working from source: git clone https://github.com/Morephine/feltstate && pip install -e feltstate)
 ```
 
 feltstate is a **character engine for AI agents** — a small, opinionated
