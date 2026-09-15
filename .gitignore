@@ -29,3 +29,6 @@ runtime/
 .mypy_cache/
 .ruff_cache/
 .venv_r/
+
+# example runtime dir (examples/companion_live.py writes here)
+_companion_live/
