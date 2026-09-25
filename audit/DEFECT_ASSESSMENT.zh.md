@@ -145,13 +145,13 @@ feltstate 自称"AI 智能体的角色引擎"：一个纯标准库、带明确�
 **基线门禁**（均通过）：
 
 ```text
-ruff check .            All checks passed!
-ruff format --check .   123 files already formatted
-mypy feltstate          Success: no issues found in 58 source files
-python3 -m pytest -q    575 passed in ~5s
+python3 -m ruff check .            All checks passed!
+python3 -m ruff format --check .   150 files already formatted
+python3 -m mypy feltstate          Success: no issues found in 58 source files
+python3 -m pytest -q               575 passed in ~5s
 ```
 
-注意：本环境 PATH 上的 `pytest` 属于另一个解释器（uv 工具安装），直接运行会在收集阶段全部报 `ModuleNotFoundError`，需用 `python3 -m pytest`。
+以上使用与 CI 相同的工具版本（ruff 0.16.9、mypy 2.3.1）。注意：本环境 PATH 上的 `pytest` 与 `ruff` 属于另外的 uv 工具安装——直接运行 `pytest` 会在收集阶段全部报 `ModuleNotFoundError`；PATH 上的 `ruff` 是 0.15.8，不格式化 Markdown 中的 Python 代码块（只检查 123 个文件），而 CI 安装的 ruff 0.16.9 会。因此需用 `python3 -m pytest` / `python3 -m ruff`。
 
 **方法**：
 
@@ -514,18 +514,23 @@ python3 -m pytest -q    575 passed in ~5s
 ### A.1 C-01：一个坏字节清空整个记忆库
 
 ```python
-import logging; logging.basicConfig(level=logging.ERROR)
+import logging
+
+logging.basicConfig(level=logging.ERROR)
 from pathlib import Path
 from feltstate import Canon
 
-p = Path("wipe/canon.jsonl"); c = Canon(p)
+p = Path("wipe/canon.jsonl")
+c = Canon(p)
 for obj in ("likes oolong tea", "has a cat named Mochi", "works as a nurse", "moved to Kyoto"):
-    c.add("user", obj, why="told me", intensity=0.9)          # 4 条"永久"事实
-p.write_bytes(p.read_bytes().replace(b"likes oolong tea", b"likes oolong t\xe9"))  # 1 个 Latin-1 字节
-print(c.view())                    # []  —— 整库读为空
-c.compact()                        # 例行维护
-print(p.stat().st_size)            # 0   —— 全部删除
-print(Path("wipe/canon.jsonl.corrupt").exists())   # False —— 连隔离文件都没有
+    c.add("user", obj, why="told me", intensity=0.9)  # 4 条"永久"事实
+p.write_bytes(
+    p.read_bytes().replace(b"likes oolong tea", b"likes oolong t\xe9")
+)  # 1 个 Latin-1 字节
+print(c.view())  # []  —— 整库读为空
+c.compact()  # 例行维护
+print(p.stat().st_size)  # 0   —— 全部删除
+print(Path("wipe/canon.jsonl.corrupt").exists())  # False —— 连隔离文件都没有
 ```
 
 ### A.2 H-01：含 U+2028 的事实静默消失
@@ -534,13 +539,14 @@ print(Path("wipe/canon.jsonl.corrupt").exists())   # False —— 连隔离文�
 from pathlib import Path
 from feltstate import Canon
 
-p = Path("ls/canon.jsonl"); c = Canon(p)
+p = Path("ls/canon.jsonl")
+c = Canon(p)
 c.add("user", "moved to Kyoto in spring", why="new job")
 c.add("user", "has a cat named Mochi", why="loves her")
-print([r["object"] for r in c.search("Kyoto")])    # []
-print([r["object"] for r in c.search("Mochi")])    # ['has a cat named Mochi']
+print([r["object"] for r in c.search("Kyoto")])  # []
+print([r["object"] for r in c.search("Mochi")])  # ['has a cat named Mochi']
 c.compact()
-print(b"Kyoto" in p.read_bytes())                  # False —— 已从主文件物理删除
+print(b"Kyoto" in p.read_bytes())  # False —— 已从主文件物理删除
 ```
 
 ### A.3 H-02：`retract("call")` 撤回了无关事实
@@ -551,8 +557,8 @@ from feltstate import Canon
 c = Canon("kw/canon.jsonl")
 c.add("user", "sister's cat is named Miso", why="family")
 c.add("user", "works as a nurse", why="job")
-print(c.retract("call").get("object"))    # sister's cat is named Miso（字段名 "recalls" 含 "call"）
-print([r["object"] for r in c.view()])    # ['works as a nurse']
+print(c.retract("call").get("object"))  # sister's cat is named Miso（字段名 "recalls" 含 "call"）
+print([r["object"] for r in c.view()])  # ['works as a nurse']
 ```
 
 ### A.4 H-04：间隔越长，同一事件越被抹掉
@@ -562,10 +568,17 @@ from datetime import datetime, timedelta, timezone
 from feltstate import Engine, AffectDelta
 from feltstate.sources.base import AffectSource
 
+
 class S(AffectSource):
     def read(self, m, *, baseline, persona=""):
-        return AffectDelta(valence=-0.8, arousal=0.6, labels=["sad"], confidence=0.9,
-                           milestones=[{"kind": "loss", "severity": 0.9, "actor": "user"}])
+        return AffectDelta(
+            valence=-0.8,
+            arousal=0.6,
+            labels=["sad"],
+            confidence=0.9,
+            milestones=[{"kind": "loss", "severity": 0.9, "actor": "user"}],
+        )
+
 
 for gap in (1, 5, 30, 240, 1440):
     e = Engine(source=S(), state_path=f"gap{gap}/state.json")
@@ -584,20 +597,27 @@ from datetime import datetime, timedelta, timezone
 from feltstate import Engine, AffectDelta
 from feltstate.sources.base import AffectSource
 
+
 class S(AffectSource):
     d = None
-    def read(self, m, *, baseline, persona=""): return self.d
 
-s = S(); e = Engine(source=s, state_path="lab/state.json")
+    def read(self, m, *, baseline, persona=""):
+        return self.d
+
+
+s = S()
+e = Engine(source=s, state_path="lab/state.json")
 t = datetime(2026, 1, 1, 12, tzinfo=timezone.utc)
 s.d = AffectDelta(valence=0.6, arousal=0.5, labels=["content"], confidence=0.9)
 e.tick([{"role": "user", "content": "nice"}], now=t)
-for _ in range(10):                                   # 10 个悲伤回合，中间各有一次心跳
+for _ in range(10):  # 10 个悲伤回合，中间各有一次心跳
     s.d = AffectDelta(valence=-0.7, arousal=0.5, labels=["sad"], confidence=0.9)
-    t += timedelta(minutes=3); e.tick([{"role": "user", "content": "sad"}], now=t)
-    s.d = AffectDelta(valence=0.0, arousal=0.4, labels=[], confidence=0.1)   # 心跳 / 无线索消息
-    t += timedelta(minutes=2); e.tick([], now=t)
-print(round(e.state.mood.valence, 3))                 # -0.242
+    t += timedelta(minutes=3)
+    e.tick([{"role": "user", "content": "sad"}], now=t)
+    s.d = AffectDelta(valence=0.0, arousal=0.4, labels=[], confidence=0.1)  # 心跳 / 无线索消息
+    t += timedelta(minutes=2)
+    e.tick([], now=t)
+print(round(e.state.mood.valence, 3))  # -0.242
 print([l for l in e.render(now=t).splitlines() if l.startswith("mood")])
 # ['mood: content | a little low, mild energy · lifting']
 ```
@@ -609,14 +629,23 @@ import os, stat
 from pathlib import Path
 from feltstate import Engine, KeywordSource, Canon
 
-os.umask(0o022); d = Path("perms"); d.mkdir(exist_ok=True)
+os.umask(0o022)
+d = Path("perms")
+d.mkdir(exist_ok=True)
 e = Engine(source=KeywordSource(), state_path=d / "state.json")
 e.tick([{"role": "user", "content": "hello"}])
-c = Canon(d / "canon.jsonl"); c.add("user", "likes tea", why="calms her")
+c = Canon(d / "canon.jsonl")
+c.add("user", "likes tea", why="calms her")
 for f in ("state.json", "state.meta.json", "canon.jsonl"):
-    os.chmod(d / f, 0o600)                            # 按 SECURITY.md 的建议收紧权限
-e.tick([{"role": "user", "content": "still here"}]); c.compact()
-print({f: oct(stat.S_IMODE((d / f).stat().st_mode)) for f in ("state.json", "state.meta.json", "canon.jsonl")})
+    os.chmod(d / f, 0o600)  # 按 SECURITY.md 的建议收紧权限
+e.tick([{"role": "user", "content": "still here"}])
+c.compact()
+print(
+    {
+        f: oct(stat.S_IMODE((d / f).stat().st_mode))
+        for f in ("state.json", "state.meta.json", "canon.jsonl")
+    }
+)
 # {'state.json': '0o644', 'state.meta.json': '0o644', 'canon.jsonl': '0o644'}
 ```
 
@@ -627,17 +656,30 @@ from datetime import datetime, timedelta, timezone
 from feltstate import Engine, AffectDelta
 from feltstate.sources.base import AffectSource
 
+
 class S(AffectSource):
     def read(self, m, *, baseline, persona=""):
-        return AffectDelta(valence=0.0, arousal=1.0, labels=[], confidence=0.05,   # 低于 0.2 的信任下限
-                           mixed_blend={"primary": "dread", "secondary": "glee",
-                                        "primary_score": 0.9, "secondary_score": 0.8},
-                           anticipation={"valence": 1.0, "arousal": 1.0, "weight": 1.0})
+        return AffectDelta(
+            valence=0.0,
+            arousal=1.0,
+            labels=[],
+            confidence=0.05,  # 低于 0.2 的信任下限
+            mixed_blend={
+                "primary": "dread",
+                "secondary": "glee",
+                "primary_score": 0.9,
+                "secondary_score": 0.8,
+            },
+            anticipation={"valence": 1.0, "arousal": 1.0, "weight": 1.0},
+        )
 
-e = Engine(source=S(), state_path="gate/state.json"); t = datetime(2026, 1, 1, 12, tzinfo=timezone.utc)
+
+e = Engine(source=S(), state_path="gate/state.json")
+t = datetime(2026, 1, 1, 12, tzinfo=timezone.utc)
 for _ in range(10):
-    t += timedelta(minutes=1); e.tick([{"role": "user", "content": "..."}], now=t)
-print(round(e.state.mood.arousal, 3), round(e.state.pressure.bars.joy, 3))   # 0.814 0.82
+    t += timedelta(minutes=1)
+    e.tick([{"role": "user", "content": "..."}], now=t)
+print(round(e.state.mood.arousal, 3), round(e.state.pressure.bars.joy, 3))  # 0.814 0.82
 print([l for l in e.render(now=t).splitlines() if l.startswith(("mood", "inside"))])
 # ['mood: neutral | level, keyed up (dread tinged with glee)', 'inside: pressure clear, joy brimming | still echoing']
 ```
