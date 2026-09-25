@@ -86,7 +86,11 @@ class JsonlTopicsStore(PendingTopicsStore):
         if not self.path.exists():
             return []
         out: list[dict] = []
-        for line in self.path.read_text(encoding="utf-8").splitlines():
+        # Line feeds only (2026-09-25): splitlines() also breaks on U+2028 /
+        # U+2029 / U+0085, which json.dumps(ensure_ascii=False) writes raw, and
+        # the torn halves of such a topic were skipped here — then erased by the
+        # next mark_consumed() rewrite.
+        for line in self.path.read_text(encoding="utf-8").split("\n"):
             line = line.strip()
             if not line:
                 continue

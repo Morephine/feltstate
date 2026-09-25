@@ -27,7 +27,9 @@ Retention: links and tombstones age out after ``keep_days``. Pruning does not
 orphan the chain — the first surviving link is re-anchored as an **epoch**
 whose ``prev`` commits to the hash of the last discarded link, so
 :meth:`verify_full` has an explicit, self-describing starting point instead of
-a link whose predecessor is gone.
+a link whose predecessor is gone. There is only ever one epoch, at the head:
+each prune re-derives it, and :meth:`verify_full` rejects an epoch anywhere
+else — a re-anchor in mid-chain would let a cut-out segment verify.
 """
 
 from __future__ import annotations
@@ -58,6 +60,22 @@ def _link_fp(prev: str, payload: dict, state: dict) -> str:
     # trusted-but-unsealed: forging the latest link's state now breaks the chain)
     blob = prev + "|" + _canon(payload) + "|" + _canon(state)
     return hashlib.sha256(blob.encode()).hexdigest()[:24]
+
+
+def _stamp(ts) -> float | None:
+    """Epoch seconds for a ledger stamp; ``None`` when it cannot be read.
+
+    Tolerates a ``Z`` suffix (which ``fromisoformat`` rejects before Python
+    3.11) and never raises: a stamp the watchdog cannot read is kept, not fatal
+    (2026-09-25 — one bad tombstone ``ts`` used to make every later patrol raise
+    after appending its link).
+    """
+    if not isinstance(ts, str) or not ts:
+        return None
+    try:
+        return datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
+    except (ValueError, OverflowError, OSError):
+        return None
 
 
 def default_bite(row: dict, raw_line: str) -> str:
@@ -106,14 +124,18 @@ class Chain:
     def _lines(self):
         if not self.ledger.exists():
             return
-        for line in self.ledger.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
+        # Line feeds only, decoded per line; anything that is not a JSON object
+        # is malformed (2026-09-25) — a torn multi-byte write or a stray list
+        # used to raise out of every patrol and verify instead of failing it.
+        for raw in self.ledger.read_bytes().split(b"\n"):
+            line = raw.decode("utf-8", "replace").strip()
             if not line:
                 continue
             try:
-                yield json.loads(line)
+                j = json.loads(line)
             except Exception:
-                yield {"__malformed__": True}
+                j = None
+            yield j if isinstance(j, dict) else {"__malformed__": True}
 
     def _links(self):
         for j in self._lines():
@@ -139,13 +161,18 @@ class Chain:
         for path in self.watch:
             if not path.exists():
                 continue
-            for i, line in enumerate(path.read_text(encoding="utf-8").splitlines()):
-                line = line.strip()
+            # Line feeds only, decoded per line (2026-09-25): a row whose text
+            # carries U+2028 stays one row, and a torn multi-byte row is one raw
+            # entry instead of a decode error that stops every patrol.
+            for i, raw in enumerate(path.read_bytes().split(b"\n")):
+                line = raw.decode("utf-8", "replace").strip()
                 if not line:
                     continue
                 try:
                     r = json.loads(line)
                 except Exception:
+                    r = None
+                if not isinstance(r, dict):
                     out[f"{path.resolve()}::raw:{_h(line)[:8]}"] = _h(line)
                     continue
                 out[self.key_of(r, i, path)] = self.bite(r, line)
@@ -184,8 +211,16 @@ class Chain:
             "payload": payload,
             "state": cur,
         }
+        entry = json.dumps(link, ensure_ascii=False) + "\n"
+        # A torn last write must not swallow this link (2026-09-25): glued onto
+        # it, the new link would be one more malformed line.
+        if self.ledger.exists() and self.ledger.stat().st_size > 0:
+            with self.ledger.open("rb") as f:
+                f.seek(-1, 2)
+                if f.read(1) != b"\n":
+                    entry = "\n" + entry
         with self.ledger.open("a", encoding="utf-8") as lf:
-            lf.write(json.dumps(link, ensure_ascii=False) + "\n")
+            lf.write(entry)
 
         if missing or mutated:
             self.on_alarm(
@@ -206,73 +241,108 @@ class Chain:
         previous link's computed hash. A malformed line fails. The first link
         must be a ``genesis`` root (hash recomputed) or an explicit ``epoch:``
         re-anchor (trusted as a self-describing checkpoint). An empty ledger is
-        vacuously valid."""
+        vacuously valid.
+
+        The re-anchor is trusted only as the head (2026-09-25): a second epoch,
+        or one after the first link, fails. An epoch accepted anywhere let a
+        segment cut out of the middle verify — and it is also how an honest
+        ledger with a stack of stale epochs is told apart from a clean one."""
         prev = None
+        seen_epoch = seen_link = False
         for j in self._lines():
             if j.get("__malformed__"):
                 return False
             if j.get("epoch"):
                 # explicit re-anchor: trusted checkpoint committing to the pruned
                 # tail (an unavoidable feature of a rolling window, made honest)
+                if seen_epoch or seen_link or not isinstance(j.get("fp"), str) or not j["fp"]:
+                    return False
+                seen_epoch = True
                 prev = j["fp"]
                 continue
             if not (j.get("fp") and "payload" in j and "state" in j):
                 continue  # event lines (tombstones) are not chain links
-            if _link_fp(j["prev"], j["payload"], j["state"]) != j["fp"]:
-                return False
+            try:
+                if _link_fp(j["prev"], j["payload"], j["state"]) != j["fp"]:
+                    return False
+            except (KeyError, TypeError, ValueError):
+                return False  # a link without a usable prev/payload/state
             if prev is None:
                 if j["prev"] != "genesis":
                     return False  # unpruned chain must start at genesis
             elif j["prev"] != prev:
                 return False  # broken chain: prev doesn't match predecessor
             prev = j["fp"]
+            seen_link = True
         return True
 
     def _prune(self) -> None:
         """Keep the rolling window; re-anchor the first survivor as an epoch that
         commits to the last discarded link's hash (so the chain stays verifiable
-        across pruning instead of orphaning its head)."""
+        across pruning instead of orphaning its head).
+
+        Exactly one epoch, at the head (2026-09-25). An epoch is stamped with
+        the time of the prune that wrote it — later than the links it anchors —
+        so it used to outlive them: the next prune cut those links, kept the
+        stale epoch and stacked a new one on top, and from the second prune on
+        an honest ledger failed :meth:`verify_full` for good. Old epochs are no
+        longer carried along: the one anchor is re-derived from the first
+        surviving link — the existing epoch if it already names that link, a new
+        one only when this prune cut exactly the link the survivor names. A
+        ledger that already carries a stack heals on the next rewrite.
+        """
         if not self.ledger.exists():
             return
         cutoff = datetime.now(timezone.utc).timestamp() - self.keep_days * 86400
-        raw = [ln for ln in self.ledger.read_text(encoding="utf-8").splitlines() if ln.strip()]
-        keep, dropped_last_fp = [], None
+        raw = [ln for ln in self.ledger.read_bytes().split(b"\n") if ln.strip()]
+        keep: list[bytes] = []
+        epochs: list[tuple[dict, bytes]] = []
+        first_link: dict | None = None
+        dropped_last_fp = None
         for ln in raw:
             try:
-                j = json.loads(ln)
+                j = json.loads(ln.decode("utf-8"))
             except Exception:
-                keep.append(ln)
+                j = None
+            if not isinstance(j, dict):
+                keep.append(ln)  # malformed: evidence, never silently dropped
                 continue
-            ts = j.get("payload", {}).get("ts", "") or j.get("ts", "")
-            old = ts and datetime.fromisoformat(ts).timestamp() < cutoff
-            if old:
+            if j.get("epoch"):
+                epochs.append((j, ln))  # re-derived below, never carried blindly
+                continue
+            payload = j.get("payload")
+            ts = (payload.get("ts") if isinstance(payload, dict) else None) or j.get("ts")
+            stamp = _stamp(ts)
+            if stamp is not None and stamp < cutoff:
                 if j.get("fp") and "payload" in j:
                     dropped_last_fp = j["fp"]  # remember the tail we cut
                 continue
+            if first_link is None and j.get("fp") and "payload" in j and "state" in j:
+                first_link = j
             keep.append(ln)
-        if len(keep) == len(raw):
-            return  # nothing aged out
-        # Re-anchor without rewriting any survivor: prepend an epoch marker whose
-        # fp equals the first survivor's prev (the dropped predecessor's hash), so
-        # the surviving chain still links intact and verify_full has a declared,
-        # tamper-explicit starting point. Skip if the head wasn't actually cut.
-        first_prev = None
-        for ln in keep:
-            try:
-                j = json.loads(ln)
-            except Exception:
-                continue
-            if j.get("fp") and "payload" in j and "state" in j:
-                first_prev = j["prev"]
-                break
+        cut = len(keep) + len(epochs) < len(raw)
+        # Re-anchor without rewriting any survivor: an epoch whose fp equals the
+        # first survivor's prev (the dropped predecessor's hash), so the surviving
+        # chain still links intact and verify_full has a declared, tamper-explicit
+        # starting point. None when the head was never cut.
+        first_prev = first_link.get("prev") if first_link is not None else None
+        anchor: bytes | None = None
         if first_prev and first_prev != "genesis":
-            anchor = {
-                "epoch": True,
-                "fp": first_prev,
-                "prev": f"epoch:{dropped_last_fp or 'genesis'}",
-                "ts": datetime.now(timezone.utc).isoformat(),
-            }
-            keep = [json.dumps(anchor, ensure_ascii=False)] + keep
+            anchor = next((ln for j, ln in epochs if j.get("fp") == first_prev), None)
+            if anchor is None and cut and dropped_last_fp == first_prev:
+                anchor = json.dumps(
+                    {
+                        "epoch": True,
+                        "fp": first_prev,
+                        "prev": f"epoch:{dropped_last_fp}",
+                        "ts": datetime.now(timezone.utc).isoformat(),
+                    },
+                    ensure_ascii=False,
+                ).encode("utf-8")
+        head = [anchor] if anchor is not None else []
+        if not cut and [ln for _, ln in epochs] == head and (not head or raw[0] == anchor):
+            return  # nothing aged out, and the head already is the one epoch
+        lines = head + keep
         tmp = self.ledger.with_suffix(".jsonl.tmp")
-        tmp.write_text("\n".join(keep) + ("\n" if keep else ""), encoding="utf-8")
+        tmp.write_bytes(b"\n".join(lines) + (b"\n" if lines else b""))
         tmp.replace(self.ledger)

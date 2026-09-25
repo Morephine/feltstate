@@ -32,7 +32,7 @@ from urllib.parse import parse_qs, urlparse
 
 from .memory.canon import Canon
 
-__all__ = ["graph_payload", "main", "node_payload"]
+__all__ = ["graph_payload", "main", "node_payload", "reach_payload"]
 
 
 # --------------------------------------------------------------------------- #
@@ -115,6 +115,18 @@ def node_payload(rows: list[dict], cid: str) -> dict[str, Any]:
                 _add(r["id"], str(edge.get("why") or ""))
     kin.sort(key=lambda k: k["when"])
     return {"brief": me, "kin": kin}
+
+
+def reach_payload(canon: Canon, q: str) -> dict[str, Any]:
+    """The search leg: the chain ``Canon.reach`` walks, read with ``bump=False``.
+
+    Searching here is looking, not recalling (2026-09-25). The default reach
+    bumps ``recalls`` and rewrites the store — right for the agent's own tool,
+    wrong for a viewer that promises zero writes: every search from this page
+    made the facts it found decay more slowly.
+    """
+    words = q.split()
+    return canon.reach(*words, bump=False) if words else {"chain": []}
 
 
 def state_payload(state_path: str | None) -> dict[str, Any]:
@@ -261,8 +273,7 @@ def main(argv: list[str] | None = None) -> None:
                     ctype = "application/json"
                 elif u.path == "/api/reach":
                     word = (q.get("q", [""])[0] or "").strip()
-                    got = canon.reach(*word.split()) if word else {"chain": []}
-                    body = json.dumps(got).encode()
+                    body = json.dumps(reach_payload(canon, word)).encode()
                     ctype = "application/json"
                 elif u.path == "/api/state":
                     body = json.dumps(state_payload(args.state)).encode()
