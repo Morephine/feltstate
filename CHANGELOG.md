@@ -6,6 +6,47 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`Canon.reach(..., bump=False)` — read the web without using it.** The
+  agent's own reach still bumps `recalls` ("used memory sticks"); an observer
+  that only looks passes `bump=False` and gets the same chain with nothing
+  written — the rule `review_skills` already keeps.
+
+### Fixed
+
+- **One bad byte could empty the whole Canon**: `_load_jsonl` read the file
+  with one `read_text()`, so a single undecodable byte anywhere — a crash that
+  cut a multi-byte character in half, an editor re-saving the file as GBK —
+  made every read see an empty store, and the next `compact()` or `confirm()`
+  (which skill auto-promotion calls) wrote that emptiness back, quarantining
+  nothing. Rows are now split on line feeds and decoded one at a time: an
+  undecodable row is quarantined like any other bad row, its exact bytes kept
+  as `raw_b64`. Read-modify-write paths read strictly — a store that cannot be
+  read at all raises instead of being rewritten as empty — `recall_skills`
+  rewrites only rows it bumped, and an append after a torn last row starts on
+  a fresh line instead of being quarantined along with it.
+- **Facts containing U+2028 / U+2029 / U+0085 vanished**: `json.dumps(...,
+  ensure_ascii=False)` writes those characters raw and `str.splitlines()`
+  breaks on them, so `add()` succeeded but the row read back as two corrupt
+  halves and left the store with the next rewrite. Every JSONL reader (Canon,
+  the topics queue, the reaper, the chain) now splits on line feeds only.
+- **The tamper chain failed `verify_full()` from its second retention prune
+  on**: each prune kept the previous epoch — stamped at prune time, so younger
+  than the links it anchored — and stacked a new one above it; a daily patrol
+  with the default 60-day window broke on day 63, for good. A prune now keeps
+  exactly one epoch at the head, re-derived from the first surviving link, and
+  a ledger that already stacked epochs heals on its next rewrite. Hardened
+  alongside: `verify_full()` accepts an epoch only at the head (one placed
+  mid-chain let a cut-out segment verify) and fails non-object lines instead
+  of raising; a torn multi-byte line no longer stops every patrol; an
+  unreadable or `Z`-suffixed stamp no longer makes retention raise after the
+  link is written; and a new link starts on a fresh line after a torn write.
+- **The read-only dashboard wrote to the store**: `/api/reach` called
+  `Canon.reach()`, which bumps `recalls` and rewrites `canon.jsonl`, so every
+  search from a "zero writes" viewer made the facts it found decay more
+  slowly. The search now reads with `bump=False` (`dashboard.reach_payload`).
+
 ## [0.2.0a4] - 2026-09-15
 
 ### Fixed

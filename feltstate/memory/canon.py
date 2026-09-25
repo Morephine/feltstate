@@ -52,7 +52,11 @@ Storage is line-delimited JSON (one record per line). Given a base ``path`` of
 
 Full-file rewrites use write-temp-then-replace. Append writes are serialised by
 a per-path lock; if a crash still leaves a partial JSONL tail, the next read
-quarantines that row instead of silently discarding it.
+quarantines that row instead of silently discarding it, and the next append
+starts on a fresh line so the damage stays in that one row. Rows are split on
+line feeds only and decoded one at a time: one bad byte costs one row, never
+the store, and a read-modify-write that cannot read its file at all raises
+rather than write an empty store back.
 
 **Scale, honestly.** Every operation loads the file — O(n), no index — and
 default recall scoring is lexical. That is right-sized on purpose for its job:
@@ -65,6 +69,7 @@ the lifecycle semantics.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import importlib
 import json
@@ -205,7 +210,7 @@ def _lexical_score(query: str, text: str) -> float:
     return sum(1.0 for t in q if t in text) / len(q)
 
 
-def _load_jsonl(path: Path) -> list[dict]:
+def _load_jsonl(path: Path, *, strict: bool = False) -> list[dict]:
     """Read a line-delimited JSON file into a list of records.
 
     A blank line is skipped silently. Invalid JSON *and* valid JSON whose root is
@@ -213,19 +218,41 @@ def _load_jsonl(path: Path) -> list[dict]:
     logged, so a later compaction cannot make an unreadable row disappear without
     a trace. Re-reading the same damaged store does not duplicate quarantine
     records. The store still loads from the readable object rows.
+
+    Rows are split on line feeds and decoded one at a time (2026-09-25). The
+    old whole-file ``read_text().splitlines()`` failed twice over: one
+    undecodable byte anywhere — a crash that cut a multi-byte character in
+    half, an editor re-saving the file as GBK — made the *whole* store read as
+    empty, which the next ``compact()`` / ``confirm()`` then wrote back; and
+    ``splitlines()`` also breaks on U+2028 / U+2029 / U+0085, which
+    ``json.dumps(ensure_ascii=False)`` writes raw, so a fact carrying one could
+    never be read back. An undecodable row is now quarantined like any other
+    bad row, its exact bytes kept.
+
+    ``strict=True`` is for read-modify-write transactions: a file that exists
+    but cannot be read at all (``OSError``) raises instead of reading as ``[]``
+    — an empty list handed on to ``_rewrite_jsonl`` would replace the store
+    with nothing. Read-only paths keep the lenient default: warn, show nothing.
     """
     if not path.exists():
         return []
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except (OSError, UnicodeDecodeError) as exc:
+        data = path.read_bytes()
+    except OSError as exc:
+        if strict:
+            raise
         _log.warning("canon: could not read %s: %s", path, exc)
         return []
 
     out: list[dict] = []
     bad: list[dict] = []
-    for line_no, raw_line in enumerate(lines, start=1):
-        line = raw_line.strip()
+    for line_no, raw_line in enumerate(data.split(b"\n"), start=1):
+        raw_line = raw_line.removesuffix(b"\r")  # a CRLF-edited file
+        try:
+            line = raw_line.decode("utf-8").strip()
+        except UnicodeDecodeError:
+            bad.append(_bad_jsonl_record(path, line_no, raw_line, "invalid-utf8"))
+            continue
         if not line:
             continue
         try:
@@ -319,15 +346,24 @@ def _write_lock(path: Path):
                     pass
 
 
-def _bad_jsonl_record(path: Path, line_no: int, raw: str, reason: str) -> dict:
-    """Structured, stable evidence for one rejected JSONL row."""
-    return {
+def _bad_jsonl_record(path: Path, line_no: int, raw: bytes, reason: str) -> dict:
+    """Structured, stable evidence for one rejected JSONL row.
+
+    ``raw`` is the row as text. When the bytes are not valid UTF-8 that text is
+    lossy, so the exact bytes ride along as ``raw_b64`` — quarantine preserves
+    evidence, it does not clean it.
+    """
+    text = raw.decode("utf-8", "replace")
+    rec = {
         "source": path.name,
         "line": line_no,
         "reason": reason,
-        "sha256": hashlib.sha256(raw.encode("utf-8")).hexdigest(),
-        "raw": raw,
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "raw": text,
     }
+    if text.encode("utf-8") != raw:
+        rec["raw_b64"] = base64.b64encode(raw).decode("ascii")
+    return rec
 
 
 def _write_quarantine_records(path: Path, records: list[dict]) -> int:
@@ -336,7 +372,7 @@ def _write_quarantine_records(path: Path, records: list[dict]) -> int:
         with _write_lock(path):
             existing: set[tuple[str, int, str]] = set()
             if path.exists():
-                for line in path.read_text(encoding="utf-8").splitlines():
+                for line in path.read_text(encoding="utf-8").split("\n"):
                     try:
                         rec = json.loads(line)
                     except json.JSONDecodeError:
@@ -364,10 +400,20 @@ def _write_quarantine_records(path: Path, records: list[dict]) -> int:
 
 
 def _append_jsonl(path: Path, entry: dict) -> None:
-    """Append one record as a JSON line, creating parent dirs as needed."""
+    """Append one record as a JSON line, creating parent dirs as needed.
+
+    If a crash left the file without its final line feed (a torn last row), the
+    record starts on a fresh line (2026-09-25): glued onto the torn row it would
+    be quarantined along with it, and a good fact would go down with a bad one.
+    """
     with _write_lock(path):
+        torn = False
+        if path.exists() and path.stat().st_size > 0:
+            with path.open("rb") as f:
+                f.seek(-1, 2)
+                torn = f.read(1) != b"\n"
         with path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            f.write(("\n" if torn else "") + json.dumps(entry, ensure_ascii=False) + "\n")
 
 
 def _rewrite_jsonl(path: Path, entries: list[dict]) -> None:
@@ -623,7 +669,7 @@ class Canon:
         self, path: Path, entry: dict, *, emotion: float | None = None, confidence: float = 0.9
     ) -> dict:
         new_id = _entry_id(entry)
-        existing = _load_jsonl(path)
+        existing = _load_jsonl(path, strict=True)
         for e in existing:
             if not self._is_active(e):
                 continue
@@ -668,7 +714,7 @@ class Canon:
         index of the match. Exact id wins over a keyword substring hit.
         """
         target_l = str(target).lower()
-        entries = _load_jsonl(path)
+        entries = _load_jsonl(path, strict=True)
         for i, e in enumerate(entries):
             if self._is_active(e) and _entry_id(e) == target_l:
                 return entries, i
@@ -819,7 +865,10 @@ class Canon:
             return self._confirm_locked(target)
 
     def _confirm_locked(self, target: str) -> list[dict]:
-        pending = _load_jsonl(self.pending_path)
+        # Strict reads (2026-09-25): each of the three files may be rewritten
+        # below, so one that cannot be read must stop the promotion, not read
+        # as empty.
+        pending = _load_jsonl(self.pending_path, strict=True)
         matched, remaining = [], []
         for e in pending:
             if self._is_active(e) and (_entry_id(e) == target or target in _entry_text(e)):
@@ -832,8 +881,8 @@ class Canon:
         # Index existing active confirmed records by id so a repeat confirm
         # reinforces rather than duplicating. The main store is authoritative;
         # a match in the archived sidecar is reinforced there, in place.
-        confirmed = _load_jsonl(self.path)
-        archived = _load_jsonl(self.archived_path)
+        confirmed = _load_jsonl(self.path, strict=True)
+        archived = _load_jsonl(self.archived_path, strict=True)
         active_main = {_entry_id(e): e for e in confirmed if self._is_active(e)}
         active_arch = {_entry_id(e): e for e in archived if self._is_active(e)}
         out, appended = [], []
@@ -1142,6 +1191,7 @@ class Canon:
         hops: int = 1,
         limit: int = 12,
         region: str | None = None,
+        bump: bool = True,
     ) -> dict:
         """The key web's query leg: collide, walk, and let time decide.
 
@@ -1156,7 +1206,10 @@ class Canon:
         edge's judged *why*).
 
         Keeps recall feedback consistent with the other read paths: returned
-        facts get their ``recalls`` bumped ("used memory sticks"). If the
+        facts get their ``recalls`` bumped ("used memory sticks"). An observer
+        that only looks — the read-only dashboard — passes ``bump=False``: the
+        same chain, nothing written (a look is not a use, the rule
+        :func:`~feltstate.memory.skill.review_skills` keeps too). If the
         chain outgrows ``limit``, the *oldest* rows are dropped — the tail is
         the answer; the head is background. Returns::
 
@@ -1199,10 +1252,14 @@ class Canon:
         kept_ids = [_entry_id(e) for e in ordered]
 
         # Recall feedback, same contract as search/recall: used memory sticks.
-        bumped = {_entry_id(e): e for e in self._bump_recalls(set(kept_ids), now)}
+        # bump=False (2026-09-25) reads the same rows back and writes nothing.
+        if bump:
+            by_id = {_entry_id(e): e for e in self._bump_recalls(set(kept_ids), now)}
+        else:
+            by_id = {_entry_id(e): e for e in ordered}
         out: list[dict] = []
         for eid in kept_ids:
-            row = bumped.get(eid)
+            row = by_id.get(eid)
             if row is None:
                 continue
             view = self._render(row, now)
@@ -1279,7 +1336,10 @@ class Canon:
             _write_lock(self.pending_path),
         ):
             kept, to_archive = [], []
-            for e in _load_jsonl(self.path):
+            # Strict reads (2026-09-25): every file read here is rewritten from
+            # what was read, so one that cannot be read must stop the compaction —
+            # read as [] it would be rewritten as an empty store.
+            for e in _load_jsonl(self.path, strict=True):
                 if not self._is_active(e):
                     # Superseded / retracted: the audit trail history()/as_of() read.
                     # Keep it in the main file, verbatim, so those methods still work.
@@ -1301,7 +1361,9 @@ class Canon:
             # _load_confirmed() is main-wins and _dedup_archive collapses a
             # re-archived duplicate.
             if to_archive:
-                merged = self._dedup_archive(_load_jsonl(self.archived_path) + to_archive)
+                merged = self._dedup_archive(
+                    _load_jsonl(self.archived_path, strict=True) + to_archive
+                )
                 # Bound cold storage: keep the most-salient up to the cap, drop the rest.
                 cap = int(getattr(self.cfg, "archive_max", ARCHIVE_MAX_DEFAULT))
                 if cap >= 0 and len(merged) > cap:
@@ -1313,7 +1375,7 @@ class Canon:
             # Prune the grey zone the same way (no archival tier for pending), but keep
             # its audit trail too for symmetry with the main store.
             pending_kept = []
-            for e in _load_jsonl(self.pending_path):
+            for e in _load_jsonl(self.pending_path, strict=True):
                 if not self._is_active(e):
                     pending_kept.append(e)
                 elif self._tier(self._current_intensity(e, now)) != "forgotten":

@@ -55,7 +55,9 @@ class ReaperError(RuntimeError):
 def _read_jsonl(p: Path) -> list[dict]:
     if not p.exists():
         return []
-    return [json.loads(x) for x in p.read_text(encoding="utf-8").splitlines() if x.strip()]
+    # Line feeds only (2026-09-25): splitlines() also breaks on U+2028 / U+2029 /
+    # U+0085, which json.dumps(ensure_ascii=False) writes raw inside a row.
+    return [json.loads(x) for x in p.read_text(encoding="utf-8").split("\n") if x.strip()]
 
 
 def _fsync_path(p: Path) -> None:

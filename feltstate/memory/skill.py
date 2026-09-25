@@ -418,11 +418,17 @@ def recall_skills(
         # Transactional (2026-07-18): recall bump under the store lock.
         with _write_lock(path):
             allrows = _load_jsonl(path)
+            touched = False
             for e in allrows:
                 if _entry_id(e) in ids and canon._is_active(e):
                     e["recalls"] = int(e.get("recalls", 0)) + 1
                     e["_last_recalled"] = _now_iso()
-            _rewrite_jsonl(path, allrows)
+                    touched = True
+            # Rewrite only what was bumped, as Canon._bump_recalls does
+            # (2026-09-25): a re-read that failed returns [], and rewriting that
+            # unconditionally replaced the whole store with nothing.
+            if touched:
+                _rewrite_jsonl(path, allrows)
 
     return [_skill_view(canon, e, proven=proven) for _w, e, _path, proven in chosen]
 
