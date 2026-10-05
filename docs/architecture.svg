@@ -1,155 +1,171 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="900" viewBox="0 0 1280 900" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
-  <rect width="1280" height="900" fill="#ffffff"/>
-
-  <!-- header -->
-  <rect x="48" y="40" width="18" height="18" rx="4" fill="#8250df"/>
-  <text x="78" y="55" font-size="22" font-weight="700" fill="#1f2328">feltstate — how the pieces bite together</text>
-  <text x="78" y="78" font-size="13" fill="#656d76">three systems, one discipline: affect is appraised, memory is earned, time is the program's job</text>
-
-  <!-- ===== Column 1: Memory pipeline ===== -->
-  <g>
-    <rect x="48" y="108" width="368" height="556" rx="10" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1"/>
-    <rect x="48" y="108" width="368" height="6" rx="3" fill="#0969da"/>
-    <text x="76" y="146" font-size="16" font-weight="700" fill="#0969da">MEMORY PIPELINE</text>
-    <text x="76" y="166" font-size="12" fill="#656d76">transcript → extract → crystallise → recall</text>
-
-    <g font-size="13.5">
-      <rect x="72" y="184" width="320" height="66" rx="8" fill="#ffffff" stroke="#d0d7de"/>
-      <text x="88" y="211" font-weight="600" fill="#1f2328">transcript — immutable raw dialogue</text>
-      <text x="88" y="232" font-size="12" fill="#656d76">every sentence keeps its original clock</text>
-      <path d="M 232 258 l -5 -8 h 10 z" fill="#8c959f"/>
-
-      <rect x="72" y="266" width="320" height="66" rx="8" fill="#ffffff" stroke="#d0d7de"/>
-      <text x="88" y="293" font-weight="600" fill="#1f2328">nightly pass — read everything once</text>
-      <text x="88" y="314" font-size="12" fill="#656d76">capable model, low effort · events, not summaries</text>
-      <path d="M 232 340 l -5 -8 h 10 z" fill="#8c959f"/>
-
-      <rect x="72" y="348" width="320" height="66" rx="8" fill="#ffffff" stroke="#d0d7de"/>
-      <text x="88" y="375" font-weight="600" fill="#1f2328">canon — 5W1H rows with provenance</text>
-      <text x="88" y="396" font-size="12" fill="#656d76">birth affect + intensity live on the row</text>
-      <path d="M 232 422 l -5 -8 h 10 z" fill="#8c959f"/>
-
-      <rect x="72" y="430" width="320" height="66" rx="8" fill="#ffffff" stroke="#d0d7de"/>
-      <text x="88" y="457" font-weight="600" fill="#1f2328">crystal ladder — day → week → month → year</text>
-      <text x="88" y="478" font-size="12" fill="#656d76">each rung cites the one below, down to the sentence</text>
-      <path d="M 232 504 l -5 -8 h 10 z" fill="#8c959f"/>
-
-      <rect x="72" y="512" width="320" height="66" rx="8" fill="#ffffff" stroke="#d0d7de"/>
-      <text x="88" y="539" font-weight="600" fill="#1f2328">lifecycle — decay, tombstones, real deletion</text>
-      <text x="88" y="560" font-size="12" fill="#656d76">memories age, cool, and die with an audit trail</text>
-    </g>
-    <text x="232" y="628" text-anchor="middle" font-size="11" fill="#8c959f" font-style="italic">the data plane</text>
-  </g>
-
-  <!-- ===== Column 2: Affect engine ===== -->
-  <g>
-    <rect x="456" y="108" width="368" height="556" rx="10" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1"/>
-    <rect x="456" y="108" width="368" height="6" rx="3" fill="#bf3989"/>
-    <text x="484" y="146" font-size="16" font-weight="700" fill="#bf3989">AFFECT ENGINE</text>
-    <text x="484" y="166" font-size="12" fill="#656d76">appraised outside the reply model</text>
-
-    <g font-size="13.5">
-      <rect x="480" y="184" width="320" height="66" rx="8" fill="#ffffff" stroke="#d0d7de"/>
-      <text x="496" y="211" font-weight="600" fill="#1f2328">a separate appraiser reads the dialogue</text>
-      <text x="496" y="232" font-size="12" fill="#656d76">the agent cannot author its own mood</text>
-
-      <rect x="480" y="266" width="320" height="66" rx="8" fill="#ffffff" stroke="#d0d7de"/>
-      <text x="496" y="293" font-weight="600" fill="#1f2328">periodic sampling — even in silence</text>
-      <text x="496" y="314" font-size="12" fill="#656d76">no conversation → natural decay, mood still flows</text>
-
-      <rect x="480" y="348" width="320" height="66" rx="8" fill="#ffffff" stroke="#d0d7de"/>
-      <text x="496" y="375" font-weight="600" fill="#1f2328">three timescales on one reading</text>
-      <text x="496" y="396" font-size="12" fill="#656d76">moment · mood · temperament</text>
-
-      <rect x="480" y="430" width="320" height="66" rx="8" fill="#ffffff" stroke="#d0d7de"/>
-      <text x="496" y="457" font-weight="600" fill="#1f2328">per-turn state block — ephemeral</text>
-      <text x="496" y="478" font-size="12" fill="#656d76">returned as context, not behavioural instruction</text>
-
-      <rect x="480" y="512" width="320" height="66" rx="8" fill="#ffffff" stroke="#d0d7de"/>
-      <text x="496" y="539" font-weight="600" fill="#1f2328">snapshots into the ledger, short window</text>
-      <text x="496" y="560" font-size="12" fill="#656d76">memories are stamped with measured affect</text>
-    </g>
-    <text x="640" y="628" text-anchor="middle" font-size="11" fill="#8c959f" font-style="italic">the control plane</text>
-  </g>
-
-  <!-- ===== Column 3: Time discipline ===== -->
-  <g>
-    <rect x="864" y="108" width="368" height="556" rx="10" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1"/>
-    <rect x="864" y="108" width="368" height="6" rx="3" fill="#1a7f37"/>
-    <text x="892" y="146" font-size="16" font-weight="700" fill="#1a7f37">TIME DISCIPLINE</text>
-    <text x="892" y="166" font-size="12" fill="#656d76">who stamps time, and which time</text>
-
-    <g font-size="13.5">
-      <rect x="888" y="184" width="320" height="66" rx="8" fill="#ffffff" stroke="#d0d7de"/>
-      <text x="904" y="211" font-weight="600" fill="#1f2328">timestamps come from the program</text>
-      <text x="904" y="232" font-size="12" fill="#656d76">the model's clock is never trusted</text>
-
-      <rect x="888" y="266" width="320" height="66" rx="8" fill="#ffffff" stroke="#d0d7de"/>
-      <text x="904" y="293" font-weight="600" fill="#1f2328">naked timestamps are host-local</text>
-      <text x="904" y="314" font-size="12" fill="#656d76">cores and seals carry true UTC</text>
-
-      <rect x="888" y="348" width="320" height="66" rx="8" fill="#ffffff" stroke="#d0d7de"/>
-      <text x="904" y="375" font-weight="600" fill="#1f2328">event time ≠ merge time</text>
-      <text x="904" y="396" font-size="12" fill="#656d76">every fused memory keeps both, never mixed</text>
-
-      <rect x="888" y="430" width="320" height="66" rx="8" fill="#ffffff" stroke="#d0d7de"/>
-      <text x="904" y="457" font-weight="600" fill="#1f2328">raw lands by event day</text>
-      <text x="904" y="478" font-size="12" fill="#656d76">catch-up runs can't disguise old material as today</text>
-
-      <rect x="888" y="512" width="320" height="66" rx="8" fill="#ffffff" stroke="#d0d7de"/>
-      <text x="904" y="539" font-weight="600" fill="#1f2328">merged once, never re-cooked</text>
-      <text x="904" y="560" font-size="12" fill="#656d76">idempotent by design — no double memories</text>
-    </g>
-    <text x="1048" y="628" text-anchor="middle" font-size="11" fill="#8c959f" font-style="italic">the bedrock</text>
-  </g>
-
-  <!-- inter-column arrows -->
-  <g stroke="#8c959f" stroke-width="1.5" fill="none">
-    <path d="M 418 386 L 452 386"/>
-    <path d="M 826 386 L 860 386"/>
-  </g>
-  <g fill="#8c959f">
-    <path d="M 454 386 l -8 -4.5 v 9 z"/>
-    <path d="M 862 386 l -8 -4.5 v 9 z"/>
-  </g>
-
-  <!-- connectors down to keyweb -->
-  <g stroke="#8c959f" stroke-width="1.5" fill="none">
-    <path d="M 232 664 L 232 692"/>
-    <path d="M 640 664 L 640 692"/>
-    <path d="M 1048 664 L 1048 692"/>
-  </g>
-  <g fill="#8c959f">
-    <path d="M 232 694 l -4.5 -8 h 9 z"/>
-    <path d="M 640 694 l -4.5 -8 h 9 z"/>
-    <path d="M 1048 694 l -4.5 -8 h 9 z"/>
-  </g>
-
-  <!-- ===== Bottom band: key web ===== -->
-  <g>
-    <rect x="48" y="696" width="1184" height="148" rx="10" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1"/>
-    <rect x="48" y="696" width="1184" height="6" rx="3" fill="#8250df"/>
-    <text x="76" y="732" font-size="16" font-weight="700" fill="#8250df">THE KEY WEB</text>
-    <text x="248" y="732" font-size="12" fill="#656d76">a ledger is a list; a memory is a web</text>
-
-    <g font-size="13">
-      <rect x="72" y="750" width="270" height="70" rx="8" fill="#ffffff" stroke="#d0d7de"/>
-      <text x="88" y="777" font-weight="600" fill="#1f2328">word keys, born on the row</text>
-      <text x="88" y="798" font-size="12" fill="#656d76">single words that exist to collide</text>
-
-      <rect x="366" y="750" width="270" height="70" rx="8" fill="#ffffff" stroke="#d0d7de"/>
-      <text x="382" y="777" font-weight="600" fill="#1f2328">one collision pass per fact</text>
-      <text x="382" y="798" font-size="12" fill="#656d76">whole-history candidates, no recency cut-off</text>
-
-      <rect x="660" y="750" width="270" height="70" rx="8" fill="#ffffff" stroke="#d0d7de"/>
-      <text x="676" y="777" font-weight="600" fill="#1f2328">judged edges, on both rows</text>
-      <text x="676" y="798" font-size="12" fill="#656d76">candidacy is arithmetic, kinship is an opinion</text>
-
-      <rect x="954" y="750" width="254" height="70" rx="8" fill="#ffffff" stroke="#d0d7de"/>
-      <text x="970" y="777" font-weight="600" fill="#1f2328">surfaced on four channels</text>
-      <text x="970" y="798" font-size="12" font-family="Consolas, monospace" fill="#656d76">RES · EMG · SPK · RSN</text>
-    </g>
-  </g>
-
-  <text x="48" y="876" font-size="12" font-family="Consolas, 'Courier New', monospace" fill="#8c959f"># state is returned as context, never as instruction — the reply model authors nothing but the reply</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+<defs><marker id="ah8250df" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#8250df"/></marker><marker id="ahbf3989" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#bf3989"/></marker><marker id="ah0969da" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#0969da"/></marker><marker id="ah6e7781" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#6e7781"/></marker></defs>
+<rect width="1920" height="1080" fill="#ffffff"/><text x="60" y="66" font-size="32" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#1f2328" text-anchor="start">feltstate — one companion: a turn by day, a pass by night</text>
+<text x="60" y="96" font-size="15" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">how the parts turn into a character · every box names the module that does it · all examples below are fictional</text>
+<rect x="60" y="125" width="900" height="640" rx="10" fill="#f6f8fa" stroke="#d0d7de"/>
+<rect x="60" y="125" width="900" height="6" rx="3" fill="#bf3989"/>
+<text x="84" y="163" font-size="21" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#bf3989" text-anchor="start">ONE TURN · by day</text>
+<text x="84" y="185" font-size="13.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">a message comes in; mood is appraised, memory rises, the reply model speaks</text>
+<rect x="84" y="207" width="410" height="108" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+<circle cx="106" cy="231" r="12" fill="#bf3989"/>
+<text x="106" y="235.5" font-size="12.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#ffffff" text-anchor="middle">1</text>
+<text x="126" y="236" font-size="15.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#1f2328" text-anchor="start">the user speaks</text>
+<text x="100" y="259" font-size="12.8" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">chat or voice reaches the shell</text>
+<text x="100" y="303" font-size="11.5" font-family="DejaVu Sans Mono, Consolas, Menlo, monospace" font-weight="normal" fill="#6e7781" text-anchor="start">companion/frontend.py</text>
+<rect x="84" y="329" width="410" height="108" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+<circle cx="106" cy="353" r="12" fill="#bf3989"/>
+<text x="106" y="357.5" font-size="12.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#ffffff" text-anchor="middle">2</text>
+<text x="126" y="358" font-size="15.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#1f2328" text-anchor="start">appraise outside the reply model</text>
+<text x="100" y="381" font-size="12.8" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">a separate source reads the dialogue</text>
+<text x="100" y="399" font-size="12.8" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">→ an affect delta; the agent can't author it</text>
+<text x="100" y="425" font-size="11.5" font-family="DejaVu Sans Mono, Consolas, Menlo, monospace" font-weight="normal" fill="#6e7781" text-anchor="start">sources/  keyword · llm · vheart</text>
+<rect x="84" y="451" width="410" height="108" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+<circle cx="106" cy="475" r="12" fill="#bf3989"/>
+<text x="106" y="479.5" font-size="12.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#ffffff" text-anchor="middle">3</text>
+<text x="126" y="480" font-size="15.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#1f2328" text-anchor="start">update the state</text>
+<text x="100" y="503" font-size="12.8" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">moment · mood · temperament; pressure bars fill</text>
+<text x="100" y="521" font-size="12.8" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">and burst; tide gives direction; closeness per person</text>
+<text x="100" y="547" font-size="11.5" font-family="DejaVu Sans Mono, Consolas, Menlo, monospace" font-weight="normal" fill="#6e7781" text-anchor="start">engine.py · state.py · affect/</text>
+<rect x="84" y="573" width="410" height="108" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+<circle cx="106" cy="597" r="12" fill="#bf3989"/>
+<text x="106" y="601.5" font-size="12.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#ffffff" text-anchor="middle">4</text>
+<text x="126" y="602" font-size="15.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#1f2328" text-anchor="start">memory rises on four channels</text>
+<text x="100" y="625" font-size="12.8" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">RES carried notes · EMG uninvited surfacing</text>
+<text x="100" y="643" font-size="12.8" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">SPK flashback (feeling first) · RSN "this is like…"</text>
+<text x="100" y="669" font-size="11.5" font-family="DejaVu Sans Mono, Consolas, Menlo, monospace" font-weight="normal" fill="#6e7781" text-anchor="start">memory/canon.py · keyweb.py · render/channels.py</text>
+<rect x="526" y="207" width="410" height="108" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+<circle cx="548" cy="231" r="12" fill="#bf3989"/>
+<text x="548" y="235.5" font-size="12.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#ffffff" text-anchor="middle">5</text>
+<text x="568" y="236" font-size="15.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#1f2328" text-anchor="start">render the felt block</text>
+<text x="542" y="259" font-size="12.8" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">first-person state + style hints + the risen</text>
+<text x="542" y="277" font-size="12.8" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">memories + how long since you last talked</text>
+<text x="542" y="303" font-size="11.5" font-family="DejaVu Sans Mono, Consolas, Menlo, monospace" font-weight="normal" fill="#6e7781" text-anchor="start">render/felt.py · timeawareness/</text>
+<rect x="526" y="329" width="410" height="108" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+<circle cx="548" cy="353" r="12" fill="#bf3989"/>
+<text x="548" y="357.5" font-size="12.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#ffffff" text-anchor="middle">6</text>
+<text x="568" y="358" font-size="15.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#1f2328" text-anchor="start">assemble the prompt</text>
+<text x="542" y="381" font-size="12.8" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">static persona stays cached at the top;</text>
+<text x="542" y="399" font-size="12.8" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">the felt block rides on the newest message</text>
+<text x="542" y="425" font-size="11.5" font-family="DejaVu Sans Mono, Consolas, Menlo, monospace" font-weight="normal" fill="#6e7781" text-anchor="start">render/inject.py</text>
+<rect x="526" y="451" width="410" height="108" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+<circle cx="548" cy="475" r="12" fill="#bf3989"/>
+<text x="548" y="479.5" font-size="12.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#ffffff" text-anchor="middle">7</text>
+<text x="568" y="480" font-size="15.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#1f2328" text-anchor="start">the reply model writes only the reply</text>
+<text x="542" y="503" font-size="12.8" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">any model you like — it reads its state as</text>
+<text x="542" y="521" font-size="12.8" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">context, never as an instruction</text>
+<text x="542" y="547" font-size="11.5" font-family="DejaVu Sans Mono, Consolas, Menlo, monospace" font-weight="normal" fill="#6e7781" text-anchor="start">companion/backend.py · round.py</text>
+<rect x="526" y="573" width="410" height="108" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+<circle cx="548" cy="597" r="12" fill="#bf3989"/>
+<text x="548" y="601.5" font-size="12.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#ffffff" text-anchor="middle">8</text>
+<text x="568" y="602" font-size="15.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#1f2328" text-anchor="start">express it</text>
+<text x="542" y="625" font-size="12.8" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">emotion tag → face · text → voice</text>
+<text x="542" y="669" font-size="11.5" font-family="DejaVu Sans Mono, Consolas, Menlo, monospace" font-weight="normal" fill="#6e7781" text-anchor="start">companion/express.py · voice.py</text>
+<line x1="289.0" y1="315" x2="289.0" y2="328" stroke="#bf3989" stroke-width="1.8" marker-end="url(#ahbf3989)"/>
+<line x1="289.0" y1="437" x2="289.0" y2="450" stroke="#bf3989" stroke-width="1.8" marker-end="url(#ahbf3989)"/>
+<line x1="289.0" y1="559" x2="289.0" y2="572" stroke="#bf3989" stroke-width="1.8" marker-end="url(#ahbf3989)"/>
+<line x1="731.0" y1="315" x2="731.0" y2="328" stroke="#bf3989" stroke-width="1.8" marker-end="url(#ahbf3989)"/>
+<line x1="731.0" y1="437" x2="731.0" y2="450" stroke="#bf3989" stroke-width="1.8" marker-end="url(#ahbf3989)"/>
+<line x1="731.0" y1="559" x2="731.0" y2="572" stroke="#bf3989" stroke-width="1.8" marker-end="url(#ahbf3989)"/>
+<path d="M 494 627.0 C 510 627.0, 510 261.0, 524 261.0" fill="none" stroke="#bf3989" stroke-width="1.8" marker-end="url(#ahbf3989)"/>
+<rect x="84" y="701" width="852" height="62" rx="8" fill="#fff8f0" stroke="#c2620a" stroke-dasharray="5 4"/>
+<text x="100" y="726" font-size="15.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#c2620a" text-anchor="start">♥ the heartbeat — ticks even in silence</text>
+<text x="100" y="747" font-size="12.6" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">keeps sampling in silence · mood drifts back · topics wait · gates pick the moment → a proactive turn enters at step 5</text>
+<text x="920" y="726" font-size="11.5" font-family="DejaVu Sans Mono, Consolas, Menlo, monospace" font-weight="normal" fill="#6e7781" text-anchor="end">companion/scheduler.py · topics.py · gates.py</text>
+<rect x="1000" y="125" width="860" height="640" rx="10" fill="#f6f8fa" stroke="#d0d7de"/>
+<rect x="1000" y="125" width="860" height="6" rx="3" fill="#0969da"/>
+<text x="1024" y="163" font-size="21" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#0969da" text-anchor="start">ONE NIGHT · while it sleeps</text>
+<text x="1024" y="185" font-size="13.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">the whole day is read once and turned into memory that can age, climb and die</text>
+<rect x="1024" y="207" width="392" height="108" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+<circle cx="1046" cy="231" r="12" fill="#0969da"/>
+<text x="1046" y="235.5" font-size="12.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#ffffff" text-anchor="middle">1</text>
+<text x="1066" y="236" font-size="15.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#1f2328" text-anchor="start">read the whole day once</text>
+<text x="1040" y="259" font-size="12.8" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">the transcript is immutable ground truth;</text>
+<text x="1040" y="277" font-size="12.8" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">a capable model, low effort — events, not summaries</text>
+<text x="1040" y="303" font-size="11.5" font-family="DejaVu Sans Mono, Consolas, Menlo, monospace" font-weight="normal" fill="#6e7781" text-anchor="start">memory/extract.py · sleep.py</text>
+<rect x="1024" y="329" width="392" height="108" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+<circle cx="1046" cy="353" r="12" fill="#0969da"/>
+<text x="1046" y="357.5" font-size="12.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#ffffff" text-anchor="middle">2</text>
+<text x="1066" y="358" font-size="15.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#1f2328" text-anchor="start">write canon rows</text>
+<text x="1040" y="381" font-size="12.8" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">5W1H + provenance + intensity + birth affect</text>
+<text x="1040" y="399" font-size="12.8" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">(read from the affect ledger); stamped once a day</text>
+<text x="1040" y="425" font-size="11.5" font-family="DejaVu Sans Mono, Consolas, Menlo, monospace" font-weight="normal" fill="#6e7781" text-anchor="start">memory/canon.py · memory/feeling.py</text>
+<rect x="1024" y="451" width="392" height="108" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+<circle cx="1046" cy="475" r="12" fill="#0969da"/>
+<text x="1046" y="479.5" font-size="12.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#ffffff" text-anchor="middle">3</text>
+<text x="1066" y="480" font-size="15.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#1f2328" text-anchor="start">link: one collision pass</text>
+<text x="1040" y="503" font-size="12.8" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">word keys are born on the row; candidates</text>
+<text x="1040" y="521" font-size="12.8" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">are arithmetic, kinship is a judged edge</text>
+<text x="1040" y="547" font-size="11.5" font-family="DejaVu Sans Mono, Consolas, Menlo, monospace" font-weight="normal" fill="#6e7781" text-anchor="start">memory/keyweb.py</text>
+<rect x="1444" y="207" width="392" height="108" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+<circle cx="1466" cy="231" r="12" fill="#0969da"/>
+<text x="1466" y="235.5" font-size="12.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#ffffff" text-anchor="middle">4</text>
+<text x="1486" y="236" font-size="15.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#1f2328" text-anchor="start">climb the crystal ladder</text>
+<text x="1460" y="259" font-size="12.8" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">day → week → month → year; each rung cites the</text>
+<text x="1460" y="277" font-size="12.8" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">one below and is checked against it before commit</text>
+<text x="1460" y="303" font-size="11.5" font-family="DejaVu Sans Mono, Consolas, Menlo, monospace" font-weight="normal" fill="#6e7781" text-anchor="start">ladder.py · lifecycle/ smelt · consistency</text>
+<rect x="1444" y="329" width="392" height="108" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+<circle cx="1466" cy="353" r="12" fill="#0969da"/>
+<text x="1466" y="357.5" font-size="12.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#ffffff" text-anchor="middle">5</text>
+<text x="1486" y="358" font-size="15.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#1f2328" text-anchor="start">age and forget</text>
+<text x="1460" y="381" font-size="12.8" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">salience decays; the dim are buried with a</text>
+<text x="1460" y="399" font-size="12.8" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">tombstone; an audit chain notices tampering</text>
+<text x="1460" y="425" font-size="11.5" font-family="DejaVu Sans Mono, Consolas, Menlo, monospace" font-weight="normal" fill="#6e7781" text-anchor="start">memory/lifecycle/  gc · reaper · chain</text>
+<rect x="1444" y="451" width="392" height="108" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+<circle cx="1466" cy="475" r="12" fill="#0969da"/>
+<text x="1466" y="479.5" font-size="12.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#ffffff" text-anchor="middle">6</text>
+<text x="1486" y="480" font-size="15.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#1f2328" text-anchor="start">dream and report</text>
+<text x="1460" y="503" font-size="12.8" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">recombine the day; leave a night note</text>
+<text x="1460" y="521" font-size="12.8" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">you could read over coffee</text>
+<text x="1460" y="547" font-size="11.5" font-family="DejaVu Sans Mono, Consolas, Menlo, monospace" font-weight="normal" fill="#6e7781" text-anchor="start">dream.py</text>
+<line x1="1220.0" y1="315" x2="1220.0" y2="328" stroke="#0969da" stroke-width="1.8" marker-end="url(#ah0969da)"/>
+<line x1="1220.0" y1="437" x2="1220.0" y2="450" stroke="#0969da" stroke-width="1.8" marker-end="url(#ah0969da)"/>
+<line x1="1640.0" y1="315" x2="1640.0" y2="328" stroke="#0969da" stroke-width="1.8" marker-end="url(#ah0969da)"/>
+<line x1="1640.0" y1="437" x2="1640.0" y2="450" stroke="#0969da" stroke-width="1.8" marker-end="url(#ah0969da)"/>
+<path d="M 1416 505.0 C 1430 505.0, 1430 261.0, 1442 261.0" fill="none" stroke="#0969da" stroke-width="1.8" marker-end="url(#ah0969da)"/>
+<rect x="1024" y="579" width="812" height="166" rx="8" fill="#f3f0ff" stroke="#8250df"/>
+<text x="1040" y="605" font-size="15.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#8250df" text-anchor="start">the key web — a ledger is a list; a memory is a web</text>
+<text x="1040" y="629" font-size="12.8" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">every new row collides once with the whole history (no recency cut-off);</text>
+<text x="1040" y="648" font-size="12.8" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">the edges it earns are what step 4 by day pulls on — tonight's canon is tomorrow's recall.</text>
+<text x="1040" y="667" font-size="12.8" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">people get separate ledgers of closeness; the one heart stays shared.</text>
+<text x="1040" y="686" font-size="12.8" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">any memory drills back to the very sentence it came from (lifecycle/drill · memory/context).</text>
+<text x="1040" y="705" font-size="12.8" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">skills live in the same canon: a human-rated region that grows from real use (memory/skill.py).</text>
+<text x="1040" y="724" font-size="12.8" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">→ solid arrow: the day's transcript goes to the night · dashed: the night's memory feeds tomorrow</text>
+<line x1="964" y1="425" x2="996" y2="425" stroke="#6e7781" stroke-width="1.8" marker-end="url(#ah6e7781)"/>
+<line x1="996" y1="465" x2="964" y2="465" stroke="#6e7781" stroke-width="1.8" stroke-dasharray="6 5" marker-end="url(#ah6e7781)"/>
+<rect x="60" y="782" width="1800" height="146" rx="10" fill="#f6f8fa" stroke="#d0d7de"/>
+<rect x="60" y="782" width="1800" height="6" rx="3" fill="#8250df"/>
+<text x="84" y="816" font-size="18" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#8250df" text-anchor="start">A STORY IN FOUR BEATS</text>
+<text x="370" y="816" font-size="13.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start" font-style="italic">fictional — a companion and a user called Sam</text>
+<rect x="84" y="832" width="405" height="84" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+<text x="98" y="854" font-size="13.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#8250df" text-anchor="start">Day 1 · 21:10 · turn</text>
+<text x="98" y="874.0" font-size="12.3" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#1f2328" text-anchor="start">Sam: "big interview tomorrow"</text>
+<text x="98" y="890.5" font-size="12.3" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">appraiser: anxious → mood dips; the felt</text>
+<text x="98" y="907.0" font-size="12.3" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">block says: worried for them</text>
+<line x1="492" y1="874" x2="508" y2="874" stroke="#8250df" stroke-width="1.8" marker-end="url(#ah8250df)"/>
+<rect x="511" y="832" width="405" height="84" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+<text x="525" y="854" font-size="13.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#8250df" text-anchor="start">Night 1 · 00:05 · pass</text>
+<text x="525" y="874.0" font-size="12.3" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#1f2328" text-anchor="start">canon: "Sam has an interview on Day 2"</text>
+<text x="525" y="890.5" font-size="12.3" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">intensity 0.7 · keys: interview, job</text>
+<text x="525" y="907.0" font-size="12.3" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">linked to an older row about the job hunt</text>
+<line x1="919" y1="874" x2="935" y2="874" stroke="#8250df" stroke-width="1.8" marker-end="url(#ah8250df)"/>
+<rect x="938" y="832" width="405" height="84" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+<text x="952" y="854" font-size="13.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#8250df" text-anchor="start">Day 2 · 18:00 · heartbeat</text>
+<text x="952" y="874.0" font-size="12.3" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#1f2328" text-anchor="start">Sam has been quiet for hours; a pending</text>
+<text x="952" y="890.5" font-size="12.3" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">topic matches → speaks first:</text>
+<text x="952" y="907.0" font-size="12.3" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">"so… how did the interview go?"</text>
+<line x1="1346" y1="874" x2="1362" y2="874" stroke="#8250df" stroke-width="1.8" marker-end="url(#ah8250df)"/>
+<rect x="1365" y="832" width="405" height="84" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+<text x="1379" y="854" font-size="13.5" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#8250df" text-anchor="start">Day 8 · night · ladder</text>
+<text x="1379" y="874.0" font-size="12.3" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#1f2328" text-anchor="start">week crystal: "a nervous week that</text>
+<text x="1379" y="890.5" font-size="12.3" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">ended with good news"; small talk from</text>
+<text x="1379" y="907.0" font-size="12.3" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#59636e" text-anchor="start">Day 3 dims and is buried with a tombstone</text>
+<rect x="60" y="942" width="1800" height="124" rx="10" fill="#f0f8f2" stroke="#d0d7de"/>
+<rect x="60" y="942" width="1800" height="6" rx="3" fill="#1a7f37"/>
+<text x="84" y="976" font-size="18" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="bold" fill="#1a7f37" text-anchor="start">BEDROCK</text>
+<text x="210" y="976" font-size="13.2" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#1f2328" text-anchor="start">· the program stamps time; the model's clock is never trusted</text>
+<text x="1010" y="976" font-size="13.2" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#1f2328" text-anchor="start">· naked timestamps = host-local · cores and seals = true UTC · event time ≠ merge time</text>
+<text x="210" y="1002" font-size="13.2" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#1f2328" text-anchor="start">· state is context, never instruction — the reply model authors nothing but the reply</text>
+<text x="1010" y="1002" font-size="13.2" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#1f2328" text-anchor="start">· a day is merged once and stamped; a half-cooked night is buried whole and cooked again</text>
+<text x="210" y="1028" font-size="13.2" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#1f2328" text-anchor="start">· raw lands by event day — a catch-up run can't pass old material off as today</text>
+<text x="1010" y="1028" font-size="13.2" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-weight="normal" fill="#1f2328" text-anchor="start">· every dial lives in config.py · look inside with  python -m feltstate.dashboard</text>
 </svg>

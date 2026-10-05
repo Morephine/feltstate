@@ -14,7 +14,7 @@
 &nbsp;[English](README.md) | [中文](README.zh.md)
 
 <p align="center">
-  <img src="docs/architecture.svg" alt="feltstate architecture — memory pipeline, affect engine, time discipline, and the key web" width="920">
+  <a href="docs/architecture.svg"><img src="docs/architecture.svg" alt="feltstate in one picture — one turn by day, one pass by night, a fictional four-beat story, and the bedrock rules; every box names the module that does it" width="100%"></a>
 </p>
 
 ```bash

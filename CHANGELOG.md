@@ -6,6 +6,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- `docs/architecture.svg` is now a one-picture assembly map: one turn by day, one pass by night, a
+  fictional four-beat story and the bedrock rules, with every box naming the module that does it.
+
 ## [0.2.0a4] - 2026-09-15
 
 ### Fixed

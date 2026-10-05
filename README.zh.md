@@ -12,7 +12,7 @@
 &nbsp;[English](README.md) | [中文](README.zh.md)
 
 <p align="center">
-  <img src="docs/architecture.svg" alt="feltstate 架构 — 记忆生产线、情感引擎、时间纪律与键网" width="920">
+  <a href="docs/architecture.svg"><img src="docs/architecture.svg" alt="一张图看懂 feltstate — 白天的一轮对话、夜里的一趟炼制、一个虚构的四拍小故事和底层规矩；每一格都标了负责它的模块" width="100%"></a>
 </p>
 
 ```bash
